@@ -49,7 +49,7 @@ def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
     indicator = IndicatorId("indicator:observed")
     action = np.array([[-5.0, -4.0, -5.0], [5.0, 4.0, 5.0], [8.0, 9.0, 8.0]])[:, :, None]
     reference = action - np.array([1.0, 3.0, 7.0])[:, None, None]
-    observed = np.array([[0, 1, 1], [1, 0, 1], [0, 1, 0]])[:, :, None]
+    observed = np.array([[0, 1, 1], [1, 0, 1], [0, 1, 0]], dtype=float)[:, :, None]
     mask = np.ones_like(action, dtype=bool)
     mask[:, 1, 0] = False
     from grassmoth.artifacts.simulation import (
@@ -98,7 +98,8 @@ def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
             support_end_times=NumericalArray.from_numpy(np.asarray([[0], [0.25], [9]])),
         ),
         assignments=SimulationSpec(
-            start="2026-01-01", horizon="9d", interventions=({"target": state_id, "value": 1},)
+            window={"start": "2026-01-01", "horizon": "9d"},
+            interventions=({"target": state_id, "value": 1},),
         ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
     )
     histories = simulation_observation_histories(evidence, observed, mask)

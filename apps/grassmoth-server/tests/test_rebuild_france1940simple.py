@@ -73,8 +73,16 @@ def test_rebuild_pins_http_outputs_and_skips_fit(monkeypatch: pytest.MonkeyPatch
             assert request.headers["content-type"] == "application/json"
             submitted = REQUEST.validate_json(request.content)
             requests.append(submitted)
-            result = next(entry.poll for entry in selected if entry.poll.action == submitted.action)
-            if submitted.action == "edit_question":
+            result = (
+                (
+                    values["question"].poll
+                    if submitted.input.parent_ref is None
+                    else values["authored"].poll
+                )
+                if submitted.action == "edit_model"
+                else next(entry.poll for entry in selected if entry.poll.action == submitted.action)
+            )
+            if submitted.action == "edit_model" and submitted.input.parent_ref is None:
                 return httpx.Response(
                     200,
                     content=ActionResult.from_poll(
@@ -92,9 +100,9 @@ def test_rebuild_pins_http_outputs_and_skips_fit(monkeypatch: pytest.MonkeyPatch
     assert len(uploads) == 1
     assert b"historical_inputs.csv" in uploads[0]
     assert b"1936-01-01,48,3.2" in uploads[0]
-    assert polls == [f"/api/studies/REBUILD/edit_question/{values['question'].poll.call_id}"]
+    assert polls == [f"/api/studies/REBUILD/edit_model/{values['question'].poll.call_id}"]
     assert [request.action for request in requests] == [
-        "edit_question",
+        "edit_model",
         "edit_model",
         "prepare_data",
         "simulate",
@@ -132,7 +140,7 @@ def test_failed_action_stops_rebuild() -> None:
             200,
             content=ActionResult.from_poll(
                 FailedPoll(
-                    action="edit_question",
+                    action="edit_model",
                     call_id=failed.call_id,
                     commit_id=failed.commit_id,
                     messages=failed.messages,
@@ -145,11 +153,11 @@ def test_failed_action_stops_rebuild() -> None:
         pytest.raises(RuntimeError, match="SyntheticProposalError"),
     ):
         rebuild(Study(client, "REBUILD", 30), Recipe.read())
-    assert paths == ["/api/upload", "/api/studies/REBUILD/edit_question"]
+    assert paths == ["/api/upload", "/api/studies/REBUILD/edit_model"]
 
 
 def test_timeout_keeps_the_call_available_to_resume() -> None:
-    question = Recipe.read().question
+    question = Recipe.read().initial_model
     saved = next(entry.poll for entry in examples() if entry.name == "question")
     paths: list[str] = []
 
@@ -167,4 +175,4 @@ def test_timeout_keeps_the_call_available_to_resume() -> None:
         pytest.raises(TimeoutError, match=f"{saved.call_id}.*server continues"),
     ):
         Study(client, "REBUILD", 0).run(question)
-    assert paths == ["/api/studies/REBUILD/edit_question"]
+    assert paths == ["/api/studies/REBUILD/edit_model"]

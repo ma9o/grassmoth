@@ -9,7 +9,6 @@ from grassmoth_server.study.persistence.store import (
     ArtifactStore,
     model_values,
     read_model,
-    read_question,
 )
 from grassmoth_server.study.records import Applied, Rejected
 
@@ -21,10 +20,10 @@ def edit_model(workspace_id: str, request: EditModelRequest[GitOid]) -> Applied[
     initialize_numerical_runtime()
     store = ArtifactStore(workspace_id)
     state = model_edit_state(store, request.input.parent_ref)
-    question = read_question(store, state.current["question"].revision)
-    base = read_model(store, state.current["model"].revision)
+    base = None if request.input.parent_ref is None else read_model(store, request.input.parent_ref)
     result = edit_model_values(
-        question, model_values(store, base), model_values(store, request.input.dynamical_model_spec)
+        None if base is None else model_values(store, base),
+        model_values(store, request.input.dynamical_model_spec),
     )
     if isinstance(result, ModelEditFailure):
         return Rejected(code="MODEL_SPEC_INVALID", subject="model", detail=result.detail)

@@ -31,8 +31,6 @@ def resolve_preparation(
             extraction keys that do not exactly match its observation IDs.
     """
     dynamical_model_spec = read_model(store, request.dynamical_model_spec_ref)
-    if dynamical_model_spec.measurement_clock is None:
-        raise StudyLookupError("prepare_data requires a model with a measurement clock")
     identities = {indicator.observation.id for indicator in dynamical_model_spec.indicators}
     if not identities or set(request.extraction) != identities:
         raise StudyLookupError(
@@ -41,7 +39,7 @@ def resolve_preparation(
     return FilePreparationSpec(
         source=request.source,
         definition=DataPreparationSpec(
-            default_window=dynamical_model_spec.measurement_clock,
+            default_window=dynamical_model_spec.time.step,
             variables=tuple(
                 DataVariableSpec(
                     observation=indicator.observation,

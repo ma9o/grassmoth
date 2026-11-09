@@ -13,6 +13,16 @@ from grassmoth_test_support.values import revise_fixture
 
 def deterministic_input_model(*, measured=False, time_origin="relative"):
     dynamical_model_spec = x_y_model()
+    start = (
+        dynamical_model_spec.time.window.start
+        if isinstance(time_origin, str)
+        else time_origin.date()
+    )
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": start.isoformat(), "horizon": "3d"}, "step": "12h"},
+        core_query={"window": {"start": start.isoformat(), "horizon": "3d"}},
+    )
     source = dynamical_model_spec.constructs[0]
     layout = JointLawLayout(
         parameters=(),

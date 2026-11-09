@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.identity import EdgeId, IndicatorId
     from grassmoth.artifacts.model.likelihood import Law
     from grassmoth.artifacts.model.parameter import ParameterCoordinate
+    from grassmoth.artifacts.model.time import ModelTimeSpec
     from grassmoth.artifacts.observations.semantics import IndicatorObservationSemantics
     from grassmoth.artifacts.observations.spec import (
         ObservationWindow,
@@ -126,6 +127,7 @@ class CompiledInputTrajectory(Value):
 class CompiledDynamicalModel:
     """Ordered execution records; authored entities remain at the compiler boundary."""
 
+    time: ModelTimeSpec
     clock_days: float
     states: tuple[CompiledState, ...]
     observations: tuple[CompiledObservation, ...]
@@ -276,7 +278,6 @@ def compile_model(
         state_index = {state.id: index for index, state in enumerate(states)}
         anchors = observations.categorical_anchors(selection)
         clock_days = axes.get_construct_dt_days(dynamical_model_spec)
-        assert dynamical_model_spec.measurement_clock is not None
 
         parameters = execution_parameters(selection)
         bindings, auxiliary = bind_parameters(
@@ -292,8 +293,7 @@ def compile_model(
         observations = tuple(
             CompiledObservation(
                 indicator.observation.resolved(
-                    indicator.observation.observation_window
-                    or dynamical_model_spec.measurement_clock
+                    indicator.observation.observation_window or dynamical_model_spec.time.step
                 ),
                 state_index[dynamical_model_spec.indicator_owner(indicator.observation.id).id],
                 bind_observation_law(
@@ -312,6 +312,7 @@ def compile_model(
             if indicator.likelihood is not None
         )
         return CompiledDynamicalModel(
+            time=dynamical_model_spec.time,
             clock_days=clock_days,
             states=states,
             observations=observations,

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from grassmoth.public import GitOid
     from grassmoth_server.actions.contracts.identity import ArtifactId, CallId
     from grassmoth_server.actions.contracts.inputs import SimulateInput
-    from grassmoth_server.study.state import StudyState
 
 
 async def _run_fit(
@@ -82,11 +81,10 @@ def _fit_selected(
     previous_cache = None if previous is None else previous.full_fit
     directory = Path(call_dir(store.workspace_id, call_id))
 
-    from grassmoth_server.study.persistence.store import model_values, read_model, read_question
+    from grassmoth_server.study.persistence.store import model_values, read_model
 
     dynamical_model_spec = model_values(store, read_model(store, pins["model"]))
-    question = read_question(store, pins["question"])
-    selection = StructuralSelection.for_question(dynamical_model_spec, question)
+    selection = StructuralSelection.for_model(dynamical_model_spec)
     admission = admit_sampler(
         launch,
         selection,
@@ -115,7 +113,6 @@ def _fit_selected(
     )
     inputs = FitInputs(
         selection=selection,
-        question=question,
         data_for_model=history.observations,
         sampler=sampler,
         compute_loo_diagnostics=get_config().inference.compute_loo_diagnostics,
@@ -158,7 +155,6 @@ def _fit_selected(
 
 async def _run_simulate(
     store: ArtifactStore,
-    pins: dict[ArtifactId, GitOid],
     request: SimulateInput[GitOid],
     call_id: CallId,
 ) -> Applied[GitOid]:
@@ -166,7 +162,7 @@ async def _run_simulate(
     from grassmoth_server.actions.errors import ActionExecutionError
     from grassmoth_server.actions.simulate.action import run_simulation
 
-    result = await asyncio.to_thread(run_simulation, store, request, pins["question"])
+    result = await asyncio.to_thread(run_simulation, store, request)
     if isinstance(result, ObservationPreflightFailure):
         raise ActionExecutionError(result.message)
     return Applied(result=store.write_result(result, call_id=call_id), effects=ActionEffects())
@@ -207,7 +203,7 @@ async def run_action_locally(
             request.input,
             call_identity(request),
         )
-    return await _run_simulate(store, pins, request.input, call_identity(request))
+    return await _run_simulate(store, request.input, call_identity(request))
 
 
 def _pinned(store: ArtifactStore, selected: dict[ArtifactId, GitOid]) -> dict[ArtifactId, GitOid]:
@@ -223,7 +219,6 @@ def _pin_action_inputs(
     | SimulateRequest[GitOid]
     | DataDiffRequest[GitOid]
     | ModelDiffRequest[GitOid],
-    state: StudyState,
 ) -> dict[ArtifactId, GitOid]:
     """Resolve selected inputs on the blocking execution boundary."""
     store = ArtifactStore(workspace_id)
@@ -232,7 +227,6 @@ def _pin_action_inputs(
             store,
             {
                 "model": fit_source(store, request.input.target).dynamical_model_spec_ref,
-                "question": state.current["question"].revision,
             },
         )
     elif isinstance(request, SimulateRequest):
@@ -240,7 +234,6 @@ def _pin_action_inputs(
             store,
             {
                 "model": request.input.dynamical_model_spec_ref,
-                "question": state.current["question"].revision,
             },
         )
     else:
@@ -254,8 +247,7 @@ async def run_action(
     | SimulateRequest[GitOid]
     | DataDiffRequest[GitOid]
     | ModelDiffRequest[GitOid],
-    state: StudyState,
 ) -> Applied[GitOid] | Rejected:
     """Pin and compile inputs off the activity event loop, then execute the action."""
-    pins = await asyncio.to_thread(_pin_action_inputs, workspace_id, request, state)
+    pins = await asyncio.to_thread(_pin_action_inputs, workspace_id, request)
     return await run_action_locally(workspace_id, request, pins)

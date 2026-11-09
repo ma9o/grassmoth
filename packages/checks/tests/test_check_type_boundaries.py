@@ -483,7 +483,7 @@ def test_type_adapter_parses_only_at_its_value_owner(cached: bool, foreign: bool
     target = "Foreign" if foreign else "Outcome"
     receiver = "adapter" if cached else f"TypeAdapter({target})"
     source = f"""from pydantic import TypeAdapter
-from grassmoth.artifacts.model.question import QuestionSpec as Foreign
+from grassmoth.artifacts.model.time import ModelTimeSpec as Foreign
 from grassmoth.artifacts.base import Value
 
 class Ready(Value):

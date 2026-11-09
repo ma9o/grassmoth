@@ -1,18 +1,16 @@
-import type { ConstructId, QuestionSpec } from "@grassmoth/api-types";
-import { presentEntries } from "@/lib/model-accessors";
+import type { ConstructId, DynamicalModelSpec } from "@grassmoth/api-types";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
 import { Hint, OwnerLink, Section, StatusIcon } from "../scope-primitives";
 
-/** The study question: the user's words, its outcome and each query's dated contrast. */
+/** The question, model time domain and the core intervention plan owned by this revision. */
 export function QuestionDetails({
   context,
-  question: output,
+  model,
 }: {
   context: ScopeContext;
-  question: QuestionSpec<ConstructId>;
+  model: DynamicalModelSpec;
 }) {
-  const question = output;
   const name = (id: ConstructId) => {
     const construct = context.entities.constructs.find((item) => item.id === id);
     return construct ? (
@@ -23,25 +21,27 @@ export function QuestionDetails({
       <span className="font-mono">{id}</span>
     );
   };
-  const queries = presentEntries(question.queries);
+  const query = model.core_query;
   return (
     <Section title="Question" wide>
-      <p className="m-0">{question.text}</p>
-      <Hint>Outcome: {name(question.outcome)}</Hint>
-      {queries.map(([label, query]) => (
-        <div key={label} className="border-t pt-2">
-          <p className="m-0 font-medium">{label}</p>
-          <Hint>
-            From {query.start} for {query.horizon}
-          </Hint>
-          {query.interventions.map((event) => (
-            <p key={`${event.target}-${event.after ?? "start"}`} className="m-0">
-              {event.after ? `After ${event.after}` : "At the start"}: set {name(event.target)} to{" "}
-              {event.value}
-            </p>
-          ))}
-        </div>
-      ))}
+      <p className="m-0">{model.question}</p>
+      <Hint>Outcome: {name(model.outcome)}</Hint>
+      <Hint>
+        Model: from {model.time.window.start} for {model.time.window.horizon}, step{" "}
+        {model.time.step}
+      </Hint>
+      <div className="border-t pt-2">
+        <p className="m-0 font-medium">Core query</p>
+        <Hint>
+          From {query.window.start} for {query.window.horizon}
+        </Hint>
+        {query.interventions.map((event) => (
+          <p key={`${event.target}-${event.after ?? "start"}`} className="m-0">
+            {event.after ? `After ${event.after}` : "At the start"}: set {name(event.target)} to{" "}
+            {event.value}
+          </p>
+        ))}
+      </div>
     </Section>
   );
 }
@@ -54,8 +54,7 @@ export function QuestionChecks({ context }: { context: ScopeContext }) {
     <Section title="Question checks" wide>
       {checks.findings.map((finding) => {
         const subject = finding.subject;
-        const label =
-          "outcome" in subject ? "Outcome" : `${subject.query} · ${humanize(finding.code)}`;
+        const label = "outcome" in subject ? "Outcome" : `Core query · ${humanize(finding.code)}`;
         return (
           <p
             key={`${finding.code}:${JSON.stringify(subject)}`}

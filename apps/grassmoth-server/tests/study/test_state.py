@@ -26,8 +26,8 @@ def test_install_supersede_and_retract_facts_without_mutating_the_prior_state():
     removed = apply_effects(
         current, (), (RetractedArtifact(artifact_id="raw_data", reason_ref="input.removed"),)
     )
-    assert not removed.has("raw_data")
-    assert current.has("raw_data")
+    assert not (removed.get("raw_data") is not None)
+    assert current.get("raw_data") is not None
 
 
 def test_fact_freshness_follows_exact_execution_inputs_and_their_ancestors():

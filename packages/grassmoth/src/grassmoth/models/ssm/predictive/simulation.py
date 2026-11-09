@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil
 from typing import TYPE_CHECKING, Self
 
 import jax.numpy as jnp
@@ -12,7 +11,6 @@ import numpy as np
 
 from grassmoth.artifacts.identity import ConstructRef, EdgeRef, IndicatorRef
 from grassmoth.artifacts.model.expressions import hill_applications
-from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 from grassmoth.artifacts.reports.checks import (
     NotEvaluated,
     PredictiveAssessment,
@@ -34,7 +32,6 @@ from grassmoth.models.ssm.predictive.registry_runtime import (
 )
 from grassmoth.models.ssm.preparation.binding import BoundPanel, input_trajectory_events
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth.observations.rows import observation_window_boundaries
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -82,25 +79,10 @@ def _time_grid(
     compiled_dynamical_model: CompiledDynamicalModel,
     start: float,
     end: float,
-    assignments: tuple[StateAssignment, ...],
-    time_origin: datetime,
 ) -> np.ndarray:
-    times = {
-        float(value)
-        for value in np.linspace(
-            start, end, max(1, ceil((end - start) / compiled_dynamical_model.clock_days)) + 1
-        )
-    }
-    times.update(event.time for event in assignments)
-    origin = ObservationInstant(time_origin)
-    times.update(
-        ObservationInstant(instant).relative_to(origin).days
-        for window in {item.observation_window for item in compiled_dynamical_model.observations}
-        for instant in observation_window_boundaries(
-            window, ModelTime(start).at(origin).value, ModelTime(end).at(origin).value
-        )
-    )
-    return np.asarray(sorted(times))
+    step = compiled_dynamical_model.time.step.days
+    first, last = round(start / step), round(end / step)
+    return np.asarray(tuple(index * step for index in range(first, last + 1)))
 
 
 def _window_input_events(
@@ -134,8 +116,8 @@ def generate_simulation_batch(
     """Sample current laws once and always generate nonlinear stochastic paths and emissions.
 
     The window and intervention assignments are in model days. A bound panel supplies
-    its prepared observation grid; otherwise the grid follows the model clock and the
-    assignment boundaries.
+    its prepared observations on the model grid; every forecast uses that same
+    fixed step and initial-state origin.
     """
     if isinstance(source, BoundPanel):
         time_origin = source.time_origin
@@ -168,34 +150,16 @@ def generate_simulation_batch(
     laws = sample_model_laws(
         compiled_dynamical_model, draws=draws, key=predictive_keys(seed).parameters
     )
-    grid = (
-        _time_grid(compiled_dynamical_model, start, end, assignments, time_origin)
-        if times is None
-        else np.asarray(times)
-    )
+    grid = _time_grid(compiled_dynamical_model, start, end) if times is None else np.asarray(times)
     if len(grid) < 2 or grid[0] != start or grid[-1] != end or np.any(np.diff(grid) <= 0):
         raise ValueError("The prepared simulation grid must increase from start through end")
-    grid = np.asarray(
-        sorted(
-            {
-                *grid,
-                *(event.spec.time for event in input_events if start < event.spec.time < end),
-            }
-        )
-    )
     initial = None
     if laws.latent_paths is None:
         if start < 0:
             raise ValueError("Simulation cannot start before the initial law at model day zero")
         if start > 0:
             history_events = tuple(event for event in input_events if event.spec.time <= start)
-            history_grid = sorted(
-                {
-                    0.0,
-                    start,
-                    *(event.spec.time for event in history_events if 0 < event.spec.time < start),
-                }
-            )
+            history_grid = _time_grid(compiled_dynamical_model, 0.0, start)
             history, _, _ = simulate_latent_histories(
                 compiled_dynamical_model,
                 laws.parameters,
@@ -220,17 +184,7 @@ def generate_simulation_batch(
             # Advance a jointly drawn state to an unrepresented start time; never interpolate
             # retained paths or condition on a second independently sampled state.
             history_events = tuple(event for event in input_events if event.spec.time <= start)
-            history_grid = sorted(
-                {
-                    anchor,
-                    start,
-                    *(
-                        event.spec.time
-                        for event in history_events
-                        if anchor < event.spec.time < start
-                    ),
-                }
-            )
+            history_grid = _time_grid(compiled_dynamical_model, anchor, start)
             history, _, _ = simulate_latent_histories(
                 compiled_dynamical_model,
                 laws.parameters,
@@ -248,6 +202,8 @@ def generate_simulation_batch(
         support = simulation_observation_support(
             compiled_dynamical_model, grid, time_origin=time_origin
         )
+        if isinstance(support, ObservationPreflightFailure):
+            return support
     interventions = []
     for event in assignments:
         if event.target not in state_ids:

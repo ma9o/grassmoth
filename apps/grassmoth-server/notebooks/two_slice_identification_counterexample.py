@@ -228,7 +228,7 @@ def verification(lab, long_result, measured_u, mo, no_persistence, nx, short_res
 @app.cell(hide_code=True)
 def production_intro(mo):
     mo.md(r"""
-    ## 4. What our current framework actually returned
+    ## 4. What the recorded framework returned
 
     The evidence below is from public HTTP `edit_question` and `edit_model` actions,
     using the construct DAG above and exact indicators on $X,Y$. It is a graph-only
@@ -270,7 +270,10 @@ def production_evidence(importlib, lab, mo, short_result):
                     ),
                     "Saved requests, response, and source fingerprint": mo.json(api_evidence),
                     "Replay the public calls": mo.md(r"""
-                        From the repository root, with the study server running:
+                        Check out the repository revision recorded in the evidence and start
+                        its study server. These historical calls use that revision’s API;
+                        the current API creates models directly with `edit_model`.
+                        From that checkout:
 
                         ```bash
                         EVIDENCE=apps/grassmoth-server/notebooks/data/two_slice_identification.json
@@ -293,7 +296,7 @@ def production_evidence(importlib, lab, mo, short_result):
 
                         Poll this call the same way. Its identification report is at
                         `body.identification`. The saved response is evidence from its
-                        recorded revision; these commands check the running server.
+                        recorded revision; these commands replay it against that same revision.
                     """),
                 }
             ),

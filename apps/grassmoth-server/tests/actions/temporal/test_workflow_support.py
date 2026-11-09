@@ -171,7 +171,7 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
         if kind == "fit"
         else {
             "dynamical_model_spec_ref": git_oid(1),
-            "simulation": {"start": "2026-01-01", "horizon": "1d"},
+            "simulation": {"window": {"start": "2026-01-01", "horizon": "1d"}},
         }
     )
     request = ActionRequest.model_validate({"request": {"action": kind, "input": payload}})
@@ -189,7 +189,6 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
     monkeypatch.setattr(study_workflow.workflow, "execute_activity", execute)
     monkeypatch.setattr(study_workflow.workflow, "now", lambda: datetime(2026, 1, 1, tzinfo=UTC))
     monkeypatch.setattr(study_workflow.workflow, "upsert_memo", Mock())
-    monkeypatch.setattr(study_workflow, "validate_lineage", lambda *_: None)
     runner = study_workflow.StudyWorkflow(StudyInit(workspace_id="test"))
     journal = AsyncMock()
     monkeypatch.setattr(runner, "_journal", journal)
@@ -226,8 +225,8 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
         memos = []
         state = StudyState(
             current={
-                "question": ArtifactRecord(
-                    artifact_id="question",
+                "model": ArtifactRecord(
+                    artifact_id="model",
                     revision=git_oid(1),
                 )
             }

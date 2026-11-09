@@ -17,7 +17,6 @@ from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import ObservationLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.serialization import (
     empirical_atoms,
@@ -33,17 +32,18 @@ from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
-from grassmoth_server.study.persistence.store import ArtifactStore, read_model, read_question
+from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, AttemptRecord, EditAttempt, Raised
-from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_server_test_support.action import applied_record, model_root
 from grassmoth_server_test_support.git import artifact_revision, commit_id
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import write_initial_model
 from grassmoth_server_test_support.model import load_study_model_fixture
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 
@@ -91,7 +91,10 @@ def _model():
                 }
                 for key in ("x", "y")
             },
-            "measurement_clock": "1d",
+            "question": "Does X change Y?",
+            "outcome": "construct:y",
+            "time": {"window": {"start": "2024-01-01", "horizon": "2d"}, "step": "1d"},
+            "core_query": {"window": {"start": "2024-01-01", "horizon": "2d"}},
             "edges": {
                 "edge:xy": {
                     "cause": "construct:x",
@@ -186,17 +189,17 @@ def _commit(workspace, artifact_id, payload, *, pins=None, retracted=(), reports
         artifact_id,
         derived_from=pins or {},
         produced_by=None,
-        json_files={{"model": "model.json", "question": "question.json"}[artifact_id]: payload},
+        json_files={{"model": "model.json", "question": "model.json"}[artifact_id]: payload},
     )
     # Every lineage carries its question; the first commit adds it alongside.
-    rooted = journal.state().has("question")
+    rooted = journal.state().get("model") is not None
     journal.append(
         applied_record(
             store.workspace_id,
             Applied(
                 result=None,
                 effects=ActionEffects(
-                    produced=[info] if rooted else [write_question(store), info],
+                    produced=[info] if rooted else [write_initial_model(store), info],
                     retracted=list(retracted),
                     reports=reports or {},
                 ),
@@ -238,7 +241,8 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
         bindings,
         parameters=[p.id for p in dynamical_model_spec.parameters],
         constructs=selected_state_ids(StructuralSelection(dynamical_model_spec, None)),
-        time_points=(0, 1),
+        time_points=dynamical_model_spec.time_points,
+        time_origin=dynamical_model_spec.time.window.start_instant,
     )
     store = ArtifactStore(workspace)
     atoms = np.ones((2, layout.width))
@@ -269,7 +273,7 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
         distributions={layout.distribution_id: law},
         law_layouts={layout.distribution_id: layout},
     )
-    question_root(workspace)
+    model_root(workspace)
     staged = seed_record(
         store,
         "model",
@@ -324,20 +328,24 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
 def test_partial_model_can_be_read_before_any_compilation(workspace):
     repository = StudyRepository(workspace)
     assert not repository.state().current
-    question_root(
+    model_root(
         workspace,
-        QuestionSpec[ConstructId](text="Does X change Y?", outcome=ConstructId("construct:y")),
+        initial_model(question="Does X change Y?", outcome=ConstructId("construct:y")),
     )
-    info = _commit(workspace, "model", {"measurement_clock": "1d"})
+    info = _commit(
+        workspace,
+        "model",
+        initial_model(question="Does X change Y?", outcome="construct:y").model_dump(mode="json"),
+    )
     state = repository.state()
     assert (
-        read_question(ArtifactStore(workspace), state.current["question"].revision).text
+        read_model(ArtifactStore(workspace), state.current["model"].revision).question
         == "Does X change Y?"
     )
     model = _published_model(workspace)
-    assert model == DynamicalModelSpec(measurement_clock="1d").materialized()
+    assert model == initial_model(question="Does X change Y?", outcome="construct:y")
     assert state.current["model"].revision == info.revision
-    assert not _identity_owners(model)
+    assert len(_identity_owners(model)) == 1
 
 
 def test_ownership_is_explicit_from_first_structure(workspace):
@@ -430,7 +438,7 @@ def test_uncommitted_versions_and_failed_attempts_never_change_published_model(w
         "model",
         derived_from={},
         produced_by=None,
-        json_files={"model.json": {"measurement_clock": "2d"}},
+        json_files={"model.json": initial_model(question="Unpublished").model_dump(mode="json")},
     )
     StudyRepository(workspace).append(
         AttemptRecord(
@@ -441,7 +449,7 @@ def test_uncommitted_versions_and_failed_attempts_never_change_published_model(w
                 request=EditModelRequest[GitOid](
                     input=EditModelInput[GitOid](
                         parent_ref=before_commit,
-                        dynamical_model_spec=DynamicalModelSpec(measurement_clock="2d"),
+                        dynamical_model_spec=DynamicalModelSpec(question="Unpublished"),
                     )
                 ),
                 outcome=Raised(error_type="SavedError", error_message="failed"),

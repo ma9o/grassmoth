@@ -11,6 +11,7 @@ from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.purpose import model_metadata
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -50,7 +51,7 @@ def _model(*mechanisms, reused=False):
             for identity, name in zip((_A, _B, _C), "abc", strict=True)
             if identity in used
         ),
-        measurement_clock="1d",
+        **model_metadata(y.id),
     )
 
 

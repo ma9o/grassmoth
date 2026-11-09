@@ -83,14 +83,14 @@ def test_valid_partial_model_can_be_enriched_for_measurement():
     ).materialized()
     candidate.require_measurements()
     assert candidate == dynamical_model_spec
-    partial = revise_fixture(dynamical_model_spec, measurement_clock=None).with_entities(
+    partial = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(revise_fixture(c, indicators=()) for c in dynamical_model_spec.constructs),
         ),
     )
     reloaded = DynamicalModelSpec.model_validate(partial.model_dump(mode="json")).materialized()
-    with pytest.raises(IncompleteModelError, match="clock and indicators"):
+    with pytest.raises(IncompleteModelError, match="indicators"):
         reloaded.require_measurements()
 
 
@@ -184,15 +184,10 @@ def test_response_presence_is_independent_of_request_defaults_and_excluded_field
     from grassmoth.artifacts.base import Value
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
-    dynamical_model_spec = DynamicalModelSpec().materialized()
-    assert dynamical_model_spec.model_dump(mode="json")["measurement_clock"] is None
-    assert (
-        "measurement_clock"
-        in DynamicalModelSpec.model_json_schema(mode="serialization")["required"]
-    )
-    assert "measurement_clock" not in DynamicalModelSpec.model_json_schema(mode="validation").get(
-        "required", []
-    )
+    dynamical_model_spec = make_model(["x"])
+    assert dynamical_model_spec.model_dump(mode="json")["time"]["step"] == "1d"
+    assert "time" in DynamicalModelSpec.model_json_schema(mode="serialization")["required"]
+    assert "time" not in DynamicalModelSpec.model_json_schema(mode="validation").get("required", [])
 
     class PrivateField(Value):
         visible: int = 0  # noqa: V107 -- The serialization assertion below reads this field through model_dump.

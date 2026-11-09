@@ -12,48 +12,28 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field
 
 from grassmoth.public import (
-    ConstructSpec,
     DataRef,
     DynamicalModelSpec,
     ExtractionSpec,
-    GitOid,
     IndicatorId,
-    QuestionSpec,
     SimulationSpec,
     Value,
 )
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
 
 
-class EditQuestionInput(Value):
-    """The study question, its required outcome, and any named intervention queries."""
-
-    question: QuestionSpec[ConstructSpec] = Field(
-        description=(
-            "The study question with its outcome construct definition and named intervention "
-            "queries. Publishes the question and an initial model containing that outcome."
-        )
-    )
-
-    def revision_dependencies(self) -> tuple[tuple[str, GitOid], ...]:
-        """Project the exact input revisions under their journal argument names."""
-        return ()
-
-
 class EditModelInput[RevisionT](Value):
-    """Revise a saved model, starting with the model produced by edit_question."""
+    """Create a model or merge an edit into a selected saved revision."""
 
     model_config = ConfigDict(json_schema_mode_override="validation")
 
-    parent_ref: RevisionT = Field(
-        description=(
-            "Model revision to start from, supplying its pinned question. 'latest' selects "
-            "the current model. An exact artifact hash can select any saved model."
-        )
+    parent_ref: RevisionT | None = Field(
+        default=None,
+        description="Model revision to edit; omission creates a new model. 'latest' requires an existing model.",
     )
     dynamical_model_spec: DynamicalModelSpec = Field(
         description=(
-            "Scientific definitions merged by identity into the selected model. "
+            "Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. "
             "Omitted fields are retained; null entity entries "
             "delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
         )
@@ -61,7 +41,7 @@ class EditModelInput[RevisionT](Value):
 
     def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
         """Project the exact input revisions under their journal argument names."""
-        return (("parent", self.parent_ref),)
+        return () if self.parent_ref is None else (("parent", self.parent_ref),)
 
 
 class PrepareDataInput[RevisionT, SourceT](Value):

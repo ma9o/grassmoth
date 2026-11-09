@@ -151,8 +151,6 @@ def _fit(
             selection.dynamical_model_spec,
             fitted.panel.compiled_dynamical_model,
             result,
-            times=fitted.panel.times,
-            time_origin=inputs.data_for_model.time_origin,
         )
     layout = conditioned.law_layouts[identity]
     latent_indices = (
@@ -479,8 +477,8 @@ def fit(
     continuation = resumed_checkpoint(inputs)
     if isinstance(continuation, ContinuationRefusal):
         return continuation
-    selection, question, previous = inputs.selection, inputs.question, inputs.previous
-    time_origin = inputs.data_for_model.time_origin
+    selection, previous = inputs.selection, inputs.previous
+    time_origin = selection.dynamical_model_spec.time.window.start_instant
     clock = execution_context.clock
     compilation_intervals: list[tuple[str, float, float]] = []
     program_counts: dict[str, int] = {}
@@ -547,13 +545,16 @@ def fit(
             else inference_report(
                 result,
                 selection.dynamical_model_spec,
-                tuple(
+                (
                     MovementWindow(
-                        name=name,
-                        start_day=query.start_day(time_origin),
-                        end_day=query.end_day(time_origin),
-                    )
-                    for name, query in question.queries.items()
+                        name="core_query",
+                        start_day=selection.dynamical_model_spec.core_query.window.start_day(
+                            time_origin
+                        ),
+                        end_day=selection.dynamical_model_spec.core_query.window.end_day(
+                            time_origin
+                        ),
+                    ),
                 ),
                 execution_context=execution_context,
             )
@@ -590,7 +591,7 @@ def fit(
         else previous.dynamical_model_spec
         if previous is not None
         else None,
-        checks=fit_check_report(selection, question, inputs.data_for_model),
+        checks=fit_check_report(selection, inputs.data_for_model),
         inference=report,
         profile=profiling,
     )

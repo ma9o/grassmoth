@@ -10,8 +10,15 @@ import jax.numpy as jnp
 import numpy as np
 import polars as pl
 
-from grassmoth.artifacts.observations.dataset import ObservationDataset, SelectedObservations
-from grassmoth.artifacts.observations.time import ObservationInstant, model_time_indices
+from grassmoth.artifacts.arrays import NumericalArray, vector_values
+from grassmoth.artifacts.observations.dataset import (
+    ObservationDataset,
+    ObservationSeries,
+    SelectedObservations,
+)
+from grassmoth.artifacts.observations.history import ObservationHistory
+from grassmoth.artifacts.observations.time import OBSERVATION_TIME_TOLERANCE, ObservationInstant
+from grassmoth.artifacts.reports.histograms import empirical_distribution
 from grassmoth.artifacts.scenarios import StateAssignment
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.counterfactual.orchestration import ResolvedIntervention
@@ -20,13 +27,14 @@ from grassmoth.models.ssm.preparation.observations import (
     validate_observation_support,
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth.observations.rows import observation_grid, pivot_to_wide
+from grassmoth.observations.rows import pivot_to_wide
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import datetime
 
     from grassmoth.artifacts.identity import IndicatorId
+    from grassmoth.artifacts.model.time import ModelTimeSpec
     from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.compile.inputs import (
         CompiledDynamicalModel,
@@ -114,6 +122,14 @@ def input_trajectory_events(
             )
             for time, value in points
         )
+    step = compiled_dynamical_model.time.step.days
+    if any(
+        abs(event.spec.time - round(event.spec.time / step) * step) > OBSERVATION_TIME_TOLERANCE
+        for event in events
+    ):
+        return ObservationPreflightFailure.rejected(
+            "Input changes must align with the model time step"
+        )
     return tuple(sorted(events, key=lambda event: (event.spec.time, event.index)))
 
 
@@ -188,6 +204,49 @@ def prepare_fit_inputs(
     return observations, times, manifest_cols, standardized_data
 
 
+def select_model_observations(
+    observations: SelectedObservations, time: ModelTimeSpec
+) -> SelectedObservations | PanelPreparationFailure:
+    """Select whole readings inside the model span and admit exact grid alignment."""
+    offset = (observations.time_origin - time.window.start_instant).total_seconds() / 86400
+    series = []
+    for recorded in observations.series:
+        history = recorded.history
+        anchors = history.times.values + offset
+        starts = vector_values(history.support_start) + offset
+        ends = vector_values(history.support_end) + offset
+        keep = (anchors >= 0) & (anchors <= time.window.horizon.days)
+        if np.any(keep & ((starts < 0) | (ends > time.window.horizon.days))):
+            return PanelPreparationFailure(
+                f"Observation {recorded.observation.id} crosses the model window boundary"
+            )
+        for coordinates in (anchors[keep], starts[keep], ends[keep]):
+            known = coordinates[np.isfinite(coordinates)]
+            ticks = known / time.step.days
+            if np.any(np.abs(known - np.rint(ticks) * time.step.days) > OBSERVATION_TIME_TOLERANCE):
+                return PanelPreparationFailure(
+                    f"Observation {recorded.observation.id} does not align with the model time step"
+                )
+        values = vector_values(history.values)[keep]
+        series.append(
+            ObservationSeries(
+                observation=recorded.observation,
+                history=ObservationHistory(
+                    times=NumericalArray.from_numpy(anchors[keep]),
+                    values=tuple(float(value) if np.isfinite(value) else None for value in values),
+                    support_start=tuple(
+                        float(value) if np.isfinite(value) else None for value in starts[keep]
+                    ),
+                    support_end=tuple(
+                        float(value) if np.isfinite(value) else None for value in ends[keep]
+                    ),
+                    empirical=empirical_distribution(values),
+                ),
+            )
+        )
+    return SelectedObservations(series=tuple(series), time_origin=time.window.start_instant)
+
+
 def bind_panel(
     observations: ObservationDataset,
     *,
@@ -200,7 +259,12 @@ def bind_panel(
     )
     if not isinstance(observation_selection, SelectedObservations):
         return PanelPreparationFailure(observation_selection.message)
-    time_origin = observations.time_origin
+    observation_selection = select_model_observations(
+        observation_selection, compiled_dynamical_model.time
+    )
+    if isinstance(observation_selection, PanelPreparationFailure):
+        return observation_selection
+    time_origin = observation_selection.time_origin
     projected = project_observation_data(
         observation_selection, compiled_dynamical_model=compiled_dynamical_model
     )
@@ -218,15 +282,6 @@ def bind_panel(
     )
     if isinstance(events, ObservationPreflightFailure):
         return PanelPreparationFailure(events.message)
-    if events:
-        grid = observation_grid(observation_selection, tuple(event.spec.time for event in events))
-        labels = {str(item.id): item.name for item in compiled_dynamical_model.observations}
-        wide = pivot_to_wide(observation_selection, grid).rename(labels)
-        indices = model_time_indices(grid, np.asarray([event.spec.time for event in events]))
-        events = tuple(
-            ResolvedIntervention(event.index, event.spec.at_time(time=float(grid[index])))
-            for event, index in zip(events, indices, strict=True)
-        )
     values, times, names, wide = prepare_fit_inputs(compiled_dynamical_model, wide)
     support = compile_observation_support_runtime(observation_selection, wide, names)
     if isinstance(support, ObservationPreflightFailure):
@@ -273,7 +328,7 @@ def project_observation_data(
     *,
     compiled_dynamical_model: CompiledDynamicalModel,
 ) -> pl.DataFrame | ObservationPreflightFailure:
-    """Bind selected identities to display columns on the tolerance-merged execution grid."""
+    """Project admitted readings onto every state in the model's fixed grid."""
     missing = [
         series.observation.id
         for series in observations.series
@@ -283,8 +338,6 @@ def project_observation_data(
         return ObservationPreflightFailure.rejected(
             "Prepared observations are missing model indicators: " + ", ".join(missing)
         )
-    grid = observation_grid(observations)
-    if not len(grid):
-        return ObservationPreflightFailure.rejected("Cannot bind an empty observation panel")
+    grid = np.asarray(compiled_dynamical_model.time.time_points)
     labels = {str(item.id): item.name for item in compiled_dynamical_model.observations}
     return pivot_to_wide(observations, grid).rename(labels)

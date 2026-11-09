@@ -20,7 +20,6 @@ from grassmoth.public import DataRef, GitOid, Value
 from grassmoth_server.actions.contracts.identity import (
     ARTIFACT_IDS,
     ArtifactId,
-    ScientificActionId,
 )
 
 
@@ -44,7 +43,7 @@ class ArtifactRecord(Value):
     """An immutable artifact revision with its producer and exact input dependencies.
 
     ``derived_from`` pins the versions used to compute the payload. Initial
-    models pin their question; edits also pin their model parent. The producing
+    models have no dependencies; edits pin their model parent. The producing
     activity stamps ``created_at`` outside deterministic workflow execution.
     """
 
@@ -70,10 +69,6 @@ class StudyState(Value):
     def get(self, artifact_id: ArtifactId) -> ArtifactRecord | None:
         """Look up the selected artifact revision, or ``None`` if that artifact is absent."""
         return self.current.get(artifact_id)
-
-    def has(self, artifact_id: ArtifactId) -> bool:
-        """Check whether the state selects a revision of the requested artifact kind."""
-        return artifact_id in self.current
 
     def matches_inputs(self, output: ArtifactId, *inputs: ArtifactId) -> bool:
         """Whether an artifact pins exactly the selected versions of these inputs."""
@@ -114,13 +109,6 @@ class RetractedArtifact(Value):
 
     artifact_id: ArtifactId
     reason_ref: str
-
-
-def validate_lineage(state: StudyState, action: ScientificActionId) -> str | None:
-    """Require an existing question for its consumers; publication owns question exclusivity."""
-    if action == "edit_question":
-        return None
-    return None if state.has("question") else "Set the study question first"
 
 
 def apply_effects(

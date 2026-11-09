@@ -6,16 +6,16 @@ from fastapi.testclient import TestClient
 
 from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.api.read_only import create_read_facade_app
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.records import Applied
-from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_server_test_support.action import applied_record, model_root
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.purpose import initial_model
 
 pytestmark = pytest.mark.contract
 
@@ -58,12 +58,12 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
-    question_root("WS-ART")
+    model_root("WS-ART")
     store, repository = ArtifactStore("WS-ART"), StudyRepository("WS-ART")
     client = TestClient(create_read_facade_app())
     saved = []
     for clock in ("1d", "2d"):
-        dynamical_model_spec = DynamicalModelSpec(measurement_clock=clock)
+        dynamical_model_spec = initial_model(question=clock)
         request = EditModelRequest[GitOid](
             input=EditModelInput[GitOid](
                 parent_ref=repository.state().current["model"].revision,
@@ -99,8 +99,7 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
         assert response.status_code == 200, response.text
         assert msgpack.unpackb(response.content)["commit_id"] == revision.commit_id
         assert (
-            msgpack.unpackb(response.content)["body"]["dynamical_model_spec"]["measurement_clock"]
-            == clock
+            msgpack.unpackb(response.content)["body"]["dynamical_model_spec"]["question"] == clock
         )
     assert len(repository.attempts()) == 3
 
@@ -115,7 +114,7 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
-    question_root("WS-TRACE")
+    model_root("WS-TRACE")
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
             parent_ref=StudyRepository("WS-TRACE").state().current["model"].revision,
@@ -127,7 +126,7 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
         "model",
         derived_from={},
         produced_by="edit_model",
-        json_files={"model.json": request.input.dynamical_model_spec.model_dump(mode="json")},
+        json_files={"model.json": initial_model().model_dump(mode="json")},
     )
     source = str(tmp_path / "data/WS-TRACE/tmp/call-test/llm/raw-data/trace.json")
     storage.write_text(
@@ -169,9 +168,9 @@ def test_workspaces_endpoint_lists_study_questions(monkeypatch, tmp_path):
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
 
-    question_root(
+    model_root(
         "WS-LIST",
-        QuestionSpec[ConstructId](text="does X cause Y?", outcome=ConstructId("construct:y")),
+        initial_model(question="does X cause Y?", outcome=ConstructId("construct:y")),
     )
 
     client = TestClient(create_read_facade_app())

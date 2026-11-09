@@ -13,9 +13,7 @@ import pytest
 from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.actions.fit import execution as stage5_inference
 from grassmoth.actions.fit.execution import FittedModelResult
-from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.construct import replace_constructs
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
@@ -138,9 +136,6 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
         result = stage5_inference.fit_model(
             FitInputs(
                 selection=StructuralSelection(dynamical_model_spec, None),
-                question=QuestionSpec[ConstructId](
-                    text="Test", outcome=dynamical_model_spec.constructs[0].id
-                ),
                 data_for_model=data_for_model,
                 sampler=SamplerSpec(),
                 compute_loo_diagnostics=False,
@@ -260,7 +255,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         return fit(
             FitInputs(
                 selection=StructuralSelection(model, None),
-                question=QuestionSpec[ConstructId](text="Test", outcome=model.constructs[0].id),
                 data_for_model=dataset,
                 sampler=revise_fixture(settings, num_samples_per_chain=count),
                 compute_loo_diagnostics=True,
@@ -397,7 +391,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         receipt = remote.fit_on_modal(
             FitInputs(
                 selection=StructuralSelection(model, None),
-                question=QuestionSpec[ConstructId](text="Test", outcome=model.constructs[0].id),
                 data_for_model=dataset,
                 sampler=revise_fixture(
                     settings,

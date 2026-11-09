@@ -12,7 +12,7 @@
 
 > Would the Battle of France have gone differently had the French not limited the work week to 40 hours? ([Willemyns & McClements, 2026](https://juliawillemyns.substack.com/p/nobody-decides-to-decline))
 
-The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](/apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI. Because state is declarative and abstracted at the DSL level, the LLM does no state management and the UI can show every modeling choice with its motivation.
+The harness exposes a DSL of six actions over a [dependency graph of versioned artifacts](/apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI. Because state is declarative and abstracted at the DSL level, the LLM does no state management and the UI can show every modeling choice with its motivation.
 
 Such restrictions applied to the [Bayesian Workflow](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) aim to address the tendency of LLMs to adopt different ad-hoc machinery and vocabulary across studies - often chosen with the answer or existing literature in mind - rendering modeling choices hard to compare.
 
@@ -66,14 +66,14 @@ cp .env.example.dev .env
 bun run dev
 ```
 
-Then open the repository in Claude Code or Codex and give the agent your question and data. The [study API skill](/.agents/skills/grassmoth-study-api/SKILL.md) teaches it the seven actions; follow the study in the web UI at `http://localhost:3000/workspaces/<workspace-id>`.
+Then open the repository in Claude Code or Codex and give the agent your question and data. The [study API skill](/.agents/skills/grassmoth-study-api/SKILL.md) teaches it the six actions; follow the study in the web UI at `http://localhost:3000/workspaces/<workspace-id>`.
 
 See the [dev setup guide](/docs/guides/dev_setup.md) for full details including environment variables and optional dependencies.
 
 ## Documentation
 
-- **How each action works:** [`edit_question`](/docs/assets/action-flows/edit-question.svg), [`edit_model`](/docs/assets/action-flows/edit-model.svg), [`prepare_data`](/docs/assets/action-flows/prepare-data.svg), [`fit`](/docs/assets/action-flows/fit.svg), [`simulate`](/docs/assets/action-flows/simulate.svg), [`data_diff`](/docs/assets/action-flows/data-diff.svg) and [`model_diff`](/docs/assets/action-flows/model-diff.svg).
-- **[Bayesian workflow](/docs/assets/bayesian-workflow.svg):** the workflow of [Gelman, Vehtari & McElreath (2026)](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) mapped onto the seven actions.
+- **How each action works:** [`edit_model`](/docs/assets/action-flows/edit-model.svg), [`prepare_data`](/docs/assets/action-flows/prepare-data.svg), [`fit`](/docs/assets/action-flows/fit.svg), [`simulate`](/docs/assets/action-flows/simulate.svg), [`data_diff`](/docs/assets/action-flows/data-diff.svg) and [`model_diff`](/docs/assets/action-flows/model-diff.svg).
+- **[Bayesian workflow](/docs/assets/bayesian-workflow.svg):** the workflow of [Gelman, Vehtari & McElreath (2026)](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) mapped onto the six actions.
 - **[Assumptions and limits](/docs/assumptions.md):** the modeling commitments behind every result.
 - **Supported laws:** the [observation law](/docs/reference/statistical-model-spec/likelihoods.md) and [parameter and prior](/docs/reference/statistical-model-spec/parameters.md) references.
 - **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [study API reference](/docs/reference/study-api.md).

@@ -2,7 +2,6 @@
 import type {
   ActionSuccess,
   EditModelOutput,
-  EditQuestionOutput,
   FailedPoll,
   FitOutput,
   RunningPoll,
@@ -13,22 +12,21 @@ import { initialOutcome, modelFixture, outcome } from "./model";
 import { fittedSnapshot } from "./snapshot";
 
 const { id: initialOutcomeId, ...initialDefinition } = initialOutcome;
-export const questionResult: EditQuestionOutput = {
-  question: {
-    text: "How does treatment affect the outcome?",
-    outcome: initialOutcomeId,
-    queries: {},
-  },
+export const initialModelResult: EditModelOutput = {
   dynamical_model_spec: {
     constructs: { [initialOutcomeId]: { ...initialDefinition, indicators: {}, dynamics: {} } },
     edges: {},
     parameters: {},
     distributions: {},
     law_layouts: {},
-    measurement_clock: null,
+    question: modelFixture.question,
+    outcome: initialOutcomeId,
+    time: modelFixture.time,
+    core_query: modelFixture.core_query,
   },
   checks: { specification: [], question: { findings: [] } },
   identification: { outcome: initialOutcomeId, treatments: {} },
+  pruning: { constructs: [], edges: [], parameters: [], distributions: [] },
 };
 
 export const authoredResult: EditModelOutput = {
@@ -178,6 +176,6 @@ export const modelComparison: Extract<ActionSuccess, { action: "model_diff" }> =
   call_id: `call:${"d".repeat(64)}`,
   commit_id: "d".repeat(40),
   status: "success",
-  body: { changes: { measurement_clock: "2d" } },
+  body: { changes: { time: { step: "2d" } } },
   messages: [],
 };

@@ -44,12 +44,12 @@ _ORIGIN = datetime(2026, 1, 1, tzinfo=UTC)
 
 @pytest.mark.contract
 def test_inputs_require_deterministic_laws_and_keep_independent_coordinates():
-    dynamical_model_spec = deterministic_input_model()
+    dynamical_model_spec = deterministic_input_model(time_origin=_ORIGIN)
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     assert compiled_dynamical_model.states[0].is_input
-    assert (
-        dynamical_model_spec.time_points == ()
-    )  # Input points are not retained endogenous states.
+    assert dynamical_model_spec.time_points == tuple(
+        index * 0.5 for index in range(7)
+    )  # The model grid is independent of sparse input changes.
     assert len(compiled_dynamical_model.input_trajectories) == 1
     assert all(not law.layout.constructs for law in compiled_dynamical_model.laws)
     source = dynamical_model_spec.constructs[0]
@@ -122,8 +122,8 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
         compiler=compile_program,
     )
     assert isinstance(bound, BoundPanel), bound
-    np.testing.assert_array_equal(bound.times, [0, 0.5, 1, 2, 2.5, 3])
-    np.testing.assert_array_equal(bound.input_values[:, 0], [1, 3, 3, 3, 2, 2])
+    np.testing.assert_array_equal(bound.times, [0, 0.5, 1, 1.5, 2, 2.5, 3])
+    np.testing.assert_array_equal(bound.input_values[:, 0], [1, 3, 3, 3, 3, 2, 2])
     assert np.isnan(bound.observations[:, 0]).all()
     contradictory = observation_dataset(
         rows.with_columns(
@@ -153,7 +153,7 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
 @pytest.mark.inference(concern="predictive")
 @pytest.mark.inference(concern="simulation")
 def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditioning():
-    dynamical_model_spec = deterministic_input_model()
+    dynamical_model_spec = deterministic_input_model(time_origin=_ORIGIN)
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     source = dynamical_model_spec.constructs[0]
     batch = generate_simulation_batch(
@@ -176,13 +176,11 @@ def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditio
         batch.prediction.trajectory.latents[:, :, 0],
         np.tile(np.where(grid < 1, expected, 7.0), (2, 1)),
     )
-    paths = jnp.array([[[1.0, 4.0], [3.0, 5.0]], [[1.0, 6.0], [3.0, 7.0]]])
+    paths = jnp.arange(2 * 7 * 2, dtype=float).reshape(2, 7, 2)
     conditioned, _ = condition_model(
         dynamical_model_spec,
         compiled_dynamical_model,
         particle_posterior(JointPosteriorDraws(parameter_draws(dynamical_model_spec, 2), paths)),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=_ORIGIN,
     )
     # Metadata JSON retains array references; the complete transport includes the
     # empirical atoms needed to materialize the conditioned law.
@@ -190,15 +188,15 @@ def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditio
         conditioned.model_dump(context={"binary_arrays": True})
     )
     fitted = compile_model_fixture(restored)
-    assert restored.time_points == (0.0, 1.0)
+    assert restored.time_points == dynamical_model_spec.time.time_points
     assert fitted.input_trajectories[0].layout.time_origin == _ORIGIN
     assert fitted.input_trajectories[0].values == (1.0, 3.0, 2.0)
     draws = sample_model_laws(fitted, draws=2, key=jax.random.PRNGKey(1))
     assert draws.state_ids == (dynamical_model_spec.constructs[1].id,)
     assert draws.latent_paths is not None
-    assert draws.latent_paths.shape == (2, 2, 1)
+    assert draws.latent_paths.shape == (2, 7, 1)
     forecast = generate_simulation_batch(
-        fitted, start=2, end=4, draws=2, time_origin=_ORIGIN, compute_budget=COMPUTE_BUDGET
+        fitted, start=4, end=5, draws=2, time_origin=_ORIGIN, compute_budget=COMPUTE_BUDGET
     )
     assert isinstance(forecast, SimulationBatch)
     assert np.isfinite(forecast.prediction.trajectory.latents).all()

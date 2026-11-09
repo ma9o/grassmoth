@@ -42,9 +42,7 @@ if TYPE_CHECKING:
     import modal
 
     from grassmoth.public import (
-        ConstructId,
         InferenceHardware,
-        QuestionSpec,
         SamplerSpec,
     )
 
@@ -59,7 +57,6 @@ class FitComputeInput:
     """Pinned, self-contained inputs; no remote workspace or storage credentials."""
 
     dynamical_model_spec_bytes: bytes
-    question: QuestionSpec[ConstructId]
     observations: bytes
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
@@ -122,8 +119,7 @@ def execute_fit_compute(payload: FitComputeInput) -> FitOutput:
     )
     return run_fit(
         FitInputs(
-            selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
-            question=payload.question,
+            selection=StructuralSelection.for_model(dynamical_model_spec),
             data_for_model=ObservationDataset.model_validate(unpack_result(payload.observations)),
             sampler=payload.sampler,
             compute_loo_diagnostics=payload.compute_loo_diagnostics,
@@ -303,7 +299,6 @@ def fit_on_modal(
     result = _dispatch_fit(
         FitComputeInput(
             dynamical_model_spec_bytes=pack_result(inputs.selection.dynamical_model_spec),
-            question=inputs.question,
             observations=pack_observations(inputs.data_for_model),
             sampler=inputs.sampler,
             compute_loo_diagnostics=inputs.compute_loo_diagnostics,

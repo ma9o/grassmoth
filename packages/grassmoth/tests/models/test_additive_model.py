@@ -15,6 +15,7 @@ from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 
@@ -34,6 +35,10 @@ def _model():
     emax = scientific_id("parameter", "emax")
     return DynamicalModelSpec.model_validate(
         {
+            "question": "How does X change Y?",
+            "outcome": "construct:y",
+            "time": {"window": {"start": "2024-01-01", "horizon": "2d"}, "step": "1d"},
+            "core_query": {"window": {"start": "2024-01-01", "horizon": "2d"}},
             "constructs": {
                 "construct:x": {
                     "name": "X",
@@ -133,19 +138,16 @@ def test_entities_gain_detail_with_one_owner_and_native_prior():
 
 
 def test_partial_model_is_valid_but_operation_requirements_are_explicit():
-    initial = DynamicalModelSpec()
-    assert initial.edges == initial.constructs == ()
-    assert DynamicalModelSpec.model_validate({}).materialized().edges == ()
-    with pytest.raises(ValueError, match="clock"):
+    initial = initial_model()
+    assert len(initial.constructs) == 1
+    assert initial.edges == ()
+    with pytest.raises(ValueError, match="indicators"):
         compile_model_fixture(initial)
     partial = _model()
-    with pytest.raises(ValueError, match="clock"):
-        partial.require_measurements()
+    partial.require_measurements()
     with pytest.raises(ValueError, match="prior laws"):
-        require_priors(StructuralSelection(partial, None))
-    complete_measurements = revise_fixture(partial, measurement_clock="1d")
-    complete_measurements.require_measurements()
-    assert partial.measurement_clock is None
+        require_priors(StructuralSelection.for_model(partial))
+    assert partial.time.step.source == "1d"
 
 
 @pytest.mark.parametrize(
@@ -231,7 +233,12 @@ def test_graph_membership_follows_edges_and_revisions_preserve_connectivity():
         dynamical_model_spec.with_entities(
             edges=(dynamical_model_spec.edges[0], dynamical_model_spec.edges[2])
         )
-    assert dynamical_model_spec.with_entities(edges=()).constructs == ()
-    shortened = dynamical_model_spec.with_entities(edges=dynamical_model_spec.edges[:-1])
+    outcome = dynamical_model_spec.get_construct(dynamical_model_spec.outcome)
+    assert dynamical_model_spec.with_entities(edges=(), constructs=(outcome,)).constructs == (
+        outcome,
+    )
+    shortened = revise_fixture(
+        dynamical_model_spec, outcome=dynamical_model_spec.constructs[2].id
+    ).with_entities(edges=dynamical_model_spec.edges[:-1])
     assert [construct.name for construct in shortened.constructs] == ["A", "B", "C"]
     assert [construct.name for construct in dynamical_model_spec.constructs] == ["A", "B", "C", "D"]

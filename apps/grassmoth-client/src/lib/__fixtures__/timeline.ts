@@ -21,7 +21,7 @@ export const simulation = revision(5, {
     action: "simulate",
     input: {
       dynamical_model_spec_ref: "3".repeat(40),
-      simulation: { start: "2026-01-01", horizon: "1d", interventions: [] },
+      simulation: { window: { start: "2026-01-01", horizon: "1d" }, interventions: [] },
       seed: 0,
       num_replicates: 100,
     },
@@ -49,7 +49,6 @@ export const comparison = revision(6, {
 
 export const comparisonRevisions = (
   [
-    "edit_question",
     "edit_model",
     "prepare_data",
     "fit",

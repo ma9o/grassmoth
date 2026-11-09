@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -313,10 +312,10 @@ def test_severed_components_do_not_require_priors_or_bind_numerical_parameters()
         unassigned,
         compile_model_fixture(unassigned, outcome),
         particle_posterior(
-            JointPosteriorDraws(draws.parameters, jnp.zeros((2, 2, 2)), draws.state_ids)
+            JointPosteriorDraws(
+                draws.parameters, jnp.zeros((2, len(unassigned.time_points), 2)), draws.state_ids
+            )
         ),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
     )
     assert conditioned.parameter(island_parameter.id) == unassigned.parameter(island_parameter.id)
     assert set(conditioned.distributions) & set(unassigned.distributions)
@@ -346,13 +345,13 @@ def test_conditioning_retains_a_construct_without_edges():
     from grassmoth_test_support.inference import parameter_draws
 
     x = next(item for item in x_model().constructs if item.name == "X")
-    lone = x_model().with_entities(constructs=(x,), edges=())
+    lone = revise_fixture(x_model(), outcome=x.id).with_entities(constructs=(x,), edges=())
     conditioned, identity = condition_model(
         lone,
         compile_model_fixture(lone),
-        particle_posterior(JointPosteriorDraws(parameter_draws(lone, 2), jnp.zeros((2, 2, 1)))),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        particle_posterior(
+            JointPosteriorDraws(parameter_draws(lone, 2), jnp.zeros((2, len(lone.time_points), 1)))
+        ),
     )
     assert conditioned.edges == ()
     assert conditioned.get_construct(x.id).distribution == identity

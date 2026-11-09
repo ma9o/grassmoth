@@ -13,7 +13,7 @@ export const TIMELINE_LANES: ReadonlyArray<{
 }> = [
   { name: "Diffs", actions: ["data_diff", "model_diff"], failures: "below" },
   { name: "Data", actions: ["prepare_data", "simulate"], failures: "below" },
-  { name: "Model", actions: ["edit_question", "edit_model", "fit"], failures: "above" },
+  { name: "Model", actions: ["edit_model", "fit"], failures: "above" },
 ];
 
 export interface RevisionTimelineNode {

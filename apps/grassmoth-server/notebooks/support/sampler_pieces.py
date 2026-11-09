@@ -15,7 +15,7 @@ posterior. It keeps the two features that decide our sampler choice for France:
 - the noise scale is *coupled*: given a whole path, σ is pinned to about 1/√(2T) on
   the log scale, far tighter than the readings alone pin it.
 
-Everything here is a client of the actions (`edit_question`, `edit_model`,
+Everything here is a client of the actions (`edit_model`,
 `simulate`, `fit`) plus exact Kalman arithmetic for the answer key; no sampler code
 is re-implemented.
 """
@@ -100,19 +100,25 @@ class Study:
 
     def initial_model(self) -> str:
         payload = {
-            "question": {
-                "text": QUESTION,
-                "outcome": {
-                    "id": "construct:x",
-                    "name": "x",
-                    "reasoning": {"text": QUESTION},
-                    "role": "endogenous",
-                    "temporal_status": "time_varying",
+            "dynamical_model_spec": {
+                "question": QUESTION,
+                "outcome": "construct:x",
+                "time": {"window": {"start": "2020-01-01", "horizon": f"{DAYS}d"}, "step": CLOCK},
+                "core_query": {
+                    "window": {"start": "2020-01-01", "horizon": f"{DAYS}d"},
+                    "interventions": [],
                 },
-                "queries": {},
+                "constructs": {
+                    "construct:x": {
+                        "name": "x",
+                        "reasoning": {"text": QUESTION},
+                        "role": "endogenous",
+                        "temporal_status": "time_varying",
+                    }
+                },
             }
         }
-        return self.produced(self.run("edit_question", payload)["commit_id"])["model"]
+        return self.produced(self.run("edit_model", payload)["commit_id"])["model"]
 
     def model(self, parent: str, spec: Json) -> str:
         envelope = self.run("edit_model", {"parent_ref": parent, "dynamical_model_spec": spec})
@@ -122,7 +128,10 @@ class Study:
         """One simulated history; returns the data revision and the body."""
         payload = {
             "dynamical_model_spec_ref": model,
-            "simulation": {"start": "2020-01-01", "horizon": f"{DAYS}d", "interventions": []},
+            "simulation": {
+                "window": {"start": "2020-01-01", "horizon": f"{DAYS}d"},
+                "interventions": [],
+            },
             "seed": seed,
             "num_replicates": 1,
         }
@@ -320,7 +329,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
         "parameters": parameters,
         "distributions": distributions,
         "law_layouts": layouts,
-        "measurement_clock": CLOCK,
+        "time": {"window": {"start": "2020-01-01", "horizon": f"{DAYS}d"}, "step": CLOCK},
     }
 
 

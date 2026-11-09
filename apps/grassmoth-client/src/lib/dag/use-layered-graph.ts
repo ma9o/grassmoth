@@ -61,7 +61,8 @@ export function useLayeredGraph({
   const [pane, setPane] = useState({ width: 0, height: 0 });
 
   const entities = useMemo(() => graphEntities(indexed), [indexed]);
-  const outcome = causalEffect(simulation)?.outcome ?? modelSnapshot.question?.outcome ?? null;
+  const outcome =
+    causalEffect(simulation)?.outcome ?? modelSnapshot.dynamical_model_spec?.outcome ?? null;
   const topologies = useMemo(
     () => ({
       rich: buildLayeredCausalGraph(

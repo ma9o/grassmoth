@@ -64,9 +64,6 @@ export type DynamicsMechanismSpec = components["schemas"]["DynamicsMechanismSpec
 export type EdgeId = components["schemas"]["EdgeId-Output"];
 export type EdgeRef = components["schemas"]["EdgeRef"];
 export type EditModelOutput = components["schemas"]["EditModelOutput"];
-export type EditQuestionInput = components["schemas"]["EditQuestionInput-Output"];
-export type EditQuestionOutput = components["schemas"]["EditQuestionOutput"];
-export type EditQuestionRequest = components["schemas"]["EditQuestionRequest-Output"];
 export type EffectSummary = components["schemas"]["EffectSummary"];
 export type EmpiricalDistribution = components["schemas"]["EmpiricalDistribution"];
 export type EntityRef = components["schemas"]["EntityRef"];
@@ -233,7 +230,6 @@ export type ProgramCompileReport = components["schemas"]["ProgramCompileReport"]
 export type ProgressEvent = components["schemas"]["ProgressEvent"];
 export type ProgressMessage = components["schemas"]["ProgressMessage"];
 export type ProportionComparison = components["schemas"]["ProportionComparison"];
-export type QueryName = components["schemas"]["QueryName"];
 export type QueryTargetSubject = components["schemas"]["QueryTargetSubject"];
 export type QueryWindowSubject = components["schemas"]["QueryWindowSubject"];
 export type QuestionAssessment = components["schemas"]["QuestionAssessment"];
@@ -281,6 +277,7 @@ export type StudyRevision = components["schemas"]["StudyRevision"];
 export type StudyState = components["schemas"]["StudyState"];
 export type SummaryOperator = components["schemas"]["SummaryOperator"];
 export type TemporalStatus = components["schemas"]["TemporalStatus"];
+export type TimeWindowSpec = components["schemas"]["TimeWindowSpec"];
 export type TimelineRecord = components["schemas"]["TimelineRecord"];
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
 export type TimelineRevision = components["schemas"]["TimelineRevision"];
@@ -425,10 +422,11 @@ export type DeltaLawSpec<A> = {
 export type EditModelInput<RevisionT> = {
     /**
      * Parent Ref
-     * @description Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model.
+     * @description Model revision to edit; omission creates a new model. 'latest' requires an existing model.
+     * @default null
      */
-    readonly parent_ref: RevisionT;
-    /** @description Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
+    readonly parent_ref?: RevisionT | null;
+    /** @description Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
     readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
 };
 export type EditModelRequest<RevisionT> = {
@@ -660,23 +658,6 @@ export type PrepareDataRequest<RevisionT, SourceT> = {
      * @default null
      */
     readonly reasoning: string | null;
-};
-export type QuestionSpec<OutcomeT> = {
-    /**
-     * Text
-     * @description The user's question in their own words.
-     */
-    readonly text: string;
-    /**
-     * Outcome
-     * @description The construct whose course answers the question.
-     */
-    readonly outcome: OutcomeT;
-    /**
-     * Queries
-     * @description Named contrasts against the recorded course, each with at least one intervention.
-     */
-    readonly queries: Readonly<Partial<Record<QueryName, SimulationSpec>>>;
 };
 export type Removed<PayloadT> = {
     /**

@@ -152,8 +152,6 @@ def test_gpu_commits_full_and_transfer_bodies_before_returning_pointers(
 
     result, body, completion, _request = retained_case
     if thinned:
-        from datetime import UTC, datetime
-
         import jax.numpy as jnp
 
         from grassmoth.actions.fit.conditioning import condition_model
@@ -173,10 +171,10 @@ def test_gpu_commits_full_and_transfer_bodies_before_returning_pointers(
             model,
             compile_model_fixture(model),
             particle_posterior(
-                JointPosteriorDraws(parameter_draws(model, 52), jnp.zeros((52, 2, 2)))
+                JointPosteriorDraws(
+                    parameter_draws(model, 52), jnp.zeros((52, len(model.time_points), 2))
+                )
             ),
-            times=jnp.array([0.0, 1.0]),
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         )
         metadata = revise_fixture(
             result.inference.core.inference_metadata,
@@ -416,7 +414,7 @@ def test_dispatch_rejects_pointers_for_another_call(retained_case, monkeypatch):
     from grassmoth_server_test_support.fit_cache import fixture
 
     _result, _body, completion, _request = retained_case
-    question, selection, data = fixture()
+    selection, data = fixture()
     monkeypatch.setattr(
         remote, "_dispatch_fit", Mock(return_value=remote.FitComputeResult(pack_result(completion)))
     )
@@ -424,7 +422,6 @@ def test_dispatch_rejects_pointers_for_another_call(retained_case, monkeypatch):
         remote.fit_on_modal(
             FitInputs(
                 selection=selection,
-                question=question,
                 data_for_model=data,
                 sampler=SamplerSpec(hardware="L40S"),
                 compute_loo_diagnostics=False,

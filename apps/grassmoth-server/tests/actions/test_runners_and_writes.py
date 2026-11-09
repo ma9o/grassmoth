@@ -9,26 +9,26 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.preparation import FailedExtractionChunk
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.models.causal.analysis import identify_model
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.actions.contracts.requests import EditModelRequest, EditQuestionRequest
+from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState, apply_effects
-from grassmoth_server_test_support.action import applied_record, edit_and_check, question_root
+from grassmoth_server_test_support.action import applied_record, edit_and_check, model_root
 from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
 from grassmoth_server_test_support.storage import seed_record, seed_source_table
 from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -54,10 +54,10 @@ def _outcome():
 
 
 def _rooted(workspace):
-    """The study state after edit_question, asking about Perf."""
-    root = question_root(
+    """The study state after edit_model, asking about Perf."""
+    root = model_root(
         workspace,
-        QuestionSpec[ConstructId](text="does stress hurt performance?", outcome=_outcome()),
+        initial_model(question="does stress hurt performance?", outcome=_outcome()),
     )
     return StudyRepository(workspace).state(root.commit_id)
 
@@ -92,7 +92,7 @@ def _write(store, artifact_id, payload, pins=None):
         artifact_id,
         derived_from=pins or {},
         produced_by=None,
-        json_files={{"model": "model.json", "question": "question.json"}[artifact_id]: payload},
+        json_files={{"model": "model.json", "question": "model.json"}[artifact_id]: payload},
     )
 
 
@@ -100,12 +100,10 @@ def test_identification_records_positive_and_absent_queries():
     report = identify_model(StructuralSelection(_model(), _outcome()))
     assert report.estimable_treatments == (_model().constructs[0].id,)
     assert report.outcome == _outcome()
-    question = QuestionSpec[ConstructId](
-        text="Does stress affect performance?", outcome=ConstructId("construct:not_defined_yet")
-    )
-    absent = identify_model(StructuralSelection.for_question(_model(), question))
-    assert absent.outcome is None
-    assert absent.estimable_treatments == ()
+    unmeasured = initial_model(question="Does a new outcome change?")
+    absent = StructuralSelection.for_model(unmeasured).identification
+    assert absent.outcome == unmeasured.outcome
+    assert absent.treatments == {}
 
 
 def test_identification_preserves_negative_findings():
@@ -217,7 +215,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
     assert journal.read_file(journal.head(), "result.msgpack")
     current = apply_effects(state, effects.effects.produced, effects.effects.retracted)
     if not nonempty:
-        assert not current.has("panel")
+        assert not (current.get("panel") is not None)
     if nonempty:
         panel = next(info for info in effects.effects.produced if info.artifact_id == "panel")
         assert panel.derived_from == {
@@ -246,7 +244,6 @@ def test_model_write_cascades_without_parallel_scientific_catalogs(workspace):
     assert all(
         info.derived_from
         == {
-            "question": root.current["question"].revision,
             "model": artifact_revision(workspace, "model", 1),
         }
         for info in effects.effects.produced
@@ -255,7 +252,6 @@ def test_model_write_cascades_without_parallel_scientific_catalogs(workspace):
     assert next(
         info for info in effects.effects.produced if info.artifact_id == "model"
     ).derived_from == {
-        "question": root.current["question"].revision,
         "model": root.current["model"].revision,
     }
 
@@ -348,7 +344,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         state.with_artifacts([panel]),
         data=DataRef[GitOid, int](revision=panel.revision, replicate_index=0),
     )
-    changed = revise_fixture(dynamical_model_spec, measurement_clock="2d")
+    changed = revise_fixture(dynamical_model_spec, question="Revised question")
     effects = edit_and_check(
         workspace,
         EditModelRequest[GitOid].model_validate(
@@ -425,4 +421,4 @@ def test_failed_tree_write_publishes_no_artifact(workspace, monkeypatch):
 
 def test_question_write_requires_text():
     with pytest.raises(ValidationError):
-        EditQuestionRequest.model_validate({"question": {"text": "   "}})
+        EditModelRequest.model_validate({"question": {"text": "   "}})

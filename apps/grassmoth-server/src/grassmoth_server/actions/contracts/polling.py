@@ -9,7 +9,6 @@ from pydantic import Field, TypeAdapter, computed_field
 from grassmoth.public import (
     DataDiffOutput,
     EditModelOutput,
-    EditQuestionOutput,
     FitOutput,
     GitOid,
     ModelDiffOutput,
@@ -76,8 +75,7 @@ class SuccessfulPoll[ActionT: str, BodyT](Value):
 
 
 type ActionSuccess = Annotated[
-    SuccessfulPoll[Literal["edit_question"], EditQuestionOutput]
-    | SuccessfulPoll[Literal["edit_model"], EditModelOutput]
+    SuccessfulPoll[Literal["edit_model"], EditModelOutput]
     | SuccessfulPoll[Literal["prepare_data"], PrepareDataOutput]
     | SuccessfulPoll[Literal["fit"], FitOutput]
     | SuccessfulPoll[Literal["simulate"], SimulateOutput]

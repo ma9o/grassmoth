@@ -1,7 +1,5 @@
 """DynamicalModelSpec identity, parameter draws, and native model execution."""
 
-from datetime import UTC, datetime
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -86,6 +84,11 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         dynamical_model_spec = (
             _conditioning_revises_the_same_type_and_retains_joint_uncertainty_complete_test_model()
         )
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": "2024-01-01", "horizon": "1d"}, "step": "8h"},
+        core_query={"window": {"start": "2024-01-01", "horizon": "1d"}},
+    )
     count = 3
     samples = {
         site.name: 100 * (index + 1)
@@ -110,11 +113,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         dynamical_model_spec,
         compile_model_fixture(dynamical_model_spec),
         result,
-        times=jnp.arange(4),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
     )
     assert type(conditioned) is DynamicalModelSpec
-    assert dynamical_model_spec.time_points == ()
+    assert dynamical_model_spec.time_points == (0.0, 1 / 3, 2 / 3, 1.0)
     assert len(dynamical_model_spec.distributions) == len(dynamical_model_spec.parameters)
     assert len(conditioned.distributions) == 1
     assert all(
@@ -168,7 +169,7 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
             ),
             None,
         )
-    with pytest.raises(ValueError, match="identity and event width must match"):
+    with pytest.raises(ValueError, match="model time grid and origin"):
         StructuralSelection(
             loaded.with_entities(
                 law_layouts={

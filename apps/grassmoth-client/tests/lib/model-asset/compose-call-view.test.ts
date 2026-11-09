@@ -5,10 +5,9 @@ import {
   simulatedResult,
   authoredResult,
   fittedResult,
-  questionResult,
+  initialModelResult,
 } from "@/lib/__fixtures__/action-results";
-import { initialOutcome, outcome } from "@/lib/__fixtures__/model";
-import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
+import { outcome } from "@/lib/__fixtures__/model";
 import {
   callDependencies,
   modelReference,
@@ -20,7 +19,7 @@ const simulationReport = simulatedResult.report;
 
 const WORKSPACE = "TEST";
 const oid = (seq: number) => seq.toString(16).padStart(40, "0");
-const question = fixtureValue(authoredSnapshot.question);
+const question = initialModelResult.dynamical_model_spec;
 const model = () => authoredResult;
 const observation = fixtureValue(outcome.indicators[0]).observation;
 const extraction = {
@@ -29,7 +28,7 @@ const extraction = {
   source_columns: [],
 };
 const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, end: null };
-const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
+const design = { window: { start: "2026-01-01", horizon: "1d" }, interventions: [] };
 const settings = {
   profile: false,
   thinning: null,
@@ -60,9 +59,9 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
   const request: NonNullable<TimelineRevision["record"]["attempt"]["request"]> =
     seq === 1
       ? {
-          action: "edit_question",
+          action: "edit_model",
           reasoning: null,
-          input: { question: { ...question, outcome: initialOutcome } },
+          input: { parent_ref: null, dynamical_model_spec: question },
         }
       : seq === 5
         ? {
@@ -144,28 +143,16 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
                       source: { kind: "files" },
                     },
                   ]
-                : request.action === "edit_question" || request.action === "prepare_data"
+                : request.action === "prepare_data"
                   ? [
                       {
-                        artifact_id: request.action === "edit_question" ? "question" : "panel",
+                        artifact_id: "panel",
                         revision: oid(seq),
                         derived_from: {},
                         produced_by: request.action,
                         created_at: "2026-01-01T00:00:00Z",
                         source: { kind: "files" },
                       },
-                      ...(request.action === "edit_question"
-                        ? [
-                            {
-                              artifact_id: "model" as const,
-                              revision: oid(101),
-                              derived_from: { question: oid(1) },
-                              produced_by: request.action,
-                              created_at: "2026-01-01T00:00:00Z",
-                              source: { kind: "files" as const },
-                            },
-                          ]
-                        : []),
                     ]
                   : [],
             retracted: [],
@@ -186,10 +173,8 @@ function savedResult(seq: number): ActionSuccess {
     messages: [],
   };
   switch (call.record.attempt.action) {
-    case "edit_question":
-      return { ...envelope, action: "edit_question", body: { ...questionResult, question } };
     case "edit_model":
-      return { ...envelope, action: "edit_model", body: model() };
+      return { ...envelope, action: "edit_model", body: seq === 1 ? initialModelResult : model() };
     case "prepare_data":
       return {
         ...envelope,
@@ -264,10 +249,10 @@ function compose(
 describe("views composed from recorded call dependencies", () => {
   it("shows the initial outcome model and its saved findings", () => {
     const { view } = compose(entry(1));
-    expect(view.dynamical_model_spec).toEqual(questionResult.dynamical_model_spec);
+    expect(view.dynamical_model_spec).toEqual(initialModelResult.dynamical_model_spec);
     expect(view.state.current.model?.revision).toBe(oid(101));
-    expect(view.specification).toEqual(questionResult.checks.specification);
-    expect(view.identification).toEqual(questionResult.identification);
+    expect(view.specification).toEqual(initialModelResult.checks.specification);
+    expect(view.identification).toEqual(initialModelResult.identification);
     expect(Object.keys(fixtureValue(view.dynamical_model_spec).constructs)).toEqual([
       question.outcome,
     ]);
@@ -283,15 +268,15 @@ describe("views composed from recorded call dependencies", () => {
     expect(view.metadata).toBeNull();
     expect(view.state.data).toBeNull();
     expect(view.state.current.panel).toBeUndefined();
-    expect(view.question).toEqual(question);
-    expect(calls.map((call) => call.record.seq).sort((a, b) => a - b)).toEqual([1, 4, 5, 7, 8, 9]);
+    expect(view.dynamical_model_spec?.question).toEqual(question.question);
+    expect(calls.map((call) => call.record.seq).sort((a, b) => a - b)).toEqual([4, 5, 7, 8, 9]);
     expect(producingCall(journal, view.state.current.model?.revision)).toEqual(entry(8));
   });
 
   it("reads an edited model with its question without fetching the base's fit and data", () => {
     const { calls, view } = compose(entry(11));
-    expect(calls.map((call) => call.record.seq)).toEqual([1, 11]);
-    expect(view.question).toEqual(question);
+    expect(calls.map((call) => call.record.seq)).toEqual([11]);
+    expect(view.dynamical_model_spec?.question).toEqual(question.question);
     expect(view.fit).toBeNull();
     expect(view.metadata).toBeNull();
     expect(view.state.data).toBeNull();

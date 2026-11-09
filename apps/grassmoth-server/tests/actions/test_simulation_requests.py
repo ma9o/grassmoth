@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.scenarios import InterventionSpec
 from grassmoth.artifacts.simulation import SimulationReport, SimulationSpec
@@ -26,7 +26,7 @@ pytestmark = pytest.mark.contract
 def test_simulation_request_is_a_dated_window_with_optional_interventions():
     request = SimulateRequest[GitOid](
         input=SimulateInput[GitOid](
-            simulation=SimulationSpec(start=date(2026, 1, 1), horizon="12d"),
+            simulation=SimulationSpec(window={"start": date(2026, 1, 1), "horizon": "12d"}),
             dynamical_model_spec_ref="a" * 40,
         )
     )
@@ -46,8 +46,7 @@ def test_simulation_request_is_a_dated_window_with_optional_interventions():
 
 def test_interventions_are_placed_after_the_start_in_model_days():
     spec = SimulationSpec(
-        start=date(2026, 1, 3),
-        horizon="3d",
+        window={"start": date(2026, 1, 3), "horizon": "3d"},
         interventions=(
             InterventionSpec(target="construct:x", value=2),
             InterventionSpec(target="construct:x", after="1d", value=4),
@@ -55,7 +54,7 @@ def test_interventions_are_placed_after_the_start_in_model_days():
     )
     assert SimulationSpec.model_validate_json(spec.model_dump_json()) == spec
     origin = datetime(2026, 1, 1, tzinfo=UTC)
-    assert (spec.start_day(origin), spec.end_day(origin)) == (2.0, 5.0)
+    assert (spec.window.start_day(origin), spec.window.end_day(origin)) == (2.0, 5.0)
     assert [(event.time, event.value) for event in spec.assignments(origin)] == [
         (2.0, 2.0),
         (3.0, 4.0),
@@ -80,8 +79,7 @@ def test_intervention_offsets_values_and_conflicts_are_explicit(events):
     with pytest.raises(ValidationError):
         SimulationSpec.model_validate(
             {
-                "start": "2026-01-01",
-                "horizon": "3d",
+                "window": {"start": "2026-01-01", "horizon": "3d"},
                 "interventions": [{"target": "construct:x", **event} for event in events],
             }
         )
@@ -120,7 +118,7 @@ def _response(origin: datetime = datetime(2026, 1, 1, tzinfo=UTC)):
             ],
             "support_start_times": NumericalArray.from_numpy(np.asarray(days)[:, None] - 1),
             "support_end_times": NumericalArray.from_numpy(np.asarray(days)[:, None]),
-            "mask": NumericalArray.from_numpy(np.ones((3, 1), dtype=bool)),
+            "mask": NumericalArray.from_numpy(np.ones((100, 3, 1), dtype=bool)),
         },
         "parameter_draws": {},
         "arms": {
@@ -179,31 +177,29 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     import jax.numpy as jnp
 
     from grassmoth.actions.fit.conditioning import condition_model
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.models.ssm.inference.types import JointPosteriorDraws
     from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
     from grassmoth_server.actions.errors import ActionExecutionError
     from grassmoth_server.actions.runners import run_action
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import ArtifactStore
-    from grassmoth_server.study.state import StudyState
-    from grassmoth_server_test_support.helpers import run_async, write_question
+    from grassmoth_server_test_support.helpers import run_async
     from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
     from grassmoth_test_support.inference import parameter_draws
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("ORIGIN")
     dynamical_model_spec = x_y_model()
-    fit_origin = datetime(2024, 1, 2, tzinfo=UTC)
     if conditioned:
         dynamical_model_spec, _ = condition_model(
             dynamical_model_spec,
             compile_model_fixture(dynamical_model_spec),
             particle_posterior(
-                JointPosteriorDraws(parameter_draws(dynamical_model_spec, 2), jnp.zeros((2, 2, 2)))
+                JointPosteriorDraws(
+                    parameter_draws(dynamical_model_spec, 2),
+                    jnp.zeros((2, len(dynamical_model_spec.time_points), 2)),
+                )
             ),
-            times=jnp.array([0.0, 1.0]),
-            time_origin=fit_origin,
         )
     # An imported conditioned model must be executable without its original fit history.
     from grassmoth_server_test_support.storage import seed_model_record
@@ -212,28 +208,17 @@ def test_runner_uses_model_time_binding_without_reading_panels(
         store, dynamical_model_spec, derived_from={}, produced_by="edit_model"
     )
 
-    panel = seed_record(
-        store,
-        "panel",
-        derived_from={},
-        produced_by="prepare_data",
-        json_files={"metadata.json": panel_metadata().model_dump(mode="json")},
-        parquet_files={"panel.parquet": panel_frame(n_days=2)},
-    )
-    state = StudyState().with_artifacts(
-        [
-            write_question(
-                store,
-                QuestionSpec[ConstructId](
-                    text="Effect on sleep", outcome=dynamical_model_spec.constructs[1].id
-                ),
-            ),
-            record,
-            *([panel] if current_panel else []),
-        ]
-    )
-    design = SimulationSpec(start=date(2026, 1, 1), horizon="2d")
-    expected_origin = fit_origin if conditioned else design.start_instant
+    if current_panel:
+        seed_record(
+            store,
+            "panel",
+            derived_from={},
+            produced_by="prepare_data",
+            json_files={"metadata.json": panel_metadata().model_dump(mode="json")},
+            parquet_files={"panel.parquet": panel_frame(n_days=2)},
+        )
+    design = SimulationSpec(window={"start": date(2026, 1, 1), "horizon": "2d"})
+    expected_origin = dynamical_model_spec.time.window.start_instant
     calls = []
 
     def generate(
@@ -250,7 +235,10 @@ def test_runner_uses_model_time_binding_without_reading_panels(
         assert (seed, draws) == (73, 1)
         calls.append(time_origin)
         assert time_origin == expected_origin
-        assert (start, end) == (design.start_day(expected_origin), design.end_day(expected_origin))
+        assert (start, end) == (
+            design.window.start_day(expected_origin),
+            design.window.end_day(expected_origin),
+        )
         assert assignments == ()
         return ObservationPreflightFailure.rejected("checked model-owned coordinates")
 
@@ -275,7 +263,6 @@ def test_runner_uses_model_time_binding_without_reading_panels(
                         num_replicates=1,
                     )
                 ),
-                state,
             )
         )
     assert calls == [expected_origin]

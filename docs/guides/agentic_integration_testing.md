@@ -263,10 +263,10 @@ curl -s -X POST http://localhost:8100/api/upload \
   -F "workspaceId=$WORKSPACE_ID" \
   -F "file=@/tmp/grassmoth-observations.csv"
 
-curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
+curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_model \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
-  -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\",\"outcome\":{\"id\":\"construct:sleep\",\"name\":\"Sleep\",\"reasoning\":{\"text\":\"The course of sleep we want to explain.\"},\"role\":\"endogenous\",\"temporal_status\":\"time_varying\"}}}}"
+  -d "{\"action\":\"edit_model\",\"input\":{\"dynamical_model_spec\":{\"question\":\"$QUESTION\",\"outcome\":\"construct:sleep\",\"time\":{\"window\":{\"start\":\"2026-01-01\",\"horizon\":\"30d\"},\"step\":\"1d\"},\"core_query\":{\"window\":{\"start\":\"2026-01-01\",\"horizon\":\"30d\"}},\"constructs\":{\"construct:sleep\":{\"name\":\"Sleep\",\"reasoning\":{\"text\":\"The course of sleep we want to explain.\"},\"role\":\"endogenous\",\"temporal_status\":\"time_varying\"}}}}}"
 ```
 
 `GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [study API reference](../reference/study-api.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../README.md#documentation) show what each action does.

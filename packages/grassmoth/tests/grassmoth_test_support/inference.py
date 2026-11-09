@@ -224,15 +224,15 @@ def bind_panel_fixture(
     compiled_dynamical_model: CompiledDynamicalModel, observations, times, *, support=None
 ):
     """Bind a numerical test fixture through the observation owners."""
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
     import polars as pl
 
     from grassmoth.models.ssm.preparation.binding import BoundPanel, bind_panel
     from grassmoth.models.ssm.preparation.observations import simulation_observation_support
 
-    observations, times = jnp.asarray(observations), jnp.asarray(times)
-    origin = datetime(1970, 1, 1, tzinfo=UTC)
+    observations, times = jnp.asarray(observations), np.asarray(times)
+    origin = compiled_dynamical_model.time.window.start_instant
     support = (
         simulation_observation_support(
             compiled_dynamical_model, np.asarray(times), time_origin=origin
@@ -240,6 +240,9 @@ def bind_panel_fixture(
         if support is None
         else support
     )
+    from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
+
+    assert not isinstance(support, ObservationPreflightFailure), support
     rows = []
     for i, observation in enumerate(compiled_dynamical_model.observations):
         for t, at in enumerate(np.asarray(times)):
@@ -331,9 +334,12 @@ def nonlinear_fit_fixture():
         "ecosystem_consumer/nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model.json"
     )
     prepared = compile_fit_fixture(model)
+    observations = (
+        jnp.full((len(model.time_points), 2), jnp.nan)
+        .at[jnp.array([0, 1, 3, 18])]
+        .set(jnp.array([[0.2, 1.0], [jnp.nan, 2.0], [0.3, jnp.nan], [-0.2, 0.0]]))
+    )
     panel = bind_panel_fixture(
-        prepared.compiled_dynamical_model,
-        jnp.array([[0.2, 1.0], [jnp.nan, 2.0], [0.3, jnp.nan], [-0.2, 0.0]]),
-        jnp.array([0.0, 0.05, 0.17, 0.9]),
+        prepared.compiled_dynamical_model, observations, np.asarray(model.time_points)
     )
     return prepared, panel

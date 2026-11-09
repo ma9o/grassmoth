@@ -1,19 +1,16 @@
 import type {
   ActionSuccess,
   EditModelOutput,
-  EditQuestionOutput,
   FitOutput,
   ModelSnapshot,
   PrepareDataOutput,
   RecordDependency,
   TimelineRevision,
 } from "@grassmoth/api-types";
-import { questionCall } from "./call-dependencies";
 
 interface ViewParts {
   artifacts: ModelSnapshot["state"]["current"];
-  question: ModelSnapshot["question"];
-  modelOutput: EditModelOutput | EditQuestionOutput | null;
+  modelOutput: EditModelOutput | null;
   dynamicalModelSpec: ModelSnapshot["dynamical_model_spec"];
   fitOutput: FitOutput | null;
   prepared: PrepareDataOutput | null;
@@ -24,7 +21,6 @@ interface ViewParts {
 
 const empty: ViewParts = {
   artifacts: {},
-  question: null,
   modelOutput: null,
   dynamicalModelSpec: null,
   fitOutput: null,
@@ -74,21 +70,10 @@ export function composeCallView(
     );
     let view: ViewParts;
     switch (result.action) {
-      case "edit_question":
-        view = {
-          ...empty,
-          question: result.body.question,
-          artifacts: produced,
-          modelOutput: result.body,
-          dynamicalModelSpec: result.body.dynamical_model_spec,
-        };
-        break;
       case "edit_model": {
-        const question = parts(questionCall(entry, attempts, dependencies));
         view = {
           ...empty,
-          question: question.question,
-          artifacts: { ...question.artifacts, ...produced },
+          artifacts: produced,
           modelOutput: result.body,
           dynamicalModelSpec: result.body.dynamical_model_spec,
         };
@@ -101,9 +86,7 @@ export function composeCallView(
           ...modelView,
           artifacts: {
             ...Object.fromEntries(
-              Object.entries(modelView.artifacts).filter(
-                ([key]) => key === "model" || key === "question",
-              ),
+              Object.entries(modelView.artifacts).filter(([key]) => key === "model"),
             ),
             ...produced,
           },
@@ -132,12 +115,9 @@ export function composeCallView(
         const modelView = input(entry, "dynamical_model_spec");
         view = {
           ...empty,
-          question: modelView.question,
           artifacts: {
             ...Object.fromEntries(
-              Object.entries(modelView.artifacts).filter(
-                ([key]) => key === "model" || key === "question",
-              ),
+              Object.entries(modelView.artifacts).filter(([key]) => key === "model"),
             ),
             ...(dataCall.record.attempt.action === "prepare_data"
               ? Object.fromEntries(
@@ -165,9 +145,7 @@ export function composeCallView(
           ...modelView,
           artifacts: {
             ...Object.fromEntries(
-              Object.entries(modelView.artifacts).filter(
-                ([key]) => key === "model" || key === "question",
-              ),
+              Object.entries(modelView.artifacts).filter(([key]) => key === "model"),
             ),
           },
           prepared: null,
@@ -194,7 +172,6 @@ export function composeCallView(
     workspace_id: workspaceId,
     commit_id: selected.commit_id,
     selected_seq: selected.record.seq,
-    question: view.question,
     state: {
       current: view.artifacts,
       data: view.data,

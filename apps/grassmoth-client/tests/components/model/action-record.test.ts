@@ -20,7 +20,7 @@ const request: SimulateRequest<GitOid> = {
   action: "simulate",
   input: {
     dynamical_model_spec_ref: "1".repeat(40),
-    simulation: { start: "2026-01-01", horizon: "1d", interventions: [] },
+    simulation: { window: { start: "2026-01-01", horizon: "1d" }, interventions: [] },
     seed: 0,
     num_replicates: 100,
   },
@@ -84,7 +84,7 @@ describe("action input", () => {
     expect(html).toContain("Check &lt;revised&gt; assumptions.\nGoal: choose a model to fit.");
     expect(html).toContain(">dynamical_model_spec_ref<");
     expect(html).toContain("1".repeat(40));
-    expect(html).toMatch(/>simulation<\/span><span[^>]*>start, horizon, interventions</);
+    expect(html).toMatch(/>simulation<\/span><span[^>]*>interventions, window</);
     expect(html).toMatch(/>num_replicates<\/span><span[^>]*>100</);
     expect(html.indexOf('aria-label="Action input"')).toBeLessThan(
       html.indexOf('aria-label="Simulator log"'),

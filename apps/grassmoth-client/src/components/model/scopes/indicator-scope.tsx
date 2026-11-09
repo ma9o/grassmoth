@@ -37,7 +37,7 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
                 [
                   "Window",
                   indicator.observation.observation_window ??
-                    context.modelSnapshot.dynamical_model_spec?.measurement_clock,
+                    context.modelSnapshot.dynamical_model_spec?.time.step,
                 ],
                 ["Polarity", indicator.construct_polarity],
                 ...(likelihood

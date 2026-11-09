@@ -37,7 +37,6 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.data import _read_history, read_data_history
 from grassmoth_server.study.records import Applied
-from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.data import metadata_for_model, simulation_layout
 from grassmoth_server_test_support.helpers import run_async
@@ -116,6 +115,11 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("TEST"), StudyRepository("TEST")
     dynamical_model_spec = _recorded_replicate_becomes_a_compatible_panel_complete_test_model()
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": "2026-01-01", "horizon": "7d"}, "step": "12h"},
+        core_query={"window": {"start": "2026-01-06", "horizon": "2d"}},
+    )
     model_info = seed_record(
         store,
         "model",
@@ -123,9 +127,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         produced_by="edit_model",
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
     )
-    from grassmoth_server_test_support.helpers import write_question
 
-    state = StudyState().with_artifacts([write_question(store), model_info])
     model_commit = history.append(
         applied_record(
             store.workspace_id,
@@ -136,7 +138,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     ).commit_id
     times = (0.0, 0.5, 2.0)
     draws = np.array([[[91, 92], [93, 94], [95, 96]], [[2, 4], [3, 8], [6, 12]]], dtype=float)
-    design = SimulationSpec(start=date(2026, 1, 6), horizon="2d")
+    design = SimulationSpec(window={"start": date(2026, 1, 6), "horizon": "2d"})
     report = SimulationReport(
         summary=empty_simulation_summary(),
         law=AuthoredLawProvenance(),
@@ -228,7 +230,8 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     )
     assert not isinstance(projected, ObservationPreflightFailure)
     assert projected["time"][0] == 0
-    wide = projected.filter(pl.col("time") > 0)
+    assert projected["time"].to_list() == [index * 0.5 for index in range(15)]
+    wide = projected.filter(pl.col("time").is_in([time + 5 for time in times]))
     np.testing.assert_allclose(wide["time"].to_numpy(), np.asarray(times) + 5)
     np.testing.assert_allclose(
         wide.select(
@@ -250,7 +253,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
 
         return FitOutput(
             dynamical_model_spec=dynamical_model_spec,
-            checks=fit_check_report(inputs.selection, inputs.question, inputs.data_for_model),
+            checks=fit_check_report(inputs.selection, inputs.data_for_model),
             inference=_report(dynamical_model_spec),
         )
 
@@ -263,7 +266,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
             ),
         )
     )
-    applied = run_async(run_action("TEST", request, revise_fixture(state, data=source)))
+    applied = run_async(run_action("TEST", request))
     assert isinstance(request.input.target, NewFitTarget)
     assert request.input.target.data_ref == source
     assert {info.artifact_id for info in applied.effects.produced} == {"model"}
@@ -288,7 +291,6 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
                             ),
                         ),
                     ),
-                    state,
                 )
             )
 
@@ -304,6 +306,11 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
                 "measurement": {"dtype": "categorical", "levels": ("a", "b", "c")},
             }
         )
+    )
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": "2026-01-01", "horizon": "60h"}, "step": "12h"},
+        core_query={"window": {"start": "2026-01-01", "horizon": "60h"}},
     )
     values = np.repeat(np.array([[[np.nan, np.nan], [2, 2], [2, 2]]]), 4, axis=0)
     if not interval:
@@ -338,9 +345,9 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
                 ),
                 mask=NumericalArray.from_numpy(np.isfinite(values)),
             ),
-            assignments=SimulationSpec(start=date(2026, 1, 1), horizon="60h").assignments(
-                datetime(2026, 1, 1, tzinfo=UTC)
-            ),
+            assignments=SimulationSpec(
+                window={"start": date(2026, 1, 1), "horizon": "60h"}
+            ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
         ),
     )
     from grassmoth_server_test_support.data import simulation_output
@@ -369,7 +376,7 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
             compiler=compile_program,
         )
         assert isinstance(bound, BoundPanel)
-        np.testing.assert_allclose(bound.times, [0, 1, 1.5, 2.5])
+        np.testing.assert_allclose(bound.times, [0, 0.5, 1, 1.5, 2, 2.5])
         assert np.all(np.diff(bound.times) > 1e-8)
     readings = tuple(
         reading for series in panel.series.values() for reading in series.history.readings()

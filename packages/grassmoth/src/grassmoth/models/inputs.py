@@ -48,9 +48,7 @@ def observation_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject:
     """Project the model clock and observation definitions used to fingerprint measurement inputs."""
     return entity_document(
         {
-            "model_clock": dynamical_model_spec.measurement_clock.source
-            if dynamical_model_spec.measurement_clock is not None
-            else None,
+            "model_clock": dynamical_model_spec.time.step.source,
             "indicators": indicator_rows(dynamical_model_spec),
         }
     )
@@ -67,9 +65,7 @@ def identification_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject
 def compilation_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject:
     """Structure and constants needed by execution, independent of the current law."""
     result: dict[str, JsonValue] = {
-        "measurement_clock": dynamical_model_spec.measurement_clock.source
-        if dynamical_model_spec.measurement_clock is not None
-        else None,
+        "time": dynamical_model_spec.time.model_dump(mode="json"),
         "parameters": [
             parameter.model_dump(mode="json", exclude={"distribution", "transform", "reasoning"})
             for parameter in dynamical_model_spec.parameters

@@ -1,6 +1,5 @@
 """Partial models stay inspectable; numerical operations validate their own inputs."""
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
 
@@ -8,7 +7,7 @@ import polars as pl
 import pytest
 
 from grassmoth.actions.contracts.io import EditModelOutput
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import InferenceHardware
 from grassmoth_server.actions.contracts.identity import CallId
@@ -18,11 +17,10 @@ from grassmoth_server.actions.contracts.settings import FitSettingsSpec
 from grassmoth_server.actions.runners import run_action
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.state import StudyState
-from grassmoth_server_test_support.action import applied_record, edit_and_check, question_root
+from grassmoth_server_test_support.action import applied_record, edit_and_check, model_root
 from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
-from grassmoth_server_test_support.helpers import run_async, write_question
+from grassmoth_server_test_support.helpers import run_async
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 from grassmoth_test_support.model import x_y_model
@@ -53,12 +51,12 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
         parameters=tuple(revise_fixture(p, distribution=None) for p in complete.parameters),
     )
     journal = StudyRepository(workspace)
-    from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth_test_support.purpose import initial_model
 
-    question = QuestionSpec[ConstructId](
-        text="Does X change Y?", outcome=fixture_entity_id("construct", "Y")
+    question = initial_model(
+        question="Does X change Y?", outcome=fixture_entity_id("construct", "Y")
     )
-    state = journal.state(question_root(workspace, question).commit_id)
+    state = journal.state(model_root(workspace, question).commit_id)
     store = ArtifactStore(workspace)
     saved_results = []
     for revision, model in (
@@ -130,7 +128,6 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
         json_files={"metadata.json": panel_metadata().model_dump(mode="json")},
         parquet_files={"panel.parquet": panel_frame(n_days=2)},
     )
-    state = StudyState().with_artifacts([write_question(store), model, panel])
     result = run_async(
         run_action(
             workspace,
@@ -142,7 +139,6 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
                     ),
                 )
             ),
-            state,
         )
     )
     from grassmoth_server.study.records import Rejected
@@ -257,10 +253,10 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             model,
             compile_model_fixture(model),
             particle_posterior(
-                JointPosteriorDraws(parameter_draws(model, 4), jnp.zeros((4, 2, 2)))
+                JointPosteriorDraws(
+                    parameter_draws(model, 4), jnp.zeros((4, len(model.time_points), 2))
+                )
             ),
-            times=jnp.array([0.0, 1.0]),
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         )
         from grassmoth.actions.checks import fit_check_report
         from grassmoth.actions.contracts.io import FitOutput
@@ -268,7 +264,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
 
         return FitOutput(
             dynamical_model_spec=conditioned,
-            checks=fit_check_report(inputs.selection, inputs.question, inputs.data_for_model),
+            checks=fit_check_report(inputs.selection, inputs.data_for_model),
             inference=_report(conditioned),
         )
 
@@ -317,7 +313,6 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     pins: dict[ArtifactId, GitOid] = {
         "model": artifact_revision(workspace, "model", 3),
         "panel": artifact_revision(workspace, "panel", 1),
-        "question": write_question(store).revision,
     }
     monkeypatch.setattr(
         ArtifactStore,

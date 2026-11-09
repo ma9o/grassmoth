@@ -33,13 +33,11 @@ from grassmoth_server.study.persistence.sources import capture_sources
 from grassmoth_server.study.records import (
     ActionMessage,
     Applied,
-    Rejected,
     StudyRevision,
     action_attempt,
     argument_parents,
-    recorded_question,
 )
-from grassmoth_server.study.state import ArtifactRecord, StudyState, apply_effects
+from grassmoth_server.study.state import StudyState, apply_effects
 
 _EMPTY_LOG_SNAPSHOT = CallLogSnapshot()
 
@@ -202,13 +200,6 @@ class StudyRepository:
             else None
         )
 
-    def question(self) -> ArtifactRecord:
-        """The study's immutable question, independent of its current scientific state."""
-        question = recorded_question(self.attempts())
-        if question is None:
-            raise StudyLookupError("Set the study question first")
-        return question
-
     def append(
         self,
         record: AttemptRecord,
@@ -216,7 +207,7 @@ class StudyRepository:
         messages: tuple[ActionMessage, ...] = (),
         snapshot: CallLogSnapshot = _EMPTY_LOG_SNAPSHOT,
     ) -> StudyRevision:
-        """Atomically publish a call and its law owners, admitting one immutable question."""
+        """Atomically publish a call and its law owners."""
         from grassmoth_server.storage import paths
         from grassmoth_server.study.persistence.log_codec import finalize_call_log
 
@@ -232,20 +223,6 @@ class StudyRepository:
             existing = self.call(identity)
             if existing is not None:
                 return existing
-            question_ref = None
-            if record.attempt.action == "edit_question" and isinstance(outcome, Applied):
-                transaction.lock_ref("refs/question")
-                if "refs/question" in self.repo.references:
-                    outcome = Rejected(
-                        code="INPUT_UNAVAILABLE",
-                        subject="inputs",
-                        detail="The question is set by the study's first action",
-                    )
-                    record = record.with_attempt(
-                        attempt=record.attempt.with_outcome(outcome=outcome),
-                    )
-                else:
-                    question_ref = "refs/question"
             tree = self.repo.TreeBuilder()
             if isinstance(outcome, Applied):
                 saved_result = SavedResult.model_validate_json(
@@ -320,6 +297,4 @@ class StudyRepository:
                 [pygit2.Oid(hex=parent) for parent in parents],
             )
             transaction.set_target(call_ref, oid)
-            if question_ref is not None:
-                transaction.set_target(question_ref, oid)
         return StudyRevision(commit_id=GitOid(str(oid)), parent_ids=parents, record=record)

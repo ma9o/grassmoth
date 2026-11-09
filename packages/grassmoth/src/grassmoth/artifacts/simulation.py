@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import UTC, date, datetime, time
 from itertools import pairwise
-from typing import Annotated, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import AwareDatetime, Field, FiniteFloat, model_validator
 
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import ConstructId, IndicatorId
-from grassmoth.artifacts.observations.duration import Duration
+from grassmoth.artifacts.model.time import ModelTimeSpec, TimeGridFailure, TimeWindowSpec
 from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
 from grassmoth.artifacts.reports.checks import NotEvaluated, PredictiveAssessment
 from grassmoth.artifacts.reports.predictive_provenance import PredictiveLawProvenance
@@ -22,23 +21,25 @@ from grassmoth.artifacts.scenarios import (
     StateAssignment,
 )
 
+if TYPE_CHECKING:
+    from datetime import datetime
+
 
 class SimulationSpec(Value):
     """Generate from a calendar day over a horizon, with interventions placed after the start.
 
-    Authored initial states apply at the start. A retained trajectory law with a
-    calendar origin places the start on that law's model-day axis.
+    Initial states apply at the model window's start. Query windows use the
+    model's fixed grid and may extend beyond its fitting window.
     """
 
-    start: date = Field(description="Calendar day the window starts, at 00:00 UTC.")
-    horizon: Duration = Field(description="How long the window lasts, such as 9w or 61d.")
+    window: TimeWindowSpec
     interventions: tuple[InterventionSpec, ...] = ()
 
     @model_validator(mode="after")
     def validate_window(self) -> Self:
         """Require interventions within the horizon and at most one assignment per state and time."""
         if any(
-            event.after is not None and event.after.seconds >= self.horizon.seconds
+            event.after is not None and event.after.seconds >= self.window.horizon.seconds
             for event in self.interventions
         ):
             raise ValueError("Interventions must occur before the end of the horizon")
@@ -50,24 +51,20 @@ class SimulationSpec(Value):
             raise ValueError("A state can have only one intervention at each time")
         return self
 
-    @property
-    def start_instant(self) -> datetime:
-        """Requested simulation start at midnight UTC."""
-        return datetime.combine(self.start, time(), tzinfo=UTC)
-
-    def start_day(self, origin: datetime) -> float:
-        """The start in model days after the law's bound origin."""
-        from grassmoth.artifacts.observations.time import ObservationInstant
-
-        return ObservationInstant(self.start_instant).relative_to(ObservationInstant(origin)).days
-
-    def end_day(self, origin: datetime) -> float:
-        """Express the simulation horizon's endpoint as model days after the supplied origin."""
-        return self.start_day(origin) + self.horizon.days
+    def grid(self, time: ModelTimeSpec) -> tuple[float, ...] | TimeGridFailure:
+        """Admit a simulation on the model's fixed grid, preserving exact event times."""
+        if any(
+            event.after is not None and event.after.seconds % time.step.seconds
+            for event in self.interventions
+        ):
+            return TimeGridFailure(
+                reason="Intervention offsets must align with the model time step"
+            )
+        return time.query_grid(self.window)
 
     def assignments(self, origin: datetime) -> tuple[StateAssignment, ...]:
         """Place every intervention in model days after the law's bound origin."""
-        start = self.start_day(origin)
+        start = self.window.start_day(origin)
         return tuple(
             StateAssignment(
                 target=event.target,

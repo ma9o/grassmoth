@@ -1,4 +1,4 @@
-import { initialOutcome } from "@/lib/__fixtures__/model";
+import { modelFixture } from "@/lib/__fixtures__/model";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { apiClient } from "@/lib/api/client";
@@ -24,10 +24,10 @@ describe("generated facade client", () => {
       Response.json({ attempt_id: "new-attempt" }, { status: 202 }),
     );
     const body = {
-      action: "edit_question",
-      input: { question: { text: "Why?", outcome: initialOutcome } },
+      action: "edit_model",
+      input: { dynamical_model_spec: modelFixture },
     } as const;
-    const result = await apiClient.POST("/api/studies/{workspace_id}/edit_question", {
+    const result = await apiClient.POST("/api/studies/{workspace_id}/edit_model", {
       baseUrl: "http://viewer",
       fetch,
       params: { path: { workspace_id: "HEALTHDEMO" } },
@@ -35,7 +35,7 @@ describe("generated facade client", () => {
     });
     const [request] = fixtureValue(fetch.mock.calls.at(0));
     expect(request.method).toBe("POST");
-    expect(request.url).toBe("http://viewer/api/studies/HEALTHDEMO/edit_question");
+    expect(request.url).toBe("http://viewer/api/studies/HEALTHDEMO/edit_model");
     expect(request.headers.get("Content-Type")).toBe("application/json");
     expect(await request.json()).toEqual(body);
     expect(result.data).toEqual({ attempt_id: "new-attempt" });

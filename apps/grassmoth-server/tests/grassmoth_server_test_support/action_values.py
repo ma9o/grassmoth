@@ -248,7 +248,10 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
             }
             if authored
             else {},
-            "measurement_clock": "1d" if authored else None,
+            "question": "How does treatment affect the outcome?",
+            "outcome": OUTCOME,
+            "time": {"window": {"start": "2026-01-01", "horizon": "3d"}, "step": "1d"},
+            "core_query": {"window": {"start": "2026-01-01", "horizon": "3d"}, "interventions": []},
         }
     ).materialized()
     return EditModelOutput.model_validate(

@@ -18,7 +18,6 @@ pytestmark = pytest.mark.contract
 def valid_artifact_payloads() -> dict[str, dict[str, Any]]:
     """Minimal valid payload for each persisted artifact id."""
     return {
-        "question": {"text": "Does stress change performance?", "outcome": "construct:perf"},
         "model": make_model(["Stress", "Perf"], [("Stress", "Perf")]).model_dump(mode="json"),
     }
 
@@ -36,7 +35,7 @@ def test_validate_artifact_payload_rejects_missing_required_fields(
     valid_artifact_payloads: dict[str, dict[str, Any]],
 ):
     """Artifact contract validation should fail on contract violations."""
-    bad = deepcopy(valid_artifact_payloads["question"])
+    bad = deepcopy(valid_artifact_payloads["model"])
     bad.pop("outcome")
     with pytest.raises(ValidationError):
-        validate_artifact_payload("question", bad)
+        validate_artifact_payload("model", bad)

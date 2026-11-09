@@ -6,8 +6,7 @@ import polars as pl
 import pytest
 
 from grassmoth.actions.checks import check_specification
-from grassmoth.artifacts.identity import ConstructId, GitOid
-from grassmoth.artifacts.model.question import QuestionSpec
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import SamplerSpec
@@ -22,7 +21,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import edit_and_check, prepared_profile
-from grassmoth_server_test_support.helpers import initial_model_record, write_question
+from grassmoth_server_test_support.helpers import write_initial_model
 from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
 from grassmoth_server_test_support.storage import seed_record
@@ -30,6 +29,7 @@ from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 """Model-panel limitations are checked when fitting, independently of model edits."""
@@ -128,17 +128,17 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         data=DataRef[GitOid, int](revision=record.revision, replicate_index=0)
     ).with_artifacts(
         [
-            write_question(
+            write_initial_model(
                 store,
-                QuestionSpec[ConstructId](
-                    text="How does sleep change?",
+                initial_model(
+                    question="How does sleep change?",
                     outcome=construct_named(stress_sleep_causal_model(), "Sleep").id,
                 ),
             ),
             record,
         ]
     )
-    state = state.with_artifacts([initial_model_record(store, state.current["question"])])
+    state = state.with_artifacts([state.current["model"]])
     edited = edit_and_check(
         "TEST",
         EditModelRequest[GitOid](

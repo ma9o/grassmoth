@@ -24,11 +24,8 @@ with workflow.unsafe.imports_passed_through():
         RunningCall,
     )
     from grassmoth_server.actions.contracts.requests import (
-        DataDiffRequest,
         EditModelRequest,
-        EditQuestionRequest,
         FitRequest,
-        ModelDiffRequest,
         PrepareDataRequest,
         call_identity,
     )
@@ -55,7 +52,6 @@ with workflow.unsafe.imports_passed_through():
         AttemptPublication,
         ChecksResult,
         EditModelActivityInput,
-        EditQuestionActivityInput,
         EvaluateChecksInput,
         ReadInputsInput,
         StudyInit,
@@ -67,13 +63,11 @@ with workflow.unsafe.imports_passed_through():
         Applied,
         AttemptRecord,
         EditAttempt,
-        EditQuestionAttempt,
         PrepareAttempt,
         Rejected,
         StudyRevision,
         action_attempt,
     )
-    from grassmoth_server.study.state import validate_lineage
 _RUN_ACTION_TIMEOUT = timedelta(hours=4)
 _WRITE_TIMEOUT = timedelta(minutes=5)
 _CHECK_TIMEOUT = timedelta(hours=1)
@@ -186,29 +180,8 @@ class StudyWorkflow:
                 attempt=saved.record.attempt,
             )
             return
-        lineage = (
-            validate_lineage(base.state, action.action)
-            if not isinstance(action, (DataDiffRequest, ModelDiffRequest))
-            else (None if base.state.has("question") else "Set the study question first")
-        )
-        rejection = (
-            Rejected(code="INPUT_UNAVAILABLE", subject="inputs", detail=lineage)
-            if lineage is not None
-            else None
-        )
-        if rejection is not None:
-            await self._journal(request, running, action_attempt(action, rejection))
-            return
         try:
-            if isinstance(action, EditQuestionRequest):
-                attempt = await workflow.execute_activity(
-                    "edit_question_activity",
-                    EditQuestionActivityInput(workspace_id=self._workspace_id, request=action),
-                    result_type=EditQuestionAttempt,
-                    start_to_close_timeout=_WRITE_TIMEOUT,
-                    retry_policy=_ACTIVITY_RETRY,
-                )
-            elif isinstance(action, EditModelRequest):
+            if isinstance(action, EditModelRequest):
                 attempt = await workflow.execute_activity(
                     "edit_model_activity",
                     EditModelActivityInput(workspace_id=self._workspace_id, request=action),
@@ -230,7 +203,7 @@ class StudyWorkflow:
                     else _ACTIVITY_RETRY,
                 )
             if isinstance(
-                action, (EditQuestionRequest, EditModelRequest, FitRequest, PrepareDataRequest)
+                action, (EditModelRequest, FitRequest, PrepareDataRequest)
             ) and isinstance(attempt.outcome, Applied):
                 result = attempt.outcome
                 running = running.with_messages(

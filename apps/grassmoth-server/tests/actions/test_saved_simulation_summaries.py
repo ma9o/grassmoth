@@ -31,7 +31,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.data import metadata_for_model
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import write_initial_model
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.helpers import make_model
@@ -89,7 +89,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             store.workspace_id,
             Applied(
                 result=None,
-                effects=ActionEffects(produced=[write_question(store), definition]),
+                effects=ActionEffects(produced=[write_initial_model(store), definition]),
             ),
             seq=1,
             ts="2026-01-01T00:00:00Z",
@@ -152,8 +152,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             ),
             observation_layout=layout,
             assignments=SimulationSpec(
-                start=date(2026, 1, 6),
-                horizon="2d",
+                window={"start": date(2026, 1, 6), "horizon": "2d"},
                 interventions=(
                     {
                         "target": selected_state_ids(
@@ -177,8 +176,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
                 input=SimulateInput(
                     dynamical_model_spec_ref=definition.revision,
                     simulation=SimulationSpec(
-                        start=date(2026, 1, 6),
-                        horizon="2d",
+                        window={"start": date(2026, 1, 6), "horizon": "2d"},
                         interventions=(
                             {"target": report.evidence.assignments[0].target, "value": 1},
                         ),

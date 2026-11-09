@@ -11,7 +11,6 @@ from grassmoth_server.actions.contracts.preparation import SourceFolder
 from grassmoth_server.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
-    EditQuestionRequest,
     FitRequest,
     ModelDiffRequest,
     PrepareDataRequest,
@@ -60,19 +59,6 @@ async def poll_action(
     )
 
 
-@router.post(
-    "/{workspace_id}/edit_question", response_model=ActionPoll, operation_id="edit_question"
-)
-async def edit_question(
-    workspace_id: str,
-    request: Request,
-    body: Annotated[EditQuestionRequest, Body(discriminator="action")],
-    temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
-) -> Response:
-    """Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures."""
-    return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
-
-
 @router.post("/{workspace_id}/edit_model", response_model=ActionPoll, operation_id="edit_model")
 async def edit_model(
     workspace_id: str,
@@ -80,7 +66,7 @@ async def edit_model(
     body: Annotated[EditModelRequest[RevisionSelector], Body(discriminator="action")],
     temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id."""
+    """Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision. Omit parent_ref to create a model, supplying question, outcome, time and core_query. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id."""
     return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
 
 

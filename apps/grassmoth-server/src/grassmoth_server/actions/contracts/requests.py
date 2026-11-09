@@ -11,7 +11,6 @@ from grassmoth_server.actions.contracts.identity import CallId, RevisionSelector
 from grassmoth_server.actions.contracts.inputs import (
     DataDiffInput,
     EditModelInput,
-    EditQuestionInput,
     FitInput,
     ModelDiffInput,
     PrepareDataInput,
@@ -19,16 +18,6 @@ from grassmoth_server.actions.contracts.inputs import (
 )
 from grassmoth_server.actions.contracts.preparation import FileSourceRef, SourceFolder
 from grassmoth_server.actions.contracts.reasoning import ACTION_REASONING_DESCRIPTION
-
-
-class EditQuestionRequest(Value):
-    """Save the question and initial model; the successful body is ``EditQuestionOutput``."""
-
-    action: Literal["edit_question"] = Field(
-        default="edit_question", description="Scientific action that owns this request or result."
-    )
-    input: EditQuestionInput = Field(description="Typed arguments of the scientific action.")
-    reasoning: str | None = Field(default=None, description=ACTION_REASONING_DESCRIPTION)
 
 
 class EditModelRequest[RevisionT](Value):
@@ -103,8 +92,7 @@ class ModelDiffRequest[RevisionT](Value):
 
 
 type ScientificActionRequest = Annotated[
-    EditQuestionRequest
-    | EditModelRequest[GitOid]
+    EditModelRequest[GitOid]
     | PrepareDataRequest[GitOid, FileSourceRef]
     | FitRequest[GitOid]
     | SimulateRequest[GitOid],
@@ -112,8 +100,7 @@ type ScientificActionRequest = Annotated[
 ]
 
 type ActionInput = Annotated[
-    EditQuestionRequest
-    | EditModelRequest[RevisionSelector]
+    EditModelRequest[RevisionSelector]
     | PrepareDataRequest[RevisionSelector, SourceFolder]
     | FitRequest[RevisionSelector]
     | SimulateRequest[RevisionSelector]

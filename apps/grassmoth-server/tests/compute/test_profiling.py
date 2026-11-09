@@ -125,7 +125,6 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
         return shell.run_fit(
             FitInputs(
                 selection=Mock(),
-                question=Mock(),
                 data_for_model=Mock(),
                 sampler=SamplerSpec(),
                 compute_loo_diagnostics=False,

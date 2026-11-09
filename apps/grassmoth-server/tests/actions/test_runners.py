@@ -37,8 +37,7 @@ pytestmark = pytest.mark.contract
         SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
                 simulation=SimulationSpec(
-                    start=date(2026, 1, 1),
-                    horizon="1w",
+                    window={"start": date(2026, 1, 1), "horizon": "1w"},
                     interventions=({"target": "construct:x", "after": "2d", "value": 1},),
                 ),
                 dynamical_model_spec_ref=git_oid(1),

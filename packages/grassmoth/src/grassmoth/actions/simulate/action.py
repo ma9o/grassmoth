@@ -8,6 +8,7 @@ import numpy as np
 
 from grassmoth.actions.contracts.io import FittedLaw, SimulateOutput
 from grassmoth.artifacts.arrays import NumericalArray
+from grassmoth.artifacts.model.time import TimeGridFailure
 from grassmoth.artifacts.simulation import (
     PairedArmSimulation,
     SimulationArm,
@@ -41,15 +42,11 @@ def _simulate(
 
     design = inputs.design
     compiled_dynamical_model = compile_executable_model(inputs.selection)
-    time_origin = next(
-        (
-            law.layout.time_origin
-            for law in compiled_dynamical_model.laws
-            if law.layout.constructs and not isinstance(law.layout.time_origin, str)
-        ),
-        design.start_instant,
-    )
-    start, end = design.start_day(time_origin), design.end_day(time_origin)
+    time_origin = compiled_dynamical_model.time.window.start_instant
+    grid = design.grid(compiled_dynamical_model.time)
+    if isinstance(grid, TimeGridFailure):
+        return ObservationPreflightFailure.rejected(grid.reason)
+    start, end = grid[0], grid[-1]
     assignments = design.assignments(time_origin)
     batch = generate_simulation_batch(
         compiled_dynamical_model,

@@ -79,7 +79,7 @@ describe("saved model comparison details", () => {
                     reasoning: { text: "Changed prior justification", reference_urls: [] },
                   },
                 },
-                measurement_clock: null,
+                time: { step: "2d" },
               },
             },
           },
@@ -97,7 +97,7 @@ describe("saved model comparison details", () => {
     expect(html).toContain(humanize(parameter.name));
     expect(html).toContain("Changed causal assumption");
     expect(html).toContain("Changed prior justification");
-    expect(html).toContain("Measurement clock");
+    expect(html).toContain("Updated · time");
   });
 
   it("renders an empty patch as no spec changes", () => {

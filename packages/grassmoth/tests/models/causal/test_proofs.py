@@ -131,8 +131,8 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
             from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 
             def condition(model: DynamicalModelSpec, compiled: CompiledDynamicalModel, posterior: MCMCPosterior, warmup: ParticleInitialization, times: Array):
-                condition_model(model, compiled, posterior, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
-                condition_model(model, compiled, warmup, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+                condition_model(model, compiled, posterior)
+                condition_model(model, compiled, warmup)
             """)
     )
     checked = subprocess.run(
@@ -237,8 +237,7 @@ def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
         SimulationInputs(
             selection=StructuralSelection(model, outcome),
             design=SimulationSpec(
-                start=date(2024, 1, 1),
-                horizon="1d",
+                window={"start": date(2024, 1, 1), "horizon": "1d"},
                 interventions=(InterventionSpec(target=treatment, value=1.0),),
             ),
             seed=0,

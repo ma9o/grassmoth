@@ -317,9 +317,9 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                 support_end_times=NumericalArray.from_numpy(np.arange(3.0)[:, None]),
                 mask=NumericalArray.from_numpy(np.ones_like(values, dtype=bool)),
             ),
-            assignments=SimulationSpec(start=date(2026, 1, 1), horizon="2d").assignments(
-                datetime(2026, 1, 1, tzinfo=UTC)
-            ),
+            assignments=SimulationSpec(
+                window={"start": date(2026, 1, 1), "horizon": "2d"}
+            ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
         ),
     )
     commit = history.append(
@@ -332,7 +332,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
             request=SimulateRequest(
                 input=SimulateInput(
                     dynamical_model_spec_ref=model.revision,
-                    simulation=SimulationSpec(start="2026-01-01", horizon="2d"),
+                    simulation=SimulationSpec(window={"start": "2026-01-01", "horizon": "2d"}),
                 )
             ),
             seq=1,
@@ -456,7 +456,9 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                     request=SimulateRequest(
                         input=SimulateInput(
                             dynamical_model_spec_ref=model.revision,
-                            simulation=SimulationSpec(start=date(2026, 1, 1 + start), horizon="2d"),
+                            simulation=SimulationSpec(
+                                window={"start": date(2026, 1, 1 + start), "horizon": "2d"}
+                            ),
                         )
                     ),
                     seq=2 + start - 5,

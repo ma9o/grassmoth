@@ -19,20 +19,19 @@ from grassmoth_server.study.persistence.store import (
     ArtifactStore,
     model_values,
     read_model,
-    read_question,
 )
 from grassmoth_server.study.queries.lineage import fitted_law_report, law_provenance
 from grassmoth_server.study.records import inference_record
 
 
 def run_simulation(
-    store: ArtifactStore, request: SimulateInput[GitOid], question_revision: GitOid
+    store: ArtifactStore, request: SimulateInput[GitOid]
 ) -> SimulateOutput | ObservationPreflightFailure:
     """Read the pinned model and its retained fit evidence before scientific execution."""
     initialize_numerical_runtime()
     revision = request.dynamical_model_spec_ref
     model = model_values(store, read_model(store, revision))
-    selection = StructuralSelection.for_question(model, read_question(store, question_revision))
+    selection = StructuralSelection.for_model(model)
     records = StudyRepository(store.workspace_id).attempts()
     provenance = law_provenance(store, store.read_meta("model", revision), model, None)
     inference = inference_record(records, revision)

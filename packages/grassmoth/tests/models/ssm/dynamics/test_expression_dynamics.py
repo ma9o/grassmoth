@@ -241,7 +241,10 @@ def _model(expression):
         )
         for name in ("x", "y", "z")
     }
+    from grassmoth_test_support.purpose import model_metadata
+
     return DynamicalModelSpec.from_entities(
+        **model_metadata(nodes["y"].id),
         edges=(
             CausalEdgeSpec(
                 id="edge:xy",
@@ -256,7 +259,7 @@ def _model(expression):
                 effect=nodes["z"],
                 reasoning=ReasoningSpec(text="x affects z"),
             ),
-        )
+        ),
     )
 
 

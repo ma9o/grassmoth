@@ -4,8 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.actions.contracts.io import EditModelOutput
-from grassmoth.artifacts.identity import ConstructId, GitOid
-from grassmoth.artifacts.model.question import QuestionSpec
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import EditModelInput
@@ -15,11 +14,12 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState, apply_effects
-from grassmoth_server_test_support.action import question_root
+from grassmoth_server_test_support.action import model_root
 from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -32,10 +32,11 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = stress_sleep_causal_model()
-    question_root(
+    model_root(
         "checks",
-        QuestionSpec[ConstructId](
-            text="How does sleep change?", outcome=construct_named(dynamical_model_spec, "Sleep").id
+        initial_model(
+            question="How does sleep change?",
+            outcome=construct_named(dynamical_model_spec, "Sleep").id,
         ),
     )
     repository = StudyRepository("checks")

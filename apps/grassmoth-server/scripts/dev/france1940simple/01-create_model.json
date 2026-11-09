@@ -1,0 +1,46 @@
+{
+  "action": "edit_model",
+  "input": {
+    "dynamical_model_spec": {
+      "question": "Did the 40-hour week cost France combat aircraft before the German offensive? If the 48-hour legal week had stayed in force from the 27 October 1936 metalworking decree until the war, how many more combat aircraft would France have produced by 10 May 1940?",
+      "outcome": "construct:cumulative_aircraft",
+      "time": {
+        "window": {
+          "start": "1936-01-01",
+          "horizon": "1643d"
+        },
+        "step": "1d"
+      },
+      "core_query": {
+        "interventions": [
+          {
+            "target": "construct:legal_hours_cap",
+            "after": null,
+            "value": 48.0
+          },
+          {
+            "target": "construct:legal_hours_cap",
+            "after": "1039d",
+            "value": 60.0
+          }
+        ],
+        "window": {
+          "start": "1936-10-27",
+          "horizon": "1291d"
+        }
+      },
+      "constructs": {
+        "construct:cumulative_aircraft": {
+          "name": "cumulative_aircraft",
+          "reasoning": {
+            "text": "Combat aircraft produced since 1 January 1936: the integral of the daily production rate, with no noise of its own. Its paired difference on 10 May 1940 answers the question.",
+            "reference_urls": []
+          },
+          "role": "endogenous",
+          "temporal_status": "time_varying"
+        }
+      }
+    }
+  },
+  "reasoning": "One contrast: keep the 48-hour legal week from the metalworking decree until the 1 September 1939 wartime regime, then follow the recorded regime. The outcome is cumulative combat-aircraft production; the paired difference on 10 May 1940 is the extra output."
+}

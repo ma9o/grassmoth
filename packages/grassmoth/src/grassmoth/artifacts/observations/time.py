@@ -13,8 +13,6 @@ from grassmoth.artifacts.observations.duration import CalendarDuration
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from grassmoth.artifacts.observations.spec import ObservationWindow
 
 
@@ -84,15 +82,6 @@ class ModelTime:
         ).cast(pl.Float64)
 
 
-def merge_model_times(times: Sequence[float] | np.ndarray) -> np.ndarray:
-    """Merge sorted coordinates whose distance from the retained representative is within tolerance."""
-    merged: list[float] = []
-    for time in np.sort(times):
-        if not merged or time - merged[-1] > OBSERVATION_TIME_TOLERANCE:
-            merged.append(float(time))
-    return np.asarray(merged, dtype=float)
-
-
 def model_time_indices(grid: np.ndarray, times: np.ndarray) -> np.ndarray:
-    """Locate original coordinates in the tolerance-merged union that contains them."""
-    return np.searchsorted(grid, times, side="right") - 1
+    """Locate admitted coordinates on their grid within the binding tolerance."""
+    return np.searchsorted(grid - OBSERVATION_TIME_TOLERANCE, times, side="right") - 1

@@ -7,7 +7,7 @@ description: "Run and inspect grassmoth studies through the HTTP API with curl. 
 
 > Auto-generated from `packages/api-types/schemas/openapi.json` (the FastAPI OpenAPI spec) by `apps/grassmoth-server/scripts/codegen/export_api.py`. Edit Python type/field descriptions, the API description or route docstrings, not this file.
 
-Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend
+Six actions carry out a study. Create the model, question, time domain and core query with `edit_model`, then extend
 the model with `edit_model`. Upload tables with `/api/upload`, extract
 observations with `prepare_data`, and condition the model on them with `fit`.
 `simulate` samples an authored or fitted model; `data_diff` and `model_diff`
@@ -39,6 +39,6 @@ and alternatives.
 ## References
 
 - The [study API reference](../../../docs/reference/study-api.md) lists every endpoint's input and success-body fields with an example request. Read an action's section before calling it.
-- Each action's flow chart shows its checks, branches and failure outcomes: [`edit_question`](../../../docs/assets/action-flows/edit-question.svg), [`edit_model`](../../../docs/assets/action-flows/edit-model.svg), [`prepare_data`](../../../docs/assets/action-flows/prepare-data.svg), [`fit`](../../../docs/assets/action-flows/fit.svg), [`simulate`](../../../docs/assets/action-flows/simulate.svg), [`data_diff`](../../../docs/assets/action-flows/data-diff.svg), [`model_diff`](../../../docs/assets/action-flows/model-diff.svg).
+- Each action's flow chart shows its checks, branches and failure outcomes: [`edit_model`](../../../docs/assets/action-flows/edit-model.svg), [`prepare_data`](../../../docs/assets/action-flows/prepare-data.svg), [`fit`](../../../docs/assets/action-flows/fit.svg), [`simulate`](../../../docs/assets/action-flows/simulate.svg), [`data_diff`](../../../docs/assets/action-flows/data-diff.svg), [`model_diff`](../../../docs/assets/action-flows/model-diff.svg).
 - [Assumptions and limits](../../../docs/assumptions.md) state the modeling commitments behind every result.
 - The [likelihood](../../../docs/reference/statistical-model-spec/likelihoods.md) and [parameter and prior](../../../docs/reference/statistical-model-spec/parameters.md) references describe parts of the `dynamical_model_spec` language.

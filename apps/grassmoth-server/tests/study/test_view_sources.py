@@ -8,7 +8,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, inference_record
 from grassmoth_server_test_support.action import applied_record
 from grassmoth_server_test_support.git import artifact_revision
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import write_initial_model
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.model import x_y_model
@@ -31,7 +31,9 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
     journal.append(
         applied_record(
             store.workspace_id,
-            Applied(result=None, effects=ActionEffects(produced=(write_question(store), info))),
+            Applied(
+                result=None, effects=ActionEffects(produced=(write_initial_model(store), info))
+            ),
             seq=1,
         )
     )
@@ -87,7 +89,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
             Applied(
                 result=result,
                 effects=ActionEffects(
-                    produced=(write_question(store), panel, info),
+                    produced=(write_initial_model(store), panel, info),
                     reports={
                         "inference": result_blob(
                             store,
@@ -164,7 +166,7 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
             store.workspace_id,
             Applied(
                 result=None,
-                effects=ActionEffects(produced=[write_question(store), info]),
+                effects=ActionEffects(produced=[write_initial_model(store), info]),
             ),
             seq=1,
             ts="2026-09-14T12:00:00Z",
@@ -175,7 +177,7 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
         "prior_density_points" not in parameter.model_dump()
         for parameter in dynamical_model_spec.parameters
     )
-    changed = revise_fixture(dynamical_model_spec, measurement_clock="2d")
+    changed = revise_fixture(dynamical_model_spec, question="Revised question")
     revision = seed_record(
         store,
         "model",

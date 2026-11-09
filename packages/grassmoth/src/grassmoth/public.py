@@ -13,9 +13,6 @@ from grassmoth.actions.contracts.io import (
     EditModelOutput as EditModelOutput,
 )
 from grassmoth.actions.contracts.io import (
-    EditQuestionOutput as EditQuestionOutput,
-)
-from grassmoth.actions.contracts.io import (
     ExtractedValue as ExtractedValue,
 )
 from grassmoth.actions.contracts.io import (
@@ -50,9 +47,6 @@ from grassmoth.actions.edit_model import (
 )
 from grassmoth.actions.edit_model import (
     edit_model as edit_model,
-)
-from grassmoth.actions.edit_question import (
-    edit_question as edit_question,
 )
 from grassmoth.actions.fit.action import (
     fit as fit,
@@ -123,8 +117,11 @@ from grassmoth.artifacts.model.indicator import (
 from grassmoth.artifacts.model.parameter_spec import (
     ParameterSpec as ParameterSpec,
 )
-from grassmoth.artifacts.model.question import (
-    QuestionSpec as QuestionSpec,
+from grassmoth.artifacts.model.time import (
+    ModelTimeSpec as ModelTimeSpec,
+)
+from grassmoth.artifacts.model.time import (
+    TimeWindowSpec as TimeWindowSpec,
 )
 from grassmoth.artifacts.observations.comparison import (
     Dataset as Dataset,

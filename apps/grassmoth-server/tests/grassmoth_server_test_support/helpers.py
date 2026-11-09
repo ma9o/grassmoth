@@ -2,7 +2,6 @@
 
 import asyncio
 
-from grassmoth.artifacts.identity import ConstructId
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
@@ -12,32 +11,19 @@ def run_async(coro):
     return asyncio.run(coro)
 
 
-def write_question(store, question=None):
-    """Write the study question that roots a test lineage and return its artifact record."""
-    from grassmoth.artifacts.model.question import QuestionSpec
+def write_initial_model(store, model=None):
+    """Save a complete initial model for a test lineage."""
+    from grassmoth_test_support.purpose import initial_model
 
     value = (
-        question
-        if question is not None
-        else QuestionSpec[ConstructId](
-            text="What does the model answer?",
-            outcome=fixture_entity_id("construct", "unmeasured_outcome"),
-        )
+        model
+        if model is not None
+        else initial_model(outcome=fixture_entity_id("construct", "unmeasured_outcome"))
     )
     return seed_record(
         store,
-        "question",
-        derived_from={},
-        produced_by="edit_question",
-        json_files={"question.json": value.model_dump(mode="json")},
-    )
-
-
-def initial_model_record(store, question):
-    """Select the initial model field from the same result as its question."""
-    return store.result_record(
         "model",
-        question.source.result,
-        derived_from={"question": question.revision},
-        produced_by="edit_question",
+        derived_from={},
+        produced_by="edit_model",
+        json_files={"model.json": value.model_dump(mode="json")},
     )

@@ -74,6 +74,7 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
     """A connected test graph; uncoupled states share an unmeasured downstream outcome."""
     from grassmoth.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from grassmoth_test_support.purpose import model_metadata
 
     constructs = {
         name: ConstructSpec.model_validate(
@@ -125,7 +126,7 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
             )
             for cause, effect in edges
         ),
-        measurement_clock="1d",
+        **model_metadata(constructs[edges[-1][1]].id),
     )
 
 

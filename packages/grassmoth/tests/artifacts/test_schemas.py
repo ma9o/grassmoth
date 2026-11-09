@@ -20,13 +20,11 @@ from grassmoth.artifacts.identity import (
 )
 from grassmoth.artifacts.model.construct import (
     CausalEdgeSpec,
-    ConstructSpec,
     Role,
     TemporalStatus,
     replace_constructs,
 )
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.duration import Duration
 from grassmoth.artifacts.observations.preparation import (
@@ -48,13 +46,13 @@ from grassmoth.artifacts.observations.spec import (
     NumericMeasurement,
 )
 from grassmoth_test_support.helpers import graph_constructs, make_model
+from grassmoth_test_support.purpose import model_metadata
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
 _QUERY = {
-    "start": "2026-05-15",
-    "horizon": "9w",
+    "window": {"start": "2026-05-15", "horizon": "9w"},
     "interventions": [{"target": "construct:x", "value": 10}],
 }
 
@@ -69,7 +67,9 @@ class TestModel:
             effect=construct_factory("mood"),
             reasoning=ReasoningSpec(text="Stress affects mood"),
         )
-        dynamical_model_spec = DynamicalModelSpec.from_entities(edges=(edge,))
+        dynamical_model_spec = DynamicalModelSpec.from_entities(
+            edges=(edge,), **model_metadata(edge.effect.id)
+        )
         assert [construct.name for construct in dynamical_model_spec.constructs] == [
             "stress",
             "mood",
@@ -88,6 +88,7 @@ class TestModel:
     def test_invalid_exogenous_cannot_be_effect(self, construct_factory):
         with pytest.raises(ValueError, match="Exogenous construct 'weather' cannot be an effect"):
             DynamicalModelSpec.from_entities(
+                **model_metadata(construct_factory("mood").id),
                 edges=(
                     CausalEdgeSpec(
                         id="edge:mood-weather",
@@ -95,12 +96,13 @@ class TestModel:
                         effect=construct_factory("weather", Role.EXOGENOUS),
                         reasoning=ReasoningSpec(text="Invalid edge"),
                     ),
-                )
+                ),
             )
 
     def test_invalid_time_varying_to_time_invariant_edge(self, construct_factory):
         with pytest.raises(ValueError, match="cannot be a cause of time-invariant construct"):
             DynamicalModelSpec.from_entities(
+                **model_metadata(construct_factory("trait").id),
                 edges=(
                     CausalEdgeSpec(
                         id="edge:habit-trait",
@@ -110,54 +112,8 @@ class TestModel:
                         ),
                         reasoning=ReasoningSpec(text="Habit changes a fixed trait"),
                     ),
-                )
+                ),
             )
-
-    @pytest.mark.parametrize(
-        ("question", "message"),
-        [
-            ({"text": "   ", "outcome": "construct:y"}, "at least 1 character"),
-            ({"text": "Why?"}, "outcome"),
-            ({"text": "Why?", "outcome": None}, "outcome"),
-            ({"text": "Why?", "queries": {"q": _QUERY}}, "outcome"),
-            (
-                {
-                    "text": "Why?",
-                    "outcome": "construct:y",
-                    "queries": {"q": {**_QUERY, "interventions": []}},
-                },
-                "needs an intervention",
-            ),
-            (
-                {"text": "Why?", "outcome": "construct:x", "queries": {"q": _QUERY}},
-                "intervenes on the outcome",
-            ),
-            ({"text": "Why?", "outcome": "construct:y", "queries": {" ": _QUERY}}, "at least 1"),
-        ],
-    )
-    def test_question_names_an_outcome_and_contrasts_interventions(self, question, message):
-        with pytest.raises(ValidationError, match=message):
-            QuestionSpec[ConstructId].model_validate(question)
-        assert (
-            QuestionSpec[ConstructId](text="  Why?  ", outcome=ConstructId("construct:y")).text
-            == "Why?"
-        )
-
-    @pytest.mark.parametrize(
-        ("change", "message"),
-        [
-            ({"role": "exogenous"}, "must be endogenous"),
-            ({"distribution": "distribution:trajectory"}, "add measurements, dynamics and laws"),
-        ],
-    )
-    def test_authored_question_admits_only_an_initial_outcome(
-        self, construct_factory, change, message
-    ):
-        outcome = revise_fixture(construct_factory("outcome"), indicators=())
-        question = QuestionSpec[ConstructSpec](text="Why?", outcome=outcome)
-        assert question.outcome_id == outcome.id
-        with pytest.raises(ValidationError, match=message):
-            QuestionSpec[ConstructSpec](text="Why?", outcome=revise_fixture(outcome, **change))
 
 
 class TestDataVariable:
@@ -622,7 +578,10 @@ class TestDuration:
 
     def test_invalid_model_clock(self):
         with pytest.raises(ValueError, match="Invalid duration"):
-            revise_fixture(make_model(["X"]), measurement_clock="bad")
+            revise_fixture(
+                make_model(["X"]),
+                time={"window": {"start": "2024-01-01", "horizon": "2d"}, "step": "bad"},
+            ).materialized()
 
 
 class TestDeriveObservationSemantics:

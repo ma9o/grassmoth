@@ -14,7 +14,6 @@ from grassmoth_server.actions.contracts.preparation import FileSourceRef
 from grassmoth_server.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
-    EditQuestionRequest,
     FitRequest,
     ModelDiffRequest,
     PrepareDataRequest,
@@ -73,15 +72,6 @@ class ActionInput(BaseModel):
     state: StudyState
 
 
-class EditQuestionActivityInput(BaseModel):
-    """Question edit and destination workspace passed across the activity boundary."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    workspace_id: str
-    request: EditQuestionRequest
-
-
 class EditModelActivityInput(BaseModel):
     """Pinned model edit and destination workspace passed across the activity boundary."""
 
@@ -98,10 +88,7 @@ class EvaluateChecksInput(Value):
     state: StudyState
     applied: Applied[GitOid]
     request: (
-        EditQuestionRequest
-        | EditModelRequest[GitOid]
-        | FitRequest[GitOid]
-        | PrepareDataRequest[GitOid, FileSourceRef]
+        EditModelRequest[GitOid] | FitRequest[GitOid] | PrepareDataRequest[GitOid, FileSourceRef]
     )
 
 

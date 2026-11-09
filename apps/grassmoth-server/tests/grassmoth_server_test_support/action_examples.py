@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
-from grassmoth.public import ConstructId, GitOid, ModelDiffOutput, QuestionSpec, Value
+from grassmoth.public import DynamicalModelSpec, GitOid, ModelDiffOutput, Value
 from grassmoth_server.actions.contracts.polling import ActionPoll, RunningPoll
 from grassmoth_server.actions.contracts.requests import (
     DataDiffRequest,
@@ -36,18 +36,23 @@ from grassmoth_server_test_support.action_values import (
     preparation,
     simulation,
 )
-from grassmoth_server_test_support.question import authored_question, question_output
+from grassmoth_server_test_support.model_output import model_output
 
 if TYPE_CHECKING:
     from grassmoth_server.actions.contracts.identity import ActionId
 
+from grassmoth_test_support.purpose import initial_model
+
 type Request = ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
+
 REQUEST = TypeAdapter(Request)
 POLL = TypeAdapter(ActionPoll)
-QUESTION = {"text": "Synthetic example: how does treatment affect the outcome?", "outcome": OUTCOME}
+
+QUESTION = initial_model(
+    question="Synthetic example: how does treatment affect the outcome?", outcome=OUTCOME
+).model_dump(mode="json")
 DESIGN = {
-    "start": "2026-01-01",
-    "horizon": "3d",
+    "window": {"start": "2026-01-01", "horizon": "3d"},
     "interventions": [{"target": TREATMENT, "after": "1d", "value": 2}],
 }
 
@@ -138,9 +143,7 @@ def examples() -> tuple[Example, ...]:
             "produced": [
                 {
                     "artifact_id": kind,
-                    "revision": oid(
-                        seq + (200 if kind == "raw_data" else 300 if kind == "question" else 100)
-                    ),
+                    "revision": oid(seq + (200 if kind == "raw_data" else 100)),
                     "derived_from": pins,
                     "produced_by": action,
                     "created_at": ORIGIN,
@@ -165,37 +168,37 @@ def examples() -> tuple[Example, ...]:
         revisions.append(revision)
         entries.append(Example(name, request, poll, revision))
 
-    question = question_output(QuestionSpec[ConstructId].model_validate(QUESTION))
+    question = model_output(DynamicalModelSpec.model_validate(QUESTION))
     structure, measured, authored, edited = (
         model(stage) for stage in ("structure", "measurement", "authored", "edited")
     )
     add(
         "question",
-        "edit_question",
-        {"question": authored_question(question.question)},
+        "edit_model",
+        {"dynamical_model_spec": question.dynamical_model_spec},
         question,
-        artifacts={"question": {}, "model": {"question": oid(301)}},
+        artifacts={"model": {}},
     )
     add(
         "structure",
         "edit_model",
         {"parent_ref": oid(101), "dynamical_model_spec": structure.dynamical_model_spec},
         structure,
-        artifacts={"model": {"question": oid(301), "model": oid(101)}},
+        artifacts={"model": {"model": oid(101)}},
     )
     add(
         "measurement",
         "edit_model",
         {"parent_ref": oid(102), "dynamical_model_spec": measured.dynamical_model_spec},
         measured,
-        artifacts={"model": {"question": oid(301), "model": oid(102)}},
+        artifacts={"model": {"model": oid(102)}},
     )
     add(
         "authored",
         "edit_model",
         {"parent_ref": oid(103), "dynamical_model_spec": authored.dynamical_model_spec},
         authored,
-        artifacts={"model": {"question": oid(301), "model": oid(103)}},
+        artifacts={"model": {"model": oid(103)}},
     )
     add(
         "prepared",
@@ -245,7 +248,7 @@ def examples() -> tuple[Example, ...]:
         "fit",
         {"target": target, "settings": {"hardware": "local"}, "repeat": 1},
         fit(),
-        artifacts={"model": {"question": oid(301), "model": oid(104), "panel": oid(105)}},
+        artifacts={"model": {"model": oid(104), "panel": oid(105)}},
     )
     add(
         "simulated",
@@ -258,7 +261,7 @@ def examples() -> tuple[Example, ...]:
         "edit_model",
         {"parent_ref": oid(104), "dynamical_model_spec": edited.dynamical_model_spec},
         edited,
-        artifacts={"model": {"question": oid(301), "model": oid(104)}},
+        artifacts={"model": {"model": oid(104)}},
     )
     add(
         "effectUnavailable",

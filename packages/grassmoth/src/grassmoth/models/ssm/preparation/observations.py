@@ -209,7 +209,7 @@ def simulation_observation_support(
     times: np.ndarray,
     *,
     time_origin: datetime,
-) -> ObservationSupportRuntime:
+) -> ObservationSupportRuntime | ObservationPreflightFailure:
     """Schedule declared indicators on a simulation grid, omitting unavailable prehistory."""
     ordered = compiled_dynamical_model.observations
     names = [indicator.name for indicator in ordered]
@@ -242,7 +242,7 @@ def simulation_observation_support(
             ends[absent, i] = np.nan
     window_plan = compile_window_plan(times, starts, ends, kinds, names)
     if isinstance(window_plan, ObservationPreflightFailure):
-        raise RuntimeError(f"Generated simulation support is inconsistent: {window_plan.message}")
+        return window_plan
     return ObservationSupportRuntime.assembled(
         window_plan=window_plan,
         manifest_names=tuple(names),

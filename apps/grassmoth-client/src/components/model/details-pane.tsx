@@ -31,12 +31,6 @@ function ModelScope({
     tick.record.attempt.request === null
   )
     return <Hint>No new model-wide state was produced.</Hint>;
-  if (tick.record.attempt.action === "edit_question")
-    return context.modelSnapshot.question ? (
-      <QuestionDetails context={context} question={context.modelSnapshot.question} />
-    ) : (
-      <Hint>No question recorded at this version.</Hint>
-    );
   if (tick.record.attempt.action === "fit") return <FitDetails context={context} />;
   if (tick.record.attempt.action === "simulate") return <SimulationEvidence context={context} />;
   if (tick.record.attempt.action === "prepare_data")
@@ -73,6 +67,9 @@ function ModelScope({
 
   return (
     <>
+      {context.modelSnapshot.dynamical_model_spec && (
+        <QuestionDetails context={context} model={context.modelSnapshot.dynamical_model_spec} />
+      )}
       <QuestionChecks context={context} />
       {identification && (
         <Section title="Identification" wide>
@@ -127,7 +124,6 @@ function ModelScope({
 /**
  * The state the selected action left, in depth. With a graph part selected it shows that part.
  * With nothing selected it shows the model-wide state that action produced, and only that:
- * - edit_question: the question, meaning its words, its outcome and each query's dated contrast.
  * - edit_model: the model as specified, meaning its checks against the question, how the question
  *   is identified, the equations, and the evidence of its predictive checks for every indicator
  *   under the laws the model holds.

@@ -13,6 +13,7 @@ from grassmoth.artifacts.model.dynamical_model_spec import (
 )
 from grassmoth_server_test_support.model import load_study_model_fixture
 from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.purpose import initial_model
 
 pytestmark = pytest.mark.contract
 
@@ -32,10 +33,9 @@ def test_spec_diffs_replay_nested_edits_pruning_and_empty_checkpoints_in_both_di
                     },
                 },
                 "edges": {before.edges[1].id: None},
-                "measurement_clock": None,
+                "question": "Revised question",
             }
         ),
-        outcome.id,
     ).dynamical_model_spec
     patch = after.changes_from(before).model_dump(mode="json")
     assert patch == {
@@ -45,9 +45,9 @@ def test_spec_diffs_replay_nested_edits_pruning_and_empty_checkpoints_in_both_di
             pruned.id: None,
         },
         "edges": {before.edges[1].id: None},
-        "measurement_clock": None,
+        "question": "Revised question",
     }
-    for left, right in product((DynamicalModelSpec.from_entities(), before, after), repeat=2):
+    for left, right in product((initial_model(), before, after), repeat=2):
         changes = right.changes_from(left)
         assert merge_fields(left.model_dump(mode="json"), changes.model_dump(mode="json")) == (
             right.model_dump(mode="json")

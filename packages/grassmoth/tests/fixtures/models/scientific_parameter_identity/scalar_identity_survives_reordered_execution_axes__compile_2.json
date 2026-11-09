@@ -512,5 +512,20 @@
     }
   },
   "law_layouts": {},
-  "measurement_clock": "1d"
+  "question": "Test model.",
+  "outcome": "construct:c2061f241aafa2387cc9",
+  "time": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "2d"
+    },
+    "step": "1d"
+  },
+  "core_query": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "2d"
+    },
+    "interventions": []
+  }
 }

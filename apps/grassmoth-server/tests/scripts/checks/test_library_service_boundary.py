@@ -16,8 +16,9 @@ def test_library_exposes_actions_and_preparation_helpers() -> None:
     from grassmoth import public
 
     assert {name for name, _ in getmembers(public, isfunction)} == {
-        "edit_question",
         "edit_model",
+        "estimate_particle_mgrad_memory",
+        "particle_mgrad_memory_shape",
         "prepare_data",
         "fit",
         "simulate",

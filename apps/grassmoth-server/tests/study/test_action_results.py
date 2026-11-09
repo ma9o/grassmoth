@@ -9,20 +9,19 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import ConstructId
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.actions.contracts.inputs import EditQuestionInput
-from grassmoth_server.actions.contracts.requests import EditQuestionRequest, call_identity
+from grassmoth_server.actions.contracts.inputs import EditModelInput
+from grassmoth_server.actions.contracts.requests import EditModelRequest, call_identity
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 from grassmoth_server.study.persistence.history import StudyRepository
-from grassmoth_server.study.persistence.store import ArtifactStore, read_question
+from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
-from grassmoth_server.study.records import Applied, AttemptRecord, EditQuestionAttempt
-from grassmoth_server_test_support.question import authored_question, question_output
+from grassmoth_server.study.records import Applied, AttemptRecord, EditAttempt
+from grassmoth_server_test_support.model_output import model_output
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.purpose import initial_model
 
 pytestmark = pytest.mark.contract
 
@@ -39,19 +38,19 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     workspace = "RESULTS"
     store = ArtifactStore(workspace)
     repository = StudyRepository(workspace)
-    question = QuestionSpec[ConstructId](
-        text="What changes the outcome?", outcome=fixture_entity_id("construct", "outcome")
+    question = initial_model(
+        question="What changes the outcome?", outcome=fixture_entity_id("construct", "outcome")
     )
-    request = EditQuestionRequest(input=EditQuestionInput(question=authored_question(question)))
-    result = question_output(question)
+    request = EditModelRequest(input=EditModelInput(dynamical_model_spec=question))
+    result = model_output(question)
     ref = store.write_result(result, call_id=call_identity(request))
-    artifact = store.result_record("question", ref, derived_from={}, produced_by="edit_question")
+    artifact = store.result_record("model", ref, derived_from={}, produced_by="edit_model")
     revision = repository.append(
         AttemptRecord(
             seq=1,
             ts="2026-01-01T00:00:00Z",
-            attempt=EditQuestionAttempt(
-                action="edit_question",
+            attempt=EditAttempt(
+                action="edit_model",
                 request=request,
                 outcome=Applied(result=ref, effects=ActionEffects(produced=(artifact,))),
             ),
@@ -61,7 +60,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     assert expected["body"] == msgpack.unpackb(
         repository.read_file(revision.commit_id, "result.msgpack")
     )
-    assert read_question(store, artifact.revision) == question
+    assert read_model(store, artifact.revision) == question
 
     def cannot_build(*args, **kwargs):
         raise AssertionError("A saved call must never construct another result")
@@ -78,12 +77,12 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     app.include_router(study_api.router)
     with TestClient(app) as client:
         for _ in range(2):
-            polled = client.get(f"/api/studies/{workspace}/edit_question/{call_identity(request)}")
+            polled = client.get(f"/api/studies/{workspace}/edit_model/{call_identity(request)}")
             assert polled.status_code == 200, polled.text
             assert polled.headers["content-type"] == "application/msgpack"
             assert msgpack.unpackb(polled.content) == expected
             posted = client.post(
-                f"/api/studies/{workspace}/edit_question", json=request.model_dump(mode="json")
+                f"/api/studies/{workspace}/edit_model", json=request.model_dump(mode="json")
             )
             assert posted.status_code == 200, posted.text
             assert msgpack.unpackb(posted.content) == expected
@@ -142,7 +141,7 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     from grassmoth_server.study.queries.data import read_data_history
     from grassmoth_server.study.records import action_attempt
     from grassmoth_server.study.state import ArtifactResult
-    from grassmoth_server_test_support.action import question_root
+    from grassmoth_server_test_support.action import model_root
     from grassmoth_server_test_support.runner_fixtures import (
         panel_frame,
         panel_metadata,
@@ -151,7 +150,7 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "PREPARED"
-    question_root(workspace)
+    model_root(workspace)
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     model = seed_model(store)
     metadata = panel_metadata()
@@ -217,16 +216,14 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     from grassmoth_server.actions.contracts.requests import EditModelRequest
     from grassmoth_server.actions.model_diff import model_diff
     from grassmoth_server.study.records import action_attempt
-    from grassmoth_server_test_support.action import edit_and_check, question_root
+    from grassmoth_server_test_support.action import edit_and_check, model_root
     from grassmoth_test_support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "MODEL_REFS"
-    question_root(
+    model_root(
         workspace,
-        QuestionSpec[ConstructId](
-            text="What changes Y?", outcome=fixture_entity_id("construct", "Y")
-        ),
+        initial_model(question="What changes Y?", outcome=fixture_entity_id("construct", "Y")),
     )
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     dynamical_model_spec = make_model(["X", "Y"], [("X", "Y")])

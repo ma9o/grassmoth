@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Never
 from unittest.mock import Mock
 
-import dynestyx as dsx
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from grassmoth.models.ssm.compile.state_space import StateSpace
+from grassmoth.models.ssm.execution.dynamical_model import DynamicalModelRuntime
 from grassmoth.models.ssm.inference.extraction import (
     extract_grouped_public_samples,
 )
@@ -97,7 +97,7 @@ def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
     target = Mock(
         spec=ParticleTarget,
         context=Mock(
-            return_value=(Mock(spec=dsx.DynamicalModel), jnp.zeros(1), jnp.arange(3.0), None)
+            return_value=(Mock(spec=DynamicalModelRuntime), jnp.zeros(1), jnp.arange(3.0))
         ),
         initial_path=Mock(side_effect=_no_numerical_execution),
         replay_path=Mock(side_effect=lambda _context, path: path),

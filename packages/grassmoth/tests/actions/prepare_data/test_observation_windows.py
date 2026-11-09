@@ -16,7 +16,6 @@ from grassmoth.artifacts.observations.spec import (
     ResolvedObservationSpec,
 )
 from grassmoth.artifacts.observations.time import ObservationInstant
-from grassmoth.observations.rows import observation_window_boundaries
 
 pytestmark = pytest.mark.contract
 
@@ -79,10 +78,6 @@ def test_period_counts_keep_exact_bounds_and_missing_windows(window, start, miss
     simulated = rows.select(lower.alias("support_start"), upper.alias("support_end"))
     assert simulated.equals(rows.select("support_start", "support_end"))
     if isinstance(variable.observation_window, CalendarDuration):
-        boundaries = observation_window_boundaries(
-            variable.observation_window, datetime.fromisoformat(start), datetime.fromisoformat(end)
-        )
-        assert boundaries == tuple(datetime.fromisoformat(value) for value in (start, missing, end))
         # A calendar count cannot be attached to a partial reporting period.
         unaligned = pl.DataFrame({"anchor_time": [datetime.fromisoformat(start).replace(day=2)]})
         assert unaligned.select(lower, upper.alias("end")).row(0) == (None, None)

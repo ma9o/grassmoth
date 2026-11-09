@@ -3,9 +3,11 @@
   "input": {
     "dynamical_model_spec_ref": "latest",
     "simulation": {
-      "start": "1936-01-01",
-      "horizon": "1643d",
-      "interventions": []
+      "interventions": [],
+      "window": {
+        "start": "1936-01-01",
+        "horizon": "1643d"
+      }
     },
     "seed": 0,
     "num_replicates": 100

@@ -131,5 +131,12 @@ def certify_conditioned_model(
         raise CausalCertificationError(
             "The model value differs from the revision certified by the inference log"
         )
-    if not dynamical_model_spec.distributions or not dynamical_model_spec.time_points:
+    if not any(
+        layout.constructs
+        and any(
+            dynamical_model_spec.get_construct(identity).role == "endogenous"
+            for identity in layout.constructs
+        )
+        for layout in dynamical_model_spec.law_layouts.values()
+    ):
         raise CausalCertificationError("The model has no retained joint uncertainty")

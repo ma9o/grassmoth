@@ -3,7 +3,6 @@
 from grassmoth.public import (
     DataDiffOutput,
     EditModelOutput,
-    EditQuestionOutput,
     FitOutput,
     GitOid,
     ModelDiffOutput,
@@ -14,8 +13,7 @@ from grassmoth_server.actions.contracts.identity import ActionId
 from grassmoth_server.study.persistence.store import ArtifactStore
 
 type ActionOutput = (
-    EditQuestionOutput
-    | EditModelOutput
+    EditModelOutput
     | PrepareDataOutput
     | FitOutput
     | SimulateOutput
@@ -27,8 +25,6 @@ type ActionOutput = (
 def read_result(store: ArtifactStore, action: ActionId, revision: GitOid) -> ActionOutput:
     """Decode the saved result with the schema owned by its recorded action."""
     match action:
-        case "edit_question":
-            return store.read_result(revision, EditQuestionOutput)
         case "edit_model":
             return store.read_result(revision, EditModelOutput)
         case "prepare_data":

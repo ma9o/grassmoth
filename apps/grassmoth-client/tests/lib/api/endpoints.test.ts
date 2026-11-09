@@ -1,4 +1,4 @@
-import { initialOutcome } from "@/lib/__fixtures__/model";
+import { modelFixture } from "@/lib/__fixtures__/model";
 import { Buffer } from "node:buffer";
 import { ExtData, encode } from "@msgpack/msgpack";
 import {
@@ -230,10 +230,10 @@ it("keeps JSON requests, timeline responses and HTTP errors alongside binary act
   const client = createModelClient({ baseUrl: "http://viewer", fetch: fetcher });
   fetcher.mockResolvedValueOnce(messagePack({ status: "running", body: null, messages: [] }));
   const request = {
-    action: "edit_question" as const,
-    input: { question: { text: "Why?", outcome: initialOutcome } },
+    action: "edit_model" as const,
+    input: { dynamical_model_spec: modelFixture },
   };
-  const running = await client.POST("/api/studies/{workspace_id}/edit_question", {
+  const running = await client.POST("/api/studies/{workspace_id}/edit_model", {
     params: { path: { workspace_id: "user-1" } },
     body: request,
   });

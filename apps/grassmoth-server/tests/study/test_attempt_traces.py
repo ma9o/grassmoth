@@ -106,11 +106,11 @@ def test_collected_snapshot_retains_all_sources_after_scratch_removal(data_root)
 def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_root):
     del data_root
     from grassmoth_server.study.persistence.store import ArtifactStore
-    from grassmoth_server_test_support.helpers import initial_model_record, write_question
+    from grassmoth_server_test_support.helpers import write_initial_model
 
     store = ArtifactStore("ws-trace")
-    question = write_question(store)
-    initial = initial_model_record(store, question)
+    question = write_initial_model(store)
+    initial = question
     previous_state = StudyRepository("ws-trace").state()
     base = asyncio.run(
         read_inputs_activity(
@@ -180,7 +180,7 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     )
 
     publication = asyncio.run(journal_activity(publication_input))
-    assert base.state.current["question"] == question
+    assert base.state.current["model"] == question
     assert StudyRepository("ws-trace").state() == previous_state
     storage.rm_tree(data_module.call_dir("ws-trace", call_identity(request)))
     asyncio.run(journal_activity(publication_input))

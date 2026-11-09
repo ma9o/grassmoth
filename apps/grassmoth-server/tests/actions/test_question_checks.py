@@ -5,12 +5,13 @@ from datetime import UTC, datetime, timedelta
 import polars as pl
 import pytest
 
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.actions.edit_model import ModelEditFailure, edit_model
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.construct import replace_constructs
+from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
-from grassmoth.artifacts.model.question import QuestionSpec
-from grassmoth.models.causal.question_checks import question_edit_reason, question_findings
+from grassmoth.models.causal.question_checks import question_findings
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_test_support.helpers import make_model, observation_dataset
@@ -39,18 +40,16 @@ def _model():
 
 
 def _question(model, *, start="2024-01-05", value=0.0, outcome=None):
-    dose, mood = model.constructs
-    return QuestionSpec[ConstructId](
-        text="Does lowering my dose change my mood?",
-        outcome=outcome or mood.id,
-        queries={
-            "taper": {
-                "start": start,
-                "horizon": "2w",
-                "interventions": [{"target": dose.id, "after": "1w", "value": value}],
-            }
+    dose = model.constructs[0]
+    return revise_fixture(
+        model,
+        question="Does lowering my dose change my mood?",
+        outcome=outcome or model.outcome,
+        core_query={
+            "window": {"start": start, "horizon": "2w"},
+            "interventions": [{"target": dose.id, "after": "1w", "value": value}],
         },
-    )
+    ).materialized()
 
 
 def _panel(model):
@@ -68,9 +67,9 @@ def _panel(model):
     )
 
 
-def _findings(question, model, panel):
+def _findings(model, panel):
     definitions = tuple(
-        indicator.observation.resolved(model.measurement_clock) for indicator in model.indicators
+        indicator.observation.resolved(model.time.step) for indicator in model.indicators
     )
     variable = definitions[0]
     history = (
@@ -90,64 +89,62 @@ def _findings(question, model, panel):
     )
     return {
         (finding.code, finding.kind, getattr(finding, "outcome", finding.kind))
-        for finding in question_findings(
-            question, StructuralSelection.for_question(model, question), history=history
-        )
+        for finding in question_findings(StructuralSelection.for_model(model), history=history)
     }
 
 
-def test_model_only_checks_undefined_constructs_without_data_findings():
-    dynamical_model_spec = make_model(["Stress"])
-    question = _question(_model())
-    findings = question_findings(
-        question,
-        StructuralSelection.for_question(dynamical_model_spec, question),
-        history=None,
+def test_model_only_checks_undefined_targets_without_data_findings():
+    model = make_model(["Stress"])
+    model = revise_fixture(
+        model,
+        core_query={
+            "window": {"start": "2024-01-01", "horizon": "2d"},
+            "interventions": [{"target": "construct:missing", "value": 1}],
+        },
     )
+    findings = question_findings(StructuralSelection.for_model(model), history=None)
     assert {(item.code, item.kind) for item in findings} == {
-        ("outcome", "not_evaluated"),
+        ("outcome", "evaluated"),
         ("target", "not_evaluated"),
         ("identification", "not_evaluated"),
     }
-    reasons = {item.code: item.reason for item in findings if item.kind == "not_evaluated"}
-    assert reasons["outcome"] == "CONSTRUCT_UNDEFINED"
+    assert {item.reason for item in findings if item.kind == "not_evaluated"} == {
+        "CONSTRUCT_UNDEFINED"
+    }
 
 
-def test_queries_are_checked_against_the_model_and_the_record():
-    dynamical_model_spec = _model()
-    panel = _panel(dynamical_model_spec)
-    assert _findings(_question(dynamical_model_spec, value=15.0), dynamical_model_spec, panel) == {
+def test_core_query_is_checked_against_the_model_and_the_record():
+    model = _model()
+    panel = _panel(model)
+    assert _findings(_question(model, value=15.0), panel) == {
         ("window", "evaluated", "passed"),
         ("range", "evaluated", "passed"),
     }
     assert ("window", "not_evaluated", "not_evaluated") in _findings(
-        _question(dynamical_model_spec), dynamical_model_spec, panel.head(0)
+        _question(model), panel.head(0)
     )
-    outside = _findings(
-        _question(dynamical_model_spec, start="2023-12-25", value=0.0), dynamical_model_spec, panel
-    )
-    assert ("window", "evaluated", "failed") in outside
-    assert ("range", "evaluated", "failed") in outside
-    dose = dynamical_model_spec.constructs[0]
-    with pytest.raises(ValueError, match="intervenes on the outcome"):
-        _question(dynamical_model_spec, outcome=dose.id)
-    exogenous_outcome = QuestionSpec[ConstructId](text="Does the dose change?", outcome=dose.id)
-    assert _findings(exogenous_outcome, dynamical_model_spec, None) == {
-        ("outcome", "evaluated", "failed")
-    }
+    assert ("range", "evaluated", "failed") in _findings(_question(model, value=0), panel)
+    with pytest.raises(ValueError, match="before the model"):
+        _question(model, start="2023-12-25")
+    dose = model.constructs[0]
+    with pytest.raises(ValueError, match="endogenous construct"):
+        _question(model, outcome=dose.id)
 
 
-def test_an_edit_defines_the_question_and_models_its_outcome():
-    dynamical_model_spec = _model()
-    dose, _ = dynamical_model_spec.constructs
-    assert question_edit_reason(dynamical_model_spec, _question(dynamical_model_spec)) is None
-    missing = question_edit_reason(make_model(["Mood"]), _question(dynamical_model_spec))
-    assert missing is not None
-    assert dose.id in missing
-    given = QuestionSpec[ConstructId](text="Does my dose change?", outcome=dose.id)
-    assert (
-        question_edit_reason(dynamical_model_spec, given)
-        == "The question's outcome must reference an endogenous construct"
+def test_an_edit_keeps_an_unresolved_query_target_as_a_readiness_finding():
+    model = _question(_model())
+    result = edit_model(None, model)
+    assert not isinstance(result, ModelEditFailure)
+    result = edit_model(
+        model,
+        DynamicalModelSpec(
+            core_query={"interventions": [{"target": "construct:missing", "value": 1}]}
+        ),
+    )
+    assert not isinstance(result, ModelEditFailure)
+    assert any(
+        item.code == "target" and item.kind == "not_evaluated"
+        for item in result.checks.question.findings
     )
 
 
@@ -161,7 +158,7 @@ def test_an_edit_defines_the_question_and_models_its_outcome():
 )
 def test_an_edit_allows_connected_branches_without_a_path_to_the_outcome(extra_edges, outside):
     dynamical_model_spec = make_model(["Dose", "Mood", *outside], [("Dose", "Mood"), *extra_edges])
-    draft = revise_fixture(dynamical_model_spec, measurement_clock=None).with_entities(
+    draft = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
@@ -170,7 +167,7 @@ def test_an_edit_allows_connected_branches_without_a_path_to_the_outcome(extra_e
             ),
         ),
     )
-    assert question_edit_reason(draft, _question(_model())) is None
+    assert not isinstance(edit_model(None, draft), ModelEditFailure)
 
 
 def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_the_outcome():
@@ -186,7 +183,6 @@ def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_th
                 ("Moderator", "Mood"),
             ],
         ),
-        measurement_clock=None,
     )
     confounder = next(
         construct for construct in dynamical_model_spec.constructs if construct.name == "U"
@@ -196,7 +192,7 @@ def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_th
             dynamical_model_spec.edges, (revise_fixture(confounder, indicators=()),)
         )
     )
-    assert question_edit_reason(dynamical_model_spec, _question(_model())) is None
+    assert not isinstance(edit_model(None, dynamical_model_spec), ModelEditFailure)
 
 
 def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypatch):
@@ -205,12 +201,12 @@ def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypat
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.state import StudyState
-    from grassmoth_server_test_support.helpers import initial_model_record, write_question
+    from grassmoth_server_test_support.helpers import write_initial_model
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("question-path")
-    question = write_question(store, _question(_model()))
-    state = StudyState().with_artifacts([question, initial_model_record(store, question)])
+    question = write_initial_model(store, _question(_model()))
+    state = StudyState().with_artifacts([question])
     dynamical_model_spec = make_model(
         ["Dose", "Mood", "Side"], [("Dose", "Mood"), ("Dose", "Side")]
     )
@@ -249,8 +245,8 @@ def test_unobserved_outcome_explanation_is_an_identification_finding():
     model = model.with_entities(
         edges=replace_constructs(model.edges, (revise_fixture(mood, indicators=()),))
     )
-    question = _question(model)
-    findings = question_findings(question, StructuralSelection(model, mood.id), history=None)
+    model = _question(model)
+    findings = question_findings(StructuralSelection(model, mood.id), history=None)
     (finding,) = (item for item in findings if item.code == "identification")
     assert finding.kind == "evaluated"
     assert finding.outcome == "failed"

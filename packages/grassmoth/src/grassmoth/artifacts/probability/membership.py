@@ -42,6 +42,12 @@ def validate_distribution_memberships(
     }
     if len(grids) > 1:
         raise ValueError("Endogenous trajectories must share their retained time grid and origin")
+    if any(
+        points != dynamical_model_spec.time.time_points
+        or origin != dynamical_model_spec.time.window.start_instant
+        for points, origin in grids
+    ):
+        raise ValueError("Endogenous trajectory laws must match the model time grid and origin")
     for identity, layout in dynamical_model_spec.law_layouts.items():
         parameters = tuple(
             sorted(

@@ -3,11 +3,8 @@
 from pathlib import Path
 from uuid import uuid4
 
-from grassmoth.artifacts.identity import ConstructId
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.storage import paths
 from grassmoth_server.study.persistence.call import SavedResult
-from grassmoth_server_test_support.question import question_output
 from grassmoth_test_support.helpers import observation_dataset
 
 
@@ -64,10 +61,6 @@ def seed_record(
             checks={"specification": (), "question": {"findings": ()}},
             identification={"outcome": None, "treatments": {}},
             pruning={},
-        )
-    elif artifact_id == "question":
-        output = question_output(
-            QuestionSpec[ConstructId].model_validate(documents["question.json"])
         )
     else:
         assert parquet_files is not None

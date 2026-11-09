@@ -2,7 +2,7 @@
 
 > Auto-generated from `packages/api-types/schemas/openapi.json` (the FastAPI OpenAPI spec) by `apps/grassmoth-server/scripts/codegen/export_api.py`. Edit Python type/field descriptions, the API description or route docstrings, not this file.
 
-Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend
+Six actions carry out a study. Create the model, question, time domain and core query with `edit_model`, then extend
 the model with `edit_model`. Upload tables with `/api/upload`, extract
 observations with `prepare_data`, and condition the model on them with `fit`.
 `simulate` samples an authored or fitted model; `data_diff` and `model_diff`
@@ -94,7 +94,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/edit_model`
 
-Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision. Omit parent_ref to create a model, supplying question, outcome, time and core_query. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
 
 **Parameters**
 
@@ -102,12 +102,12 @@ Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields fr
 
 **Input: [`EditModelInput<RevisionSelector>`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py)**
 
-Revise a saved model, starting with the model produced by edit_question.
+Create a model or merge an edit into a selected saved revision.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model. |
-| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
+| `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) \| `null` | optional; default `null` | Model revision to edit; omission creates a new model. 'latest' requires an existing model. |
+| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
 
 **Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
@@ -128,135 +128,35 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
 {
   "action": "edit_model",
   "input": {
-    "parent_ref": "0000065000000000000000000000000000000000",
+    "parent_ref": null,
     "dynamical_model_spec": {
       "constructs": {
-        "construct:00000000000000000001": {
-          "name": "baseline",
-          "reasoning": {
-            "text": "Synthetic baseline for interface examples.",
-            "reference_urls": []
-          },
-          "indicators": {},
-          "dynamics": {},
-          "coefficients": [],
-          "innovation_family": "gaussian",
-          "distribution": null,
-          "role": "endogenous",
-          "temporal_status": "time_invariant"
-        },
-        "construct:00000000000000000002": {
-          "name": "treatment",
-          "reasoning": {
-            "text": "Synthetic treatment for interface examples.",
-            "reference_urls": []
-          },
-          "indicators": {},
-          "dynamics": {},
-          "coefficients": [],
-          "innovation_family": "gaussian",
-          "distribution": null,
-          "role": "endogenous",
-          "temporal_status": "time_varying"
-        },
         "construct:00000000000000000003": {
           "name": "outcome",
           "reasoning": {
             "text": "Synthetic outcome for interface examples.",
             "reference_urls": []
           },
-          "indicators": {},
-          "dynamics": {},
-          "coefficients": [],
-          "innovation_family": "gaussian",
-          "distribution": null,
           "role": "endogenous",
           "temporal_status": "time_varying"
         }
       },
-      "edges": {
-        "edge:00000000000000000001": {
-          "mechanisms": {},
-          "reasoning": {
-            "text": "Baseline affects treatment.",
-            "reference_urls": []
-          },
-          "cause": "construct:00000000000000000001",
-          "effect": "construct:00000000000000000002"
+      "question": "Synthetic example: how does treatment affect the outcome?",
+      "outcome": "construct:00000000000000000003",
+      "time": {
+        "window": {
+          "start": "2026-01-01",
+          "horizon": "90d"
         },
-        "edge:00000000000000000002": {
-          "mechanisms": {},
-          "reasoning": {
-            "text": "Treatment affects the outcome.",
-            "reference_urls": []
-          },
-          "cause": "construct:00000000000000000002",
-          "effect": "construct:00000000000000000003"
-        }
+        "step": "1d"
       },
-      "parameters": {},
-      "distributions": {},
-      "law_layouts": {},
-      "measurement_clock": null
-    }
-  }
-}
-JSON
-```
-
-### POST `/api/studies/{workspace_id}/edit_question`
-
-Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.
-
-**Parameters**
-
-- `workspace_id` (path, required)
-
-**Input: [`EditQuestionInput`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py)**
-
-The study question, its required outcome, and any named intervention queries.
-
-| Field | Type | Presence / default | Description |
-|---|---|---|---|
-| `question` | [`QuestionSpec<ConstructSpec>`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome. |
-
-**Success body: [`EditQuestionOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
-
-The saved question, its initial outcome-only model and readiness findings.
-
-| Field | Type | Presence / default | Description |
-|---|---|---|---|
-| `question` | [`QuestionSpec<ConstructId>`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The saved question, including its outcome and intervention queries. |
-| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Initial outcome-only model. |
-| `checks` | [`ModelCheckReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/model_checks.py) | required | Initial specification and question findings. |
-| `identification` | [`IdentificationReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/identification.py) | required | Initial causal identification findings. |
-
-```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_question" -H 'Accept: application/json' -o /tmp/action.json \
-  -X POST \
-  -H 'Content-Type: application/json' \
-  --data-binary @- <<'JSON'
-{
-  "action": "edit_question",
-  "input": {
-    "question": {
-      "text": "Synthetic example: how does treatment affect the outcome?",
-      "outcome": {
-        "id": "construct:00000000000000000003",
-        "name": "outcome",
-        "reasoning": {
-          "text": "Synthetic outcome for interface examples.",
-          "reference_urls": []
+      "core_query": {
+        "window": {
+          "start": "2026-01-01",
+          "horizon": "90d"
         },
-        "indicators": [],
-        "dynamics": [],
-        "coefficients": [],
-        "innovation_family": "gaussian",
-        "distribution": null,
-        "role": "endogenous",
-        "temporal_status": "time_varying"
-      },
-      "queries": {}
+        "interventions": []
+      }
     }
   }
 }
@@ -470,8 +370,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/simu
   "input": {
     "dynamical_model_spec_ref": "0000068000000000000000000000000000000000",
     "simulation": {
-      "start": "2026-01-01",
-      "horizon": "3d",
+      "window": {
+        "start": "2026-01-01",
+        "horizon": "3d"
+      },
       "interventions": [
         {
           "target": "construct:00000000000000000002",

@@ -8,13 +8,13 @@ import pytest
 
 from grassmoth.artifacts.observations.dataset import SelectedObservations
 from grassmoth.artifacts.observations.spec import NumericMeasurement, ResolvedObservationSpec
-from grassmoth.observations.rows import observation_grid, pivot_to_wide
+from grassmoth.observations.rows import pivot_to_wide
 from grassmoth_test_support.helpers import observation_dataset
 
 pytestmark = pytest.mark.contract
 
 
-def _project(rows):
+def _project(rows, grid=(0.0, 1.0, 2.0)):
     origin = datetime(2024, 1, 1, tzinfo=UTC)
     if rows.schema["anchor_time"].is_numeric():
         rows = rows.with_columns(
@@ -41,7 +41,7 @@ def _project(rows):
     )
     selected = observations.select(variables)
     assert isinstance(selected, SelectedObservations)
-    return pivot_to_wide(selected, observation_grid(selected))
+    return pivot_to_wide(selected, np.asarray(grid))
 
 
 # =============================================================================
@@ -71,10 +71,10 @@ class TestPivotToWide:
         assert wide.height == 3
 
     def test_empty_dataframe(self):
-        """Empty input returns empty output."""
+        """Empty input preserves the declared model grid."""
         df = pl.DataFrame({"anchor_time": [], "indicator_id": [], "value": []})
         result = _project(df)
-        assert result.is_empty()
+        assert result["time"].to_list() == [0.0, 1.0, 2.0]
 
     def test_datetime_to_fractional_days(self):
         """Datetime timestamps are converted to fractional days from t0."""
@@ -112,7 +112,7 @@ class TestPivotToWide:
                 "value": [30.0, 10.0, 20.0],
             }
         )
-        wide = _project(df)
+        wide = _project(df, grid=(0.0, 1.0, 2.0, 3.0))
         times = wide["time"].to_list()
         assert times == sorted(times)
 
@@ -194,7 +194,7 @@ class TestPivotToWide:
             }
         )
         wide = _project(df)
-        assert wide.height == 2
+        assert wide.height == 3
         assert "indicator:1f4c67cecb9238ee1a80" in wide.columns
         assert wide["indicator:1f4c67cecb9238ee1a80"][1] == 42.0
 
@@ -226,7 +226,7 @@ class TestPivotToWideSparsity:
         logger = logging.getLogger("grassmoth.observations.rows")
         logger.propagate = True
         with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
-            wide = _project(raw)
+            wide = _project(raw, grid=tuple(range(24)))
 
         assert wide.height == 24
         assert np.isnan(wide.to_numpy()).sum() == 46
@@ -254,7 +254,7 @@ class TestPivotToWideSparsity:
 
         raw = pl.DataFrame(rows)
         with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
-            _project(raw)
+            _project(raw, grid=tuple(range(10)))
 
         assert not any("Sparse" in msg for msg in caplog.messages)
 
@@ -272,7 +272,7 @@ class TestPivotToWideTimezoneStrings:
                 "value": [1.0, 2.0],
             }
         )
-        wide = _project(df)
+        wide = _project(df, grid=(0.0, 1.5))
 
         assert wide.schema["time"] == pl.Float64
         times = wide["time"].to_list()

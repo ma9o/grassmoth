@@ -172,7 +172,7 @@ describe("local distributions at model seams", () => {
     if (!specification) throw new Error("Missing test parameter.");
     const persistence: DynamicalModelSpec = {
       ...model,
-      measurement_clock: "12h",
+      time: { ...modelFixture.time, step: "12h" },
       parameters: {
         [theta]: {
           ...specification,

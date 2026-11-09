@@ -98,7 +98,7 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                             workspace_id="test", state=state,
                             request=SimulateRequest[GitOid](input=SimulateInput[GitOid](
                                 dynamical_model_spec_ref=model_record.revision,
-                                simulation=SimulationSpec(start="2026-01-01", horizon="2d"),
+                                simulation=SimulationSpec(window={"start": "2026-01-01", "horizon": "2d"}),
                             )),
                         ),
                         EvaluateChecksInput(
@@ -182,7 +182,7 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
         )
         InferenceEvidence(chain_extra_fields={"energy": values})
     else:
-        design = {"start": "2026-01-01", "horizon": "1d"}
+        design = {"window": {"start": "2026-01-01", "horizon": "1d"}}
         request = SimulateRequest.model_validate(
             {"input": {"dynamical_model_spec_ref": ref["revision"], "simulation": design}}
         )

@@ -12,10 +12,6 @@ from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.bindings import joint_law_layout
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
-    from jax.typing import ArrayLike
-
     from grassmoth.artifacts.identity import DistributionId
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -26,9 +22,6 @@ def condition_model(
     dynamical_model_spec: DynamicalModelSpec,
     compiled_dynamical_model: CompiledDynamicalModel,
     result: MCMCPosterior,
-    *,
-    times: ArrayLike,
-    time_origin: datetime,
 ) -> tuple[DynamicalModelSpec, DistributionId]:
     """Replace the current uncertainty with the engine's full joint empirical law.
 
@@ -45,7 +38,8 @@ def condition_model(
         for identity in state_ids
         if dynamical_model_spec.get_construct(identity).role == "endogenous"
     ]
-    grid = np.asarray(times)
+    grid = dynamical_model_spec.time.time_points
+    time_origin = dynamical_model_spec.time.window.start_instant
     if paths is None or paths.shape[1:] != (len(grid), len(state_ids)):
         raise ValueError("Conditioning must retain the complete aligned latent trajectories")
     if result.draws.state_ids and tuple(result.draws.state_ids) != tuple(state_ids):
@@ -58,7 +52,7 @@ def condition_model(
         bindings,
         parameters=conditioned_parameters,
         constructs=modeled_ids,
-        time_points=grid.tolist(),
+        time_points=grid,
         time_origin=time_origin,
     )
     # Relative input paths acquire the same calendar binding as the conditioned states.

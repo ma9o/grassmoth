@@ -39,7 +39,7 @@ export interface ModelDraws {
 function intervalDays(transform: ParameterTransformSpec, model: DynamicalModelSpec): number {
   if (!("interval_days" in transform)) throw new Error("This transform has no interval.");
   if (transform.interval_days !== "model_clock") return transform.interval_days;
-  const clock = model.measurement_clock;
+  const clock = model.time.step;
   if (!clock) throw new PlotUnavailable("The model clock has not been assigned.");
   const units: Readonly<Record<string, number>> = {
     s: 1 / 86400,

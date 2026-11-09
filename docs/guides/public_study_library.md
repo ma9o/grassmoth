@@ -13,9 +13,8 @@ service; the on-disk compilation cache stays there.
 
 Callers import the library only through
 [`grassmoth.public`](../../packages/grassmoth/src/grassmoth/public.py).
-This module re-exports only the seven actions, their input, output and failure
-types, and two helpers that keep the workers' support windows and level labels
-identical to `prepare_data`'s. The
+This module re-exports only the six actions, their input, output and failure
+types, observation-window and level-label helpers, and fit memory estimates. The
 [public import checker](../../packages/checks/src/grassmoth_checks/check_public_imports.py)
 enforces this boundary with ARCH011 for external callers and ARCH013 for the
 service, including its maintenance tools. Both rules check type-only and dynamic

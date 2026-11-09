@@ -11,7 +11,7 @@ import pytest
 
 from grassmoth.actions.contracts.io import SimulateOutput, SimulationInputs
 from grassmoth.actions.fit.conditioning import condition_model
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.simulation import SimulationSpec
@@ -27,7 +27,7 @@ from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.git import artifact_revision, commit_id
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import write_initial_model
 from grassmoth_server_test_support.model import stress_sleep_causal_model, stress_sleep_model
 from grassmoth_server_test_support.runner_fixtures import panel_metadata
 from grassmoth_server_test_support.storage import result_blob, seed_record
@@ -61,11 +61,9 @@ def test_current_law_sampling_preserves_joint_parameter_atoms():
         particle_posterior(
             JointPosteriorDraws(
                 original,
-                jnp.zeros((3, 2, 2)),
+                jnp.zeros((3, len(dynamical_model_spec.time_points), 2)),
             )
         ),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
     )
     draws = sample_model_laws(
         compile_model_fixture(conditioned), draws=24, key=jax.random.PRNGKey(4)
@@ -122,19 +120,19 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     from grassmoth_server.study.persistence.store import read_model
 
     dynamical_model_spec = read_model(store, definition.revision)
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_test_support.model import construct_named
+    from grassmoth_test_support.purpose import initial_model
 
-    question = write_question(
+    question = write_initial_model(
         store,
-        QuestionSpec[ConstructId](
-            text="How does sleep change?", outcome=construct_named(dynamical_model_spec, "Sleep").id
+        initial_model(
+            question="How does sleep change?",
+            outcome=construct_named(dynamical_model_spec, "Sleep").id,
         ),
     )
     produced = [definition, question]
     pins: dict[ArtifactId, GitOid] = {
         "model": artifact_revision("TEST", "model", 1),
-        "question": question.revision,
     }
     produced.append(
         seed_record(
@@ -155,10 +153,11 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             dynamical_model_spec,
             compile_model_fixture(dynamical_model_spec),
             particle_posterior(
-                JointPosteriorDraws(parameter_draws(dynamical_model_spec, 3), jnp.zeros((3, 5, 2)))
+                JointPosteriorDraws(
+                    parameter_draws(dynamical_model_spec, 3),
+                    jnp.zeros((3, len(dynamical_model_spec.time_points), 2)),
+                )
             ),
-            times=jnp.arange(-1.0, 4.0),
-            time_origin=panel_metadata().time_origin,
         )
         from grassmoth_server_test_support.storage import seed_model_record
 
@@ -225,7 +224,10 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             SimulateRequest[GitOid](
                 input=SimulateInput[GitOid](
                     simulation=SimulationSpec(
-                        start=date(2023, 12, 31) if fitted_laws else date(2026, 1, 1), horizon="4d"
+                        window={
+                            "start": date(2024, 1, 1),
+                            "horizon": "4d",
+                        }
                     ),
                     dynamical_model_spec_ref=pins["model"],
                 )
@@ -237,7 +239,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     evidence = report.evidence
     assert evidence.arms.action.latent_paths.values.shape == (evidence.draws, 5, 2)
     assert evidence.arms.action.observations.values.shape == (evidence.draws, 5, 2)
-    assert set(pins) == {"model", "question"}
+    assert set(pins) == {"model"}
     assert report.law is not None
     assert report.law.kind == ("fitted" if fitted_laws else "authored")
     if fitted_laws:
@@ -254,7 +256,10 @@ def test_durable_replication_preserves_current_laws_without_comparison(
                 input=SimulateInput(
                     dynamical_model_spec_ref=pins["model"],
                     simulation=SimulationSpec(
-                        start=date(2023, 12, 31) if fitted_laws else date(2026, 1, 1), horizon="4d"
+                        window={
+                            "start": date(2024, 1, 1),
+                            "horizon": "4d",
+                        }
                     ),
                 )
             ),
@@ -301,23 +306,15 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     )
     panel = selected.observations
     from grassmoth.artifacts.observations.dataset import SelectedObservations
-    from grassmoth.models.ssm.preparation.binding import project_observation_data
+    from grassmoth.observations.rows import pivot_to_wide
 
     selection = panel.select(panel.variables)
     assert isinstance(selection, SelectedObservations)
-    projected = project_observation_data(
-        selection,
-        compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
-    )
+    projected = pivot_to_wide(selection, np.asarray(evidence.times))
     assert not isinstance(projected, ObservationPreflightFailure)
     wide = projected
     np.testing.assert_allclose(
-        wide.select(
-            [
-                dynamical_model_spec.indicator(identity).observation.name
-                for identity in evidence.observation_layout.indicator_ids
-            ]
-        ).to_numpy(),
+        wide.select(evidence.observation_layout.indicator_ids).to_numpy(),
         evidence.arms.action.observations.values[1],
         equal_nan=True,
     )
@@ -325,15 +322,15 @@ def test_durable_replication_preserves_current_laws_without_comparison(
 
 @pytest.mark.inference(concern="simulation")
 @pytest.mark.parametrize(
-    ("start_time", "origin"),
+    ("start_time", "query_day"),
     [
-        pytest.param(1.0, datetime(2026, 1, 1, tzinfo=UTC), id="1.0"),
-        pytest.param(0.0, datetime(2026, 1, 2, tzinfo=UTC), id="0.0"),
-        pytest.param(0.25, datetime(2026, 1, 1, 18, tzinfo=UTC), id="0.25"),
+        pytest.param(1.0, date(2026, 1, 2), id="last-retained"),
+        pytest.param(0.0, date(2026, 1, 1), id="first-retained"),
+        pytest.param(2.0, date(2026, 1, 3), id="future-gap"),
     ],
 )
 def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
-    tmp_path, monkeypatch, start_time, origin
+    tmp_path, monkeypatch, start_time, query_day
 ):
     from grassmoth.actions.simulate.action import _simulate as simulate
     from grassmoth.artifacts.scenarios import InterventionSpec
@@ -341,25 +338,27 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
     from grassmoth_server.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
-    dynamical_model_spec = x_model()
+    dynamical_model_spec = revise_fixture(
+        x_model(),
+        time={"window": {"start": "2026-01-01", "horizon": "1d"}, "step": "12h"},
+        core_query={"window": {"start": "2026-01-01", "horizon": "1d"}},
+    )
+    origin = dynamical_model_spec.time.window.start_instant
     from grassmoth.models.ssm import compiled_access as numeric
 
     states = numeric.state_ids(compile_model_fixture(dynamical_model_spec))
-    paths = jnp.arange(1.0, 1 + 4 * len(states)).reshape(2, 2, len(states))
+    paths = jnp.arange(1.0, 1 + 6 * len(states)).reshape(2, 3, len(states))
     dynamical_model_spec, _ = condition_model(
         dynamical_model_spec,
         compile_model_fixture(dynamical_model_spec),
         particle_posterior(JointPosteriorDraws(parameter_draws(dynamical_model_spec, 2), paths)),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=origin,
     )
     ArtifactStore("TEST")
     design = SimulationSpec(
-        start=date(2026, 1, 2),
-        horizon="1d",
+        window={"start": query_day, "horizon": "1d"},
         interventions=(InterventionSpec(target=states[0], value=2.0, after="12h"),),
     )
-    assert design.start_day(origin) == start_time
+    assert design.window.start_day(origin) == start_time
     report = simulate(
         SimulationInputs(
             selection=StructuralSelection(dynamical_model_spec, None),
@@ -377,13 +376,15 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
     np.testing.assert_allclose(action[:, 0], reference[:, 0])
     if start_time in (1.0, 0.0):
         for initial in action[:, 0]:
-            assert any(np.allclose(initial, atom) for atom in np.asarray(paths[:, int(start_time)]))
+            assert any(
+                np.allclose(initial, atom) for atom in np.asarray(paths[:, int(start_time / 0.5)])
+            )
     np.testing.assert_allclose(action[:, 1, 0], 2.0, atol=1e-5)
     assert not np.allclose(action[:, -1, 0], 2.0)
     assert np.isfinite(action).all()
     emissions = report.arms.action.observations.values
-    assert np.isnan(emissions[:, :-1]).all()
-    assert np.isfinite(emissions[:, -1]).all()
+    assert np.isnan(emissions[:, 0]).all()
+    assert np.isfinite(emissions[:, 1:]).all()
 
 
 @pytest.mark.inference(concern="simulation")
@@ -406,14 +407,14 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         dynamical_model_spec,
         compile_model_fixture(dynamical_model_spec),
         particle_posterior(
-            JointPosteriorDraws(parameter_draws(dynamical_model_spec, 2), jnp.zeros((2, 2, 2)))
+            JointPosteriorDraws(
+                parameter_draws(dynamical_model_spec, 2),
+                jnp.zeros((2, len(dynamical_model_spec.time_points), 2)),
+            )
         ),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
     )
     design = SimulationSpec(
-        start=date(2024, 1, 2),
-        horizon="1d",
+        window={"start": date(2024, 1, 2), "horizon": "1d"},
         interventions=(InterventionSpec(target=states[0], value=1.0),),
     )
     inference_log(dynamical_model_spec)
@@ -479,7 +480,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
     assert SimulationReport.model_validate(unpack_result(pack_result(report))) == report
-    from grassmoth.models.ssm.preparation.binding import project_observation_data
+    from grassmoth.observations.rows import pivot_to_wide
     from grassmoth_server_test_support.data import simulation_output
 
     panel = simulation_output(report).observations(0)
@@ -487,17 +488,12 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 
     selection = panel.select(panel.variables)
     assert isinstance(selection, SelectedObservations)
-    projected = project_observation_data(
-        selection,
-        compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
-    )
+    projected = pivot_to_wide(selection, np.asarray(evidence.times))
     assert not isinstance(projected, ObservationPreflightFailure)
     assert np.all(np.diff(projected["time"].to_numpy()) > 1e-8)
     wide = projected.filter(pl.col("time").is_in(list(evidence.times)))
     np.testing.assert_allclose(
-        wide.select(
-            numeric.observation_names(compile_model_fixture(dynamical_model_spec))
-        ).to_numpy(),
+        wide.select(evidence.observation_layout.indicator_ids).to_numpy(),
         evidence.arms.action.observations.values[0],
         equal_nan=True,
     )
@@ -616,7 +612,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     )
     state = StudyState().with_artifacts((panel,))
     assert set(profile.indicators) == {item.id for item in panel_metadata().variables}
-    assert not state.has("model")
+    assert not (state.get("model") is not None)
     revised_model = stress_sleep_model()
     revised_model = revised_model.with_entities(
         edges=(
@@ -690,7 +686,7 @@ def test_simulation_retains_exact_histories_without_running_measurement_reducers
     evidence = action._simulate(
         SimulationInputs(
             selection=StructuralSelection(dynamical_model_spec, None),
-            design=SimulationSpec(start=date(2026, 1, 1), horizon="2d"),
+            design=SimulationSpec(window={"start": date(2024, 1, 1), "horizon": "2d"}),
             seed=0,
             num_replicates=100,
             law=AuthoredLawProvenance(),
@@ -712,12 +708,10 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
     from grassmoth.actions.edit_model import ModelEditFailure, edit_model
     from grassmoth.actions.simulate.action import simulate
     from grassmoth.artifacts.identity import GitRef, scientific_id
-    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.model.expressions import coefficient, restoring_potential, state
     from grassmoth.artifacts.model.likelihood import LikelihoodSpec, NormalLawSpec
     from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
     from grassmoth.artifacts.model.parameter_spec import ParameterSpec
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.scenarios import CausalEffectResult, InterventionSpec
     from grassmoth.models.causal.proofs import CausalCertificationError, certify_identified_estimand
     from grassmoth.models.ssm import compiled_access as numeric
@@ -791,14 +785,16 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
         distributions={"distribution:branch": dist.Normal(0.5, 0.05)},
     )
     design = SimulationSpec(
-        start=date(2024, 1, 2),
-        horizon="2d",
+        window={"start": date(2024, 1, 2), "horizon": "2d"},
         interventions=(InterventionSpec(target=nodes["X"].id, value=1.0),),
     )
-    question = QuestionSpec[ConstructId](
-        text="Effect of X on Y", outcome=nodes["Y"].id, queries={"raise": design}
+    source = revise_fixture(
+        source,
+        question="Effect of X on Y",
+        outcome=nodes["Y"].id,
+        core_query=design.model_dump(mode="json"),
     )
-    edited = edit_model(question, DynamicalModelSpec(), source)
+    edited = edit_model(None, source)
     assert not isinstance(edited, ModelEditFailure)
     assert edited.pruning.constructs == ()
     assert all(
@@ -824,9 +820,11 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
     model, _ = condition_model(
         model,
         compiled,
-        particle_posterior(JointPosteriorDraws(parameter_draws(model, 2), jnp.zeros((2, 2, 4)))),
-        times=jnp.array([0.0, 1.0]),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        particle_posterior(
+            JointPosteriorDraws(
+                parameter_draws(model, 2), jnp.zeros((2, len(model.time_points), 4))
+            )
+        ),
     )
     result = simulate(
         SimulationInputs(

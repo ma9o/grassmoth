@@ -1039,5 +1039,20 @@
   "parameters": {},
   "distributions": {},
   "law_layouts": {},
-  "measurement_clock": "864s"
+  "question": "Test model.",
+  "outcome": "construct:x04",
+  "time": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "2d"
+    },
+    "step": "864s"
+  },
+  "core_query": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "2d"
+    },
+    "interventions": []
+  }
 }

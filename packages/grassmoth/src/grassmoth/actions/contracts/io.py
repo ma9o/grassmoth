@@ -1,4 +1,4 @@
-"""Resolved inputs and complete scientific outputs of the seven library actions.
+"""Resolved inputs and complete scientific outputs of the six library actions.
 
 Fit and simulate take input records, and prepare_data takes its source table and the
 values its workers extracted; the other actions take artifact values directly. Typed
@@ -21,9 +21,8 @@ from pydantic import (
 )
 
 from grassmoth.artifacts.base import Value
-from grassmoth.artifacts.identity import ConstructId, IndicatorId
+from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec, ModelEditResult
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.history import ObservationData
 from grassmoth.artifacts.observations.preparation import (
     DataPreparationResult,
@@ -54,22 +53,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.artifacts.simulation import SimulationSpec
     from grassmoth.models.structure import StructuralSelection
-
-# edit_question
-
-
-class EditQuestionOutput(Value):
-    """The saved question, its initial outcome-only model and readiness findings."""
-
-    question: QuestionSpec[ConstructId] = Field(
-        description="The saved question, including its outcome and intervention queries."
-    )
-    dynamical_model_spec: DynamicalModelSpec = Field(description="Initial outcome-only model.")
-    checks: ModelCheckReport = Field(description="Initial specification and question findings.")
-    identification: IdentificationReport = Field(
-        description="Initial causal identification findings."
-    )
-
 
 # edit_model
 
@@ -159,7 +142,6 @@ class FitInputs:
     """
 
     selection: StructuralSelection
-    question: QuestionSpec[ConstructId]
     data_for_model: ObservationDataset
     sampler: SamplerSpec
     compute_loo_diagnostics: bool

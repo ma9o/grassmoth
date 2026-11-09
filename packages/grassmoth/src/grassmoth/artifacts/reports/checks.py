@@ -147,23 +147,26 @@ class LatentConvergenceSubject(Value):
 class OutcomeSubject(Value):
     """The outcome construct selected by the study question."""
 
+    kind: Literal["outcome"] = "outcome"
     outcome: ConstructRef
 
 
 class QueryTargetSubject(Value):
-    """An intervention target in one named query."""
+    """An intervention target in the core query."""
 
-    query: str
+    kind: Literal["query_target"] = "query_target"
     target: ConstructRef
 
 
 class QueryWindowSubject(Value):
-    """The observation window of one named query."""
+    """The observation window of the core query."""
 
-    query: str
+    kind: Literal["query_window"] = "query_window"
 
 
-type QuestionSubject = OutcomeSubject | QueryTargetSubject | QueryWindowSubject
+type QuestionSubject = Annotated[
+    OutcomeSubject | QueryTargetSubject | QueryWindowSubject, Field(discriminator="kind")
+]
 type FindingSubject = (
     str
     | EntityRef

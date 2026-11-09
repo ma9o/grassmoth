@@ -11,7 +11,7 @@ bun run --cwd apps/grassmoth-server study:rebuild
 
 The command prints the new workspace ID and workbench URL. Each default run uses
 a fresh timestamped `FRANCE1940SIMPLE_…` workspace. It uploads the source CSV and
-runs `edit_question`, `edit_model`, `prepare_data`, `simulate`, `data_diff`, and
+runs `edit_model` twice, then `prepare_data`, `simulate`, `data_diff`, and
 `model_diff`, waiting for each saved result. It never calls `fit`. The simulation
 retains the original 100 prior histories, seed 0, and daily 1936–1940 window.
 `model_diff` compares the initial outcome-only model with the authored model.

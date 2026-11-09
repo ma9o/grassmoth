@@ -337,5 +337,20 @@
     }
   },
   "law_layouts": {},
-  "measurement_clock": "1d"
+  "question": "Test model.",
+  "outcome": "construct:numerical_test_outcome",
+  "time": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "36h"
+    },
+    "step": "36h"
+  },
+  "core_query": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "36h"
+    },
+    "interventions": []
+  }
 }

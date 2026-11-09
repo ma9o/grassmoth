@@ -13,16 +13,14 @@ from unittest.mock import AsyncMock
 import pytest
 
 from grassmoth.actions.contracts.io import EditModelOutput, PrepareDataOutput
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.simulation import SimulationSpec
 from grassmoth_server.actions.contracts.call_state import CallProgress, RunningCall
 from grassmoth_server.actions.contracts.identity import RevisionSelector
 from grassmoth_server.actions.contracts.inputs import (
     EditModelInput,
-    EditQuestionInput,
     FitInput,
     ModelDiffInput,
     NewFitTarget,
@@ -37,7 +35,6 @@ from grassmoth_server.actions.contracts.polling import (
 from grassmoth_server.actions.contracts.preparation import SourceFolder
 from grassmoth_server.actions.contracts.requests import (
     EditModelRequest,
-    EditQuestionRequest,
     FitRequest,
     PrepareDataRequest,
     SimulateRequest,
@@ -49,8 +46,8 @@ from grassmoth_server.study import calls as study_calls
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import ActionMessage, Rejected
-from grassmoth_server_test_support.question import authored_question
 from grassmoth_test_support.helpers import graph_constructs
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
@@ -108,7 +105,6 @@ def _proposed_model() -> dict[str, Any]:
 
 def _measured_model() -> dict[str, Any]:
     model = _proposed_model()
-    model["measurement_clock"] = "1d"
     graph_constructs(model)[0]["indicators"] = {
         "indicator:sleep": {
             "reasoning": {"text": "Synthetic measurement of the construct for this test scenario."},
@@ -215,20 +211,14 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert rejected.record.attempt.outcome.code == "INPUT_UNAVAILABLE"
                 assert "0" * 40 in rejected.record.attempt.outcome.detail
 
-                question = QuestionSpec[ConstructId](
-                    text=_QUESTION, outcome="construct:unmeasured_outcome"
-                )
+                question = initial_model(question=_QUESTION, outcome="construct:unmeasured_outcome")
                 root = await execute(
-                    EditQuestionRequest(
-                        input=EditQuestionInput(question=authored_question(question))
-                    )
+                    EditModelRequest(input=EditModelInput(dynamical_model_spec=question))
                 )
                 assert root.record.attempt.outcome.status == "applied"
-                assert state(root).has("question")
+                assert state(root).get("model") is not None
                 again = await execute(
-                    EditQuestionRequest(
-                        input=EditQuestionInput(question=authored_question(question))
-                    )
+                    EditModelRequest(input=EditModelInput(dynamical_model_spec=question))
                 )
                 assert again == root
 
@@ -257,7 +247,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                             .revision,
                             dynamical_model_spec=DynamicalModelSpec.model_validate(
                                 _measured_model()
-                            ).materialized(),
+                            ),
                         )
                     )
                 )
@@ -266,8 +256,8 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     PrepareDataRequest[RevisionSelector, SourceFolder](input=_PREPARATION)
                 )
                 assert prepared.record.attempt.outcome.status == "applied", prepared
-                assert state(prepared).has("panel")
-                assert set(state(prepared).current) == {"question", "model", "raw_data", "panel"}
+                assert state(prepared).get("panel") is not None
+                assert set(state(prepared).current) == {"model", "raw_data", "panel"}
                 store = ArtifactStore(workspace_id)
                 assert (
                     store.read_result(
@@ -296,7 +286,9 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     ),
                     SimulateRequest[GitOid](
                         input=SimulateInput[GitOid](
-                            simulation=SimulationSpec(start="2026-01-01", horizon="1d"),
+                            simulation=SimulationSpec(
+                                window={"start": "2026-01-01", "horizon": "1d"}
+                            ),
                             dynamical_model_spec_ref=model_revision,
                         )
                     ),
@@ -355,7 +347,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 ]
                 assert [record.record.attempt.action for record in records] == [
                     "edit_model",
-                    "edit_question",
+                    "edit_model",
                     "edit_model",
                     "edit_model",
                     "prepare_data",
@@ -367,7 +359,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert records[3].record.attempt.request is not None
                 assert (
                     records[3].record.attempt.request.input.dynamical_model_spec
-                    == DynamicalModelSpec.model_validate(_measured_model()).materialized()
+                    == DynamicalModelSpec.model_validate(_measured_model())
                 )
                 assert records[5].record.attempt.action == "fit"
                 assert records[5].record.attempt.request is not None
@@ -378,7 +370,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 )
                 assert all("move" not in record.model_dump() for record in records)
                 assert read_model(store, state(rewritten).current["model"].revision) == revised
-                assert state(rewritten).current["question"] == state(root).current["question"]
+                assert "question" not in state(rewritten).current
                 assert (
                     store.read_result(edited.record.attempt.outcome.result, EditModelOutput)
                     == saved_model
@@ -496,12 +488,10 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 handle = await study_calls._study_handle(workspace_id, clients)
                 created = await _submit(
                     workspace_id,
-                    EditQuestionRequest(
-                        input=EditQuestionInput(
-                            question=authored_question(
-                                QuestionSpec[ConstructId](
-                                    text=_QUESTION, outcome="construct:unmeasured_outcome"
-                                )
+                    EditModelRequest(
+                        input=EditModelInput(
+                            dynamical_model_spec=initial_model(
+                                question=_QUESTION, outcome="construct:unmeasured_outcome"
                             )
                         )
                     ),
@@ -525,7 +515,7 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                             .revision,
                             dynamical_model_spec=DynamicalModelSpec.model_validate(
                                 _measured_model()
-                            ).materialized(),
+                            ),
                         )
                     ),
                     clients,

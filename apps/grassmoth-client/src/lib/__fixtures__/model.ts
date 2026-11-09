@@ -158,5 +158,8 @@ export const modelFixture: DynamicalModelSpec = {
     },
   },
   law_layouts: {},
-  measurement_clock: "1d",
+  question: "How does treatment affect the outcome?",
+  outcome: outcome.id,
+  time: { window: { start: "2026-01-01", horizon: "2d" }, step: "1d" },
+  core_query: { window: { start: "2026-01-01", horizon: "2d" }, interventions: [] },
 };

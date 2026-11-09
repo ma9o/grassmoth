@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import ConstructId, GitOid, GitRef
+from grassmoth.artifacts.identity import GitOid, GitRef
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
@@ -50,8 +50,8 @@ from grassmoth_server_test_support.action import (
     empty_simulation_summary,
     fixture_request,
 )
-from grassmoth_server_test_support.question import authored_question
 from grassmoth_server_test_support.storage import seed_record, stage_result
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -92,7 +92,7 @@ def _model(store, clock, parent=0):
         "model",
         produced_by=None,
         derived_from={"model": parent} if parent else {},
-        json_files={"model.json": {"measurement_clock": clock}},
+        json_files={"model.json": initial_model(question=clock).model_dump(mode="json")},
     )
 
 
@@ -119,10 +119,10 @@ def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(
 
 
 def test_out_of_order_publication_selects_submission_order_and_retains_input_parents(study):
-    from grassmoth_server_test_support.action import question_root
+    from grassmoth_server_test_support.action import model_root
 
     repository, store = study
-    root = question_root("STUDY")
+    root = model_root("STUDY")
     earlier, later = _model(store, "1d"), _model(store, "2d")
     records = []
     for seq, model, clock in ((2, earlier, "1d"), (3, later, "2d")):
@@ -135,7 +135,7 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
                     request=EditModelRequest[GitOid](
                         input=EditModelInput[GitOid](
                             parent_ref=repository.state().current["model"].revision,
-                            dynamical_model_spec=DynamicalModelSpec(measurement_clock=clock),
+                            dynamical_model_spec=initial_model(question=clock),
                         )
                     ),
                 ),
@@ -189,63 +189,32 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
     )
 
 
-def test_question_publication_admits_one_call_and_reuses_its_result(study):
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth_server.actions.contracts.inputs import EditQuestionInput
-    from grassmoth_server.actions.contracts.requests import EditQuestionRequest
-    from grassmoth_server.actions.edit_question import edit_question
-    from grassmoth_server.study.records import ActionMessage, action_attempt
-    from grassmoth_server_test_support.action import question_root
+def test_initial_models_are_independent_roots_and_question_edits_inherit_the_model(study):
+    from grassmoth_server.actions.edit_model import edit_model
+    from grassmoth_server.study.persistence.store import read_model
+    from grassmoth_server_test_support.action import model_root
 
-    repository, _ = study
-    first = question_root(
-        "STUDY", QuestionSpec[ConstructId](text="First?", outcome="construct:outcome")
-    )
-    request = EditQuestionRequest(
-        input=EditQuestionInput(
-            question=authored_question(
-                QuestionSpec[ConstructId](text="Second?", outcome="construct:outcome")
-            )
+    repository, store = study
+    first = model_root("STUDY", initial_model(question="First?"))
+    second = model_root("STUDY", initial_model(question="Second?"))
+    assert first.parent_ids == second.parent_ids == ()
+    assert first.commit_id != second.commit_id
+    assert model_root("STUDY", initial_model(question="First?")) == first
+    request = EditModelRequest[GitOid](
+        input=EditModelInput[GitOid](
+            parent_ref=repository.state(first.commit_id).current["model"].revision,
+            dynamical_model_spec=DynamicalModelSpec(question="Revised?"),
         )
     )
-    at = datetime(2026, 1, 1, tzinfo=UTC)
-    started = ActionMessage(
-        timestamp=at,
-        severity="info",
-        code="EDIT_QUESTION_STARTED",
-        subject="edit_question",
-        detail="Started question edit.",
-    )
-    second = repository.append(
-        AttemptRecord(
-            seq=2,
-            ts=at.isoformat(),
-            attempt=action_attempt(request, edit_question("STUDY", request)),
-        ),
-        messages=(started,),
-    )
-    assert isinstance(first.record.attempt.outcome, Applied)
-    assert first.parent_ids == ()
-    assert isinstance(second.record.attempt.outcome, Rejected)
-    log = read_call_log(repository, second.commit_id)
-    messages = tuple(message for message in log.messages if message.kind == "log")
-    assert messages[0] == started
-    assert [message.code for message in messages] == ["EDIT_QUESTION_STARTED", "INPUT_UNAVAILABLE"]
-    assert messages[-1].detail == second.record.attempt.outcome.detail
-    assert (
-        next(message.failure for message in log.messages if message.kind == "failure")
-        == second.record.attempt.outcome
-    )
-    assert str(repository.repo.references["refs/question"].target) == first.commit_id
-    assert (
-        repository.state().current["question"] == first.record.attempt.outcome.effects.produced[0]
-    )
-    assert (
-        question_root(
-            "STUDY", QuestionSpec[ConstructId](text="First?", outcome="construct:outcome")
-        )
-        == first
-    )
+    result = edit_model("STUDY", request)
+    assert isinstance(result, Applied)
+    third = repository.append(applied_record("STUDY", result, request=request, seq=3))
+    assert third.parent_ids == (first.commit_id,)
+    saved = read_model(store, repository.state(third.commit_id).current["model"].revision)
+    assert saved.question == "Revised?"
+    assert saved.time == initial_model().time
+    assert saved.core_query == initial_model().core_query
+    assert set(repository.state().current) == {"model"}
 
 
 @pytest.mark.parametrize("fails", [False, True])
@@ -273,9 +242,9 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
     from grassmoth_server_test_support.helpers import run_async
 
     repository, store = study
-    from grassmoth_server_test_support.action import question_root
+    from grassmoth_server_test_support.action import model_root
 
-    root = question_root("STUDY").commit_id
+    root = model_root("STUDY").commit_id
     head = repository.append(
         applied_record(
             "STUDY",
@@ -533,9 +502,9 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
                         "support_end_times": NumericalArray.from_numpy(np.zeros((2, 0))),
                         "mask": NumericalArray.from_numpy(np.zeros((1, 2, 0), dtype=bool)),
                     },
-                    assignments=SimulationSpec(start=date(2026, 1, 1), horizon="10d").assignments(
-                        datetime(2026, 1, 1, tzinfo=UTC)
-                    ),
+                    assignments=SimulationSpec(
+                        window={"start": date(2026, 1, 1), "horizon": "10d"}
+                    ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
                 ),
             )
             record = dependency_record(
@@ -546,7 +515,9 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
                 seq=seq,
                 request=SimulateRequest[GitOid](
                     input=SimulateInput[GitOid](
-                        simulation=SimulationSpec(start=date(2026, 1, 1), horizon="10d"),
+                        simulation=SimulationSpec(
+                            window={"start": date(2026, 1, 1), "horizon": "10d"}
+                        ),
                         dynamical_model_spec_ref=ref.revision,
                     )
                 ),

@@ -1,9 +1,8 @@
 """Execute model staging and action-owned checks in local contract tests."""
 
-from grassmoth.artifacts.identity import ConstructId
-from grassmoth_server.actions.contracts.inputs import EditQuestionInput
+from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.edit_model import edit_model
-from grassmoth_server_test_support.question import authored_question, question_output
+from grassmoth_server_test_support.model_output import model_output
 from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.helpers import fixture_entity_id
 from grassmoth_test_support.values import revise_fixture
@@ -13,22 +12,20 @@ def edit_and_check(workspace_id, request, state):
     return edit_model(workspace_id, request)
 
 
-def question_root(workspace_id, question=None):
-    """Publish the study question as the lineage root, as edit_question does."""
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth_server.actions.contracts.requests import EditQuestionRequest
-    from grassmoth_server.actions.edit_question import edit_question
+def model_root(workspace_id, question=None):
+    """Publish the study question as the lineage root, as edit_model does."""
+    from grassmoth_server.actions.contracts.requests import EditModelRequest
+    from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.study.persistence.history import StudyRepository
+    from grassmoth_test_support.purpose import initial_model
 
-    request = EditQuestionRequest(
-        input=EditQuestionInput(
-            question=authored_question(
-                question
-                if question is not None
-                else QuestionSpec[ConstructId](
-                    text="What does it answer?",
-                    outcome=fixture_entity_id("construct", "unmeasured_outcome"),
-                )
+    request = EditModelRequest(
+        input=EditModelInput(
+            dynamical_model_spec=question
+            if question is not None
+            else initial_model(
+                question="What does it answer?",
+                outcome=fixture_entity_id("construct", "unmeasured_outcome"),
             )
         )
     )
@@ -36,7 +33,7 @@ def question_root(workspace_id, question=None):
     return journal.append(
         applied_record(
             workspace_id,
-            edit_question(workspace_id, request),
+            edit_model(workspace_id, request),
             request=request,
             seq=journal.latest_seq() + 1,
         )
@@ -68,7 +65,7 @@ def applied_record(
     from grassmoth.models.structure import StructuralSelection
     from grassmoth.study.projections.visuals import simulation_observation_histories
     from grassmoth_server.study.persistence.history import StudyRepository
-    from grassmoth_server.study.persistence.store import ArtifactStore, read_model, read_question
+    from grassmoth_server.study.persistence.store import ArtifactStore, read_model
     from grassmoth_server.study.records import ActionAttempt, Applied, AttemptRecord
     from grassmoth_server.study.state import apply_effects
 
@@ -85,11 +82,11 @@ def applied_record(
             else next(item.produced_by for item in result.effects.produced)
         )
     else:
-        if not state.has("question"):
-            from grassmoth_server_test_support.helpers import write_question
+        if not (state.get("model") is not None):
+            from grassmoth_server_test_support.helpers import write_initial_model
 
-            state = state.with_artifacts((write_question(store),))
-        question = read_question(store, state.current["question"].revision)
+            state = state.with_artifacts((write_initial_model(store),))
+        question = read_model(store, state.current["model"].revision)
         match result.result:
             case DataPreparationResult():
                 from grassmoth_server.study.queries.data import read_data_source
@@ -136,14 +133,14 @@ def applied_record(
                 )
                 action = "simulate"
             case _:
-                if state.has("model"):
+                if state.get("model") is not None:
                     model = read_model(store, state.current["model"].revision)
-                    selection = StructuralSelection.for_question(model, question)
+                    selection = StructuralSelection.for_model(model)
                     output = EditModelOutput(
                         dynamical_model_spec=model,
                         checks=store.read_result(reports["checks"], ModelCheckReport)
                         if "checks" in reports
-                        else model_check_report(selection, question),
+                        else model_check_report(selection),
                         identification=store.read_result(
                             reports["identification"], IdentificationReport
                         )
@@ -155,8 +152,8 @@ def applied_record(
                     )
                     action = "edit_model"
                 else:
-                    output = question_output(question)
-                    action = "edit_question"
+                    output = model_output(question)
+                    action = "edit_model"
         identity = result_blob(store, output)
     if request is None:
         request = fixture_request(store, state, action, seq)
@@ -180,24 +177,15 @@ def fixture_request(store, state, action, seq):
     from pydantic import TypeAdapter
 
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.simulation import SimulationSpec
     from grassmoth_server.actions.contracts.requests import ScientificActionRequest
-    from grassmoth_server.study.persistence.store import read_model, read_question
+    from grassmoth_server.study.persistence.store import read_model
     from grassmoth_test_support.git import git_oid
 
     model = state.current.get("model")
-    question = state.current.get("question")
     panel = state.current.get("panel")
     model_ref = model.revision if model else git_oid(seq)
     inputs = {
-        "edit_question": {
-            "question": authored_question(
-                read_question(store, question.revision)
-                if question
-                else QuestionSpec[ConstructId](text=f"Question {seq}?", outcome="construct:outcome")
-            )
-        },
         "edit_model": {
             "parent_ref": model_ref,
             "dynamical_model_spec": read_model(store, model_ref) if model else DynamicalModelSpec(),
@@ -222,7 +210,7 @@ def fixture_request(store, state, action, seq):
         },
         "simulate": {
             "dynamical_model_spec_ref": model_ref,
-            "simulation": SimulationSpec(start=date(2024, 1, 1), horizon="1d"),
+            "simulation": SimulationSpec(window={"start": date(2024, 1, 1), "horizon": "1d"}),
             "seed": seq,
         },
     }
@@ -250,17 +238,16 @@ def model_findings(workspace_id, state, *, action):
         model_check_report,
     )
     from grassmoth.models.structure import StructuralSelection
-    from grassmoth_server.study.persistence.store import ArtifactStore, read_model, read_question
+    from grassmoth_server.study.persistence.store import ArtifactStore, read_model
     from grassmoth_server.study.queries.data import read_data_history
 
     store = ArtifactStore(workspace_id)
     model = read_model(store, state.current["model"].revision)
-    question = read_question(store, state.current["question"].revision)
-    selection = StructuralSelection.for_question(model, question)
+    selection = StructuralSelection.for_model(model)
     if action == "fit":
         history = read_data_history(store, state.data)
-        return fit_check_report(selection, question, history.observations)
-    return model_check_report(selection, question), selection.identification
+        return fit_check_report(selection, history.observations)
+    return model_check_report(selection), selection.identification
 
 
 def prepared_profile(workspace_id, state, applied):

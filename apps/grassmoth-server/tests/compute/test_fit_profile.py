@@ -22,7 +22,7 @@ pytestmark = [pytest.mark.inference(concern="sampling"), pytest.mark.inference(c
 
 
 def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
-    question, selection, data = fixture()
+    selection, data = fixture()
     sampler = SamplerSpec(
         hardware="local",
         num_chains=2,
@@ -36,7 +36,6 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
     )
     inputs = FitInputs(
         selection=selection,
-        question=question,
         data_for_model=data,
         sampler=sampler,
         compute_loo_diagnostics=False,
@@ -113,11 +112,10 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
 
 @pytest.mark.parametrize("draws", [0, 1])
 def test_profile_compile_only_and_first_sweep(draws, tmp_path):
-    question, selection, data = fixture()
+    selection, data = fixture()
     result = run_fit(
         FitInputs(
             selection=selection,
-            question=question,
             data_for_model=data,
             sampler=SamplerSpec(
                 hardware="local",

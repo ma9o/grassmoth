@@ -69,7 +69,7 @@ from grassmoth_server.study.records import Applied
 from grassmoth_server_test_support.action import (
     applied_record,
     empty_simulation_summary,
-    question_root,
+    model_root,
 )
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata, seed_model
 from grassmoth_server_test_support.storage import result_blob, seed_record
@@ -82,7 +82,7 @@ pytestmark = pytest.mark.contract
 def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     workspace = "SAVED"
-    question_root(workspace)
+    model_root(workspace)
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     panel = seed_record(
         store,
@@ -172,7 +172,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         store,
         "model",
         produced_by="edit_model",
-        derived_from={"question": repository.question().revision},
+        derived_from={"model": repository.state().current["model"].revision},
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json", round_trip=True)},
     )
     checks = ModelCheckReport(
@@ -275,9 +275,9 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         model_checks=validation,
     )
     zeroes = NumericalArray.from_numpy(np.zeros((2, 2, 0)))
-    assert dynamical_model_spec.measurement_clock is not None
+    assert dynamical_model_spec.time.step is not None
     variables = tuple(
-        item.observation.resolved(dynamical_model_spec.measurement_clock)
+        item.observation.resolved(dynamical_model_spec.time.step)
         for item in dynamical_model_spec.indicators
     )
     support_ends = np.broadcast_to(np.array([[0.0], [1.0]]), (2, len(variables)))
@@ -304,7 +304,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             "support_end_times": NumericalArray.from_numpy(support_ends),
             "mask": NumericalArray.from_numpy(mask),
         },
-        assignments=SimulationSpec(start="2026-01-01", horizon="1d").assignments(
+        assignments=SimulationSpec(window={"start": "2026-01-01", "horizon": "1d"}).assignments(
             datetime(2026, 1, 1, tzinfo=UTC)
         ),
     )
@@ -323,7 +323,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         ),
         request=SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
-                simulation=SimulationSpec(start="2026-01-01", horizon="1d"),
+                simulation=SimulationSpec(window={"start": "2026-01-01", "horizon": "1d"}),
                 dynamical_model_spec_ref=fitted.revision,
             )
         ),

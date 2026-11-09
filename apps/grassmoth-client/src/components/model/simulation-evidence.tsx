@@ -143,7 +143,7 @@ export function SimulationEvidence({ context }: { context: ScopeContext }) {
   const report = simulation;
   const names = new Map(entities.constructs.map((item) => [item.id, humanize(item.name)]));
   const effect = causalEffect(report);
-  const outcome = effect?.outcome ?? modelSnapshot.question?.outcome ?? null;
+  const outcome = effect?.outcome ?? modelSnapshot.dynamical_model_spec?.outcome ?? null;
   const simulatedOutcome =
     outcome !== null && report.evidence.state_ids.some((id) => id === outcome) ? outcome : null;
   const timeLabel = (day: number) =>

@@ -2,8 +2,7 @@ import type { RecordDependency, TimelineRevision } from "@grassmoth/api-types";
 
 /** Input roles supplying the saved outputs composed into each action's view. */
 const viewArguments = {
-  edit_question: [],
-  edit_model: ["parent"],
+  edit_model: [],
   prepare_data: ["dynamical_model_spec"],
   fit: ["dynamical_model_spec", "data", "fit"],
   simulate: ["dynamical_model_spec"],
@@ -56,28 +55,6 @@ export function producingCall(
   });
 }
 
-/** Follow parent references using timeline metadata, without loading intermediate model bodies. */
-export function questionCall(
-  entry: TimelineRevision,
-  attempts: readonly TimelineRevision[],
-  dependencies: readonly RecordDependency[],
-): TimelineRevision {
-  if (entry.record.attempt.action === "edit_question") return entry;
-  const request = entry.record.attempt.request;
-  const argument =
-    request?.action === "fit" && request.input.target.kind === "continue"
-      ? "fit"
-      : entry.record.attempt.action === "edit_model"
-        ? "parent"
-        : "dynamical_model_spec";
-  const dependency = dependencies.find(
-    (item) => item.seq === entry.record.seq && item.argument === argument,
-  );
-  const parent = attempts.find((item) => item.record.seq === dependency?.source_seq);
-  if (!parent) throw new Error(`Missing ${argument} dependency for call ${entry.record.seq}`);
-  return questionCall(parent, attempts, dependencies);
-}
-
 /** Only declared input dependencies belong to a call's view; journal neighbors do not. */
 export function callDependencies(
   selected: TimelineRevision,
@@ -91,15 +68,11 @@ export function callDependencies(
     const seq = entry.record.seq;
     if (visited.has(seq)) return;
     visited.add(seq);
-    if (entry.record.attempt.action === "edit_model") {
-      visit(questionCall(entry, attempts, dependencies));
-    } else {
-      for (const dependency of viewDependencies(entry, dependencies)) {
-        const parent = bySeq.get(dependency.source_seq);
-        if (parent === undefined)
-          throw new Error(`Missing recorded dependency ${dependency.source_seq} for call ${seq}`);
-        visit(parent);
-      }
+    for (const dependency of viewDependencies(entry, dependencies)) {
+      const parent = bySeq.get(dependency.source_seq);
+      if (parent === undefined)
+        throw new Error(`Missing recorded dependency ${dependency.source_seq} for call ${seq}`);
+      visit(parent);
     }
     calls.push(entry);
   }
@@ -120,10 +93,8 @@ export function modelReference(
   }
   if (!request) return undefined;
   switch (request.action) {
-    case "edit_question":
-      return undefined;
     case "edit_model":
-      return request.input.parent_ref;
+      return request.input.parent_ref ?? undefined;
     case "fit":
       return request.input.target.kind === "new"
         ? request.input.target.dynamical_model_spec_ref

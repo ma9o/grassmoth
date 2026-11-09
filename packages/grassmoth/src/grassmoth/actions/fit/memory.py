@@ -15,17 +15,18 @@ from grassmoth.models.ssm.compile.inputs import CompiledFitInputs, compile_ssm_i
 from grassmoth.models.ssm.inference.conditioning import compile_exact_state_constraints
 from grassmoth.models.ssm.inference.samplers.sweep_plan import SWEEP_BLOCK_SIZE
 from grassmoth.models.ssm.preparation.binding import (
+    PanelPreparationFailure,
     input_trajectory_events,
     input_trajectory_values,
     prepare_fit_inputs,
     project_observation_data,
+    select_model_observations,
 )
 from grassmoth.models.ssm.preparation.observations import validate_observation_support
 from grassmoth.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
     validate_sampler_support,
 )
-from grassmoth.observations.rows import observation_grid, pivot_to_wide
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.observations.dataset import ObservationDataset
@@ -71,6 +72,9 @@ def particle_mgrad_memory_shape(
     selected = observations.select(tuple(item.observation for item in compiled.observations))
     if not isinstance(selected, SelectedObservations):
         return ParticleMgradMemoryFailure(message=selected.message)
+    selected = select_model_observations(selected, compiled.time)
+    if isinstance(selected, PanelPreparationFailure):
+        return ParticleMgradMemoryFailure(message=selected.message)
     wide = project_observation_data(selected, compiled_dynamical_model=compiled)
     if isinstance(wide, ObservationPreflightFailure):
         return ParticleMgradMemoryFailure(message=wide.message)
@@ -79,17 +83,12 @@ def particle_mgrad_memory_shape(
         return ParticleMgradMemoryFailure(message=failure.message)
     events = input_trajectory_events(
         compiled,
-        time_origin=observations.time_origin,
+        time_origin=selected.time_origin,
         start=float(wide["time"][0]),
         end=float(wide["time"][-1]),
     )
     if isinstance(events, ObservationPreflightFailure):
         return ParticleMgradMemoryFailure(message=events.message)
-    if events:
-        grid = observation_grid(selected, tuple(event.spec.time for event in events))
-        wide = pivot_to_wide(selected, grid).rename(
-            {str(item.id): item.name for item in compiled.observations}
-        )
     values, times, _, _ = prepare_fit_inputs(compiled, wide)
     input_values = input_trajectory_values(compiled, times, events)
     constraints = compile_exact_state_constraints(compiled, values, input_values=input_values)

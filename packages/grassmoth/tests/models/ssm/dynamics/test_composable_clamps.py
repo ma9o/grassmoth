@@ -141,9 +141,7 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
         for parameter in dynamical_model_spec.parameters
         if parameter.name not in {"rho_setting", "sigma_setting"}
     )
-    dynamical_model_spec = revise_fixture(
-        dynamical_model_spec, measurement_clock="1d"
-    ).with_entities(
+    dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (dose,)),
         parameters=parameters,
         distributions={

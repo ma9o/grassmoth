@@ -55,9 +55,13 @@ def test_nonlinear_mixed_missing_irregular_exact_densities(intervals):
         )
         spec = spec.with_entities(edges=replace_constructs(spec.edges, (revised,)))
     model = compile_fit_fixture(spec)
-    times = jnp.array([0.0, 0.05, 0.17, 0.4, 0.9])
-    observations = jnp.array(
-        [[0.2, 1.0], [jnp.nan, 2.0], [0.3, jnp.nan], [jnp.nan, jnp.nan], [-0.2, 0.0]]
+    times = np.asarray(spec.time_points)
+    observations = (
+        jnp.full((len(times), 2), jnp.nan)
+        .at[jnp.array([0, 1, 3, 8, 18])]
+        .set(
+            jnp.array([[0.2, 1.0], [jnp.nan, 2.0], [0.3, jnp.nan], [jnp.nan, jnp.nan], [-0.2, 0.0]])
+        )
     )
     if intervals:
         observations = observations.at[0].set(jnp.nan)

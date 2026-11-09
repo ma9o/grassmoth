@@ -13,9 +13,7 @@ import polars as pl
 
 from grassmoth.actions.contracts.io import FitInputs, FitOutput
 from grassmoth.actions.fit.action import fit
-from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.reports.inference import FitRuntime
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
@@ -32,27 +30,14 @@ from grassmoth_server.compute.compilation_cache import compile_program, prepare_
 from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.values import revise_fixture
 
-ROOT = Path(__file__).resolve().parents[4]
+FIXTURE = Path(__file__).resolve().parents[1] / "fixtures/models/fit_cache/c0.json"
 ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
 
 
 def fixture(scale=1.0, offset=0.0):
-    model = json.loads((ROOT / "benchmarks/cases/suite/C0/fit.json").read_text())
+    model = json.loads(FIXTURE.read_text())
     model["distributions"]["distribution:tiny-beta"]["params"]["scale"] = scale
-    question = QuestionSpec[ConstructId].model_validate(
-        {
-            "text": "Identify the input effect on y.",
-            "outcome": "construct:y",
-            "queries": {
-                "input contrast": {
-                    "start": "2020-01-01",
-                    "horizon": "16d",
-                    "interventions": [{"target": "construct:u", "value": 1.0}],
-                }
-            },
-        }
-    )
-    selection = StructuralSelection.for_question(DynamicalModelSpec.model_validate(model), question)
+    selection = StructuralSelection.for_model(DynamicalModelSpec.model_validate(model))
     compiled = compile_executable_model(selection)
     variables = tuple(item.observation for item in compiled.observations)
     rows = [
@@ -71,7 +56,7 @@ def fixture(scale=1.0, offset=0.0):
         for index in range(3)
     ]
     data = observation_dataset(pl.DataFrame(rows), variables, time_origin=ORIGIN)
-    return question, selection, data
+    return selection, data
 
 
 def run(phase, output):
@@ -105,7 +90,7 @@ def run(phase, output):
     )
 
     def execute(label, template, *, prior=1.0, offset=0.0, seed=19, previous=None):
-        question, selection, data = fixture(prior, offset)
+        selection, data = fixture(prior, offset)
         sampler = revise_fixture(template, seed=seed)
         events.clear()
         traces.clear()
@@ -114,7 +99,6 @@ def run(phase, output):
         result = fit(
             FitInputs(
                 selection=selection,
-                question=question,
                 data_for_model=data,
                 sampler=sampler,
                 compute_loo_diagnostics=False,

@@ -136,14 +136,18 @@ function ModelChanges({
           value={patch}
         />
       ))}
-      {changes.measurement_clock !== undefined && (
-        <DefinitionChange
-          context={context}
-          title="Updated"
-          label="Measurement clock"
-          selection={null}
-          value={{ measurement_clock: changes.measurement_clock }}
-        />
+      {(["question", "outcome", "time", "core_query"] as const).map(
+        (field) =>
+          changes[field] !== undefined && (
+            <DefinitionChange
+              key={field}
+              context={context}
+              title="Updated"
+              label={field}
+              selection={null}
+              value={{ [field]: changes[field] }}
+            />
+          ),
       )}
     </>
   );

@@ -3,7 +3,7 @@
   "info": {
     "title": "grassmoth study API",
     "version": "0.1.0",
-    "description": "Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend\nthe model with `edit_model`. Upload tables with `/api/upload`, extract\nobservations with `prepare_data`, and condition the model on them with `fit`.\n`simulate` samples an authored or fitted model; `data_diff` and `model_diff`\ncompare saved revisions. `/api/docs` has complete input/output schemas, defaults\nand alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
+    "description": "Six actions carry out a study. Create the model, question, time domain and core query with `edit_model`, then extend\nthe model with `edit_model`. Upload tables with `/api/upload`, extract\nobservations with `prepare_data`, and condition the model on them with `fit`.\n`simulate` samples an authored or fitted model; `data_diff` and `model_diff`\ncompare saved revisions. `/api/docs` has complete input/output schemas, defaults\nand alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
   },
   "paths": {
     "/api/studies/{workspace_id}/{action}/{call_id}": {
@@ -79,76 +79,10 @@
         }
       }
     },
-    "/api/studies/{workspace_id}/edit_question": {
-      "post": {
-        "summary": "Edit Question",
-        "description": "Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.",
-        "operationId": "edit_question",
-        "parameters": [
-          {
-            "name": "workspace_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Workspace Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/EditQuestionRequest-Input"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "action",
-                  "mapping": {
-                    "edit_question": "#/components/schemas/EditQuestionRequest-Input"
-                  }
-                },
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/msgpack": {
-                "schema": {
-                  "$ref": "#/components/schemas/ActionPoll"
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/JsonResponse_ActionPoll"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/studies/{workspace_id}/edit_model": {
       "post": {
         "summary": "Edit Model",
-        "description": "Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.",
+        "description": "Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision. Omit parent_ref to create a model, supplying question, outcome, time and core_query. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.",
         "operationId": "edit_model",
         "parameters": [
           {
@@ -667,7 +601,6 @@
           "mapping": {
             "data_diff": "#/components/schemas/Attempt_Literal__data_diff___DataDiffRequest_GitOid__GitOid_",
             "edit_model": "#/components/schemas/Attempt_Literal__edit_model___EditModelRequest_GitOid__GitOid_",
-            "edit_question": "#/components/schemas/Attempt_Literal__edit_question___EditQuestionRequest_GitOid_",
             "fit": "#/components/schemas/Attempt_Literal__fit___FitRequest_GitOid__GitOid_",
             "model_diff": "#/components/schemas/Attempt_Literal__model_diff___ModelDiffRequest_GitOid__GitOid_",
             "prepare_data": "#/components/schemas/Attempt_Literal__prepare_data___PrepareDataRequest_GitOid__FileSourceRef__GitOid_",
@@ -676,9 +609,6 @@
           "propertyName": "action"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/Attempt_Literal__edit_question___EditQuestionRequest_GitOid_"
-          },
           {
             "$ref": "#/components/schemas/Attempt_Literal__edit_model___EditModelRequest_GitOid__GitOid_"
           },
@@ -857,7 +787,6 @@
           "mapping": {
             "data_diff": "#/components/schemas/SuccessfulPoll_Literal__data_diff___DataDiffOutput_",
             "edit_model": "#/components/schemas/SuccessfulPoll_Literal__edit_model___EditModelOutput_",
-            "edit_question": "#/components/schemas/SuccessfulPoll_Literal__edit_question___EditQuestionOutput_",
             "fit": "#/components/schemas/SuccessfulPoll_Literal__fit___FitOutput_",
             "model_diff": "#/components/schemas/SuccessfulPoll_Literal__model_diff___ModelDiffOutput_",
             "prepare_data": "#/components/schemas/SuccessfulPoll_Literal__prepare_data___PrepareDataOutput_",
@@ -866,9 +795,6 @@
           "propertyName": "action"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/SuccessfulPoll_Literal__edit_question___EditQuestionOutput_"
-          },
           {
             "$ref": "#/components/schemas/SuccessfulPoll_Literal__edit_model___EditModelOutput_"
           },
@@ -1205,7 +1131,6 @@
       },
       "ArtifactId": {
         "enum": [
-          "question",
           "raw_data",
           "model",
           "panel"
@@ -1218,7 +1143,7 @@
       },
       "ArtifactRecord": {
         "additionalProperties": false,
-        "description": "An immutable artifact revision with its producer and exact input dependencies.\n\n``derived_from`` pins the versions used to compute the payload. Initial\nmodels pin their question; edits also pin their model parent. The producing\nactivity stamps ``created_at`` outside deterministic workflow execution.",
+        "description": "An immutable artifact revision with its producer and exact input dependencies.\n\n``derived_from`` pins the versions used to compute the payload. Initial\nmodels have no dependencies; edits pin their model parent. The producing\nactivity stamps ``created_at`` outside deterministic workflow execution.",
         "properties": {
           "artifact_id": {
             "$ref": "#/components/schemas/ArtifactId"
@@ -1660,62 +1585,6 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"edit_model\", EditModelRequest<GitOid>, GitOid>",
-        "x-python-module": "grassmoth_server.study.records",
-        "x-layer": "study",
-        "x-concern": "execution_history"
-      },
-      "Attempt_Literal__edit_question___EditQuestionRequest_GitOid_": {
-        "additionalProperties": false,
-        "description": "One action's request and successful result share the same attempt owner.",
-        "properties": {
-          "action": {
-            "const": "edit_question",
-            "title": "Action",
-            "type": "string"
-          },
-          "request": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EditQuestionRequest-Output"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Parsed arguments, or null for a historical attempt whose arguments were not retained"
-          },
-          "outcome": {
-            "discriminator": {
-              "mapping": {
-                "applied": "#/components/schemas/Applied_GitOid_",
-                "raised": "#/components/schemas/Raised",
-                "rejected": "#/components/schemas/Rejected"
-              },
-              "propertyName": "status"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Applied_GitOid_"
-              },
-              {
-                "$ref": "#/components/schemas/Rejected"
-              },
-              {
-                "$ref": "#/components/schemas/Raised"
-              }
-            ],
-            "title": "Outcome"
-          }
-        },
-        "required": [
-          "action",
-          "request",
-          "outcome"
-        ],
-        "title": "Attempt[Literal['edit_question'], EditQuestionRequest, GitOid]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-typescript-type": "Attempt<\"edit_question\", EditQuestionRequest, GitOid>",
         "x-python-module": "grassmoth_server.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
@@ -4672,6 +4541,94 @@
         "additionalProperties": false,
         "description": "One identity-addressed scientific document, usable for creation and partial edits.\n\nOmission carries no update. Null entity entries are deletion instructions. The\nediting boundary materializes and checks the complete document before publication.\nScientific consumers resolve its owned entities at that boundary.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "outcome": {
+            "pattern": "^construct:[A-Za-z0-9_.-]+$",
+            "tsType": "`construct:${string}`",
+            "type": "string"
+          },
+          "time": {
+            "additionalProperties": false,
+            "description": "The fitting window, initial-state origin, and regular state interval.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "step": {
+                "description": "Fixed state interval and default measurement and coefficient-authoring interval.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "core_query": {
+            "additionalProperties": false,
+            "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "interventions": {
+                "items": {
+                  "additionalProperties": false,
+                  "description": "Set a state some time after the design's start, then let its dynamics resume.",
+                  "properties": {
+                    "target": {
+                      "pattern": "^construct:[A-Za-z0-9_.-]+$",
+                      "tsType": "`construct:${string}`",
+                      "type": "string"
+                    },
+                    "after": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Offset from the design's start; omitted means at the start."
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "constructs": {
             "additionalProperties": {
               "anyOf": [
@@ -8723,16 +8680,6 @@
               "$ref": "#/components/schemas/DistributionId-Input"
             },
             "type": "object"
-          },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "title": "DynamicalModelSpec",
@@ -8745,6 +8692,115 @@
         "additionalProperties": false,
         "description": "One identity-addressed scientific document, usable for creation and partial edits.\n\nOmission carries no update. Null entity entries are deletion instructions. The\nediting boundary materializes and checks the complete document before publication.\nScientific consumers resolve its owned entities at that boundary.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "outcome": {
+            "tsType": "`construct:${string}`",
+            "type": "string"
+          },
+          "time": {
+            "additionalProperties": false,
+            "description": "The fitting window, initial-state origin, and regular state interval.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "horizon"
+                ],
+                "type": "object"
+              },
+              "step": {
+                "description": "Fixed state interval and default measurement and coefficient-authoring interval.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "window",
+              "step"
+            ],
+            "type": "object"
+          },
+          "core_query": {
+            "additionalProperties": false,
+            "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "horizon"
+                ],
+                "type": "object"
+              },
+              "interventions": {
+                "default": [],
+                "items": {
+                  "additionalProperties": false,
+                  "description": "Set a state some time after the design's start, then let its dynamics resume.",
+                  "properties": {
+                    "target": {
+                      "tsType": "`construct:${string}`",
+                      "type": "string"
+                    },
+                    "after": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "description": "Offset from the design's start; omitted means at the start."
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "target",
+                    "after",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "window",
+              "interventions"
+            ],
+            "type": "object"
+          },
           "constructs": {
             "additionalProperties": {
               "additionalProperties": false,
@@ -13696,26 +13752,18 @@
               "$ref": "#/components/schemas/DistributionId-Output"
             },
             "type": "object"
-          },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           }
         },
         "required": [
+          "question",
+          "outcome",
+          "time",
+          "core_query",
           "constructs",
           "edges",
           "parameters",
           "distributions",
-          "law_layouts",
-          "measurement_clock"
+          "law_layouts"
         ],
         "title": "DynamicalModelSpec",
         "type": "object",
@@ -13974,21 +14022,28 @@
       },
       "EditModelInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
-        "description": "Revise a saved model, starting with the model produced by edit_question.",
+        "description": "Create a model or merge an edit into a selected saved revision.",
         "properties": {
           "parent_ref": {
-            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model.",
-            "title": "Parent Ref",
-            "tsType": "RevisionT",
-            "type": "string"
+            "anyOf": [
+              {
+                "tsType": "RevisionT",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model revision to edit; omission creates a new model. 'latest' requires an existing model.",
+            "title": "Parent Ref"
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
-          "parent_ref",
           "dynamical_model_spec"
         ],
         "title": "EditModelInput[Annotated[Any, WithJsonSchema]]",
@@ -14003,19 +14058,26 @@
       },
       "EditModelInput_GitOid_": {
         "additionalProperties": false,
-        "description": "Revise a saved model, starting with the model produced by edit_question.",
+        "description": "Create a model or merge an edit into a selected saved revision.",
         "properties": {
           "parent_ref": {
-            "$ref": "#/components/schemas/GitOid-Input",
-            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model."
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GitOid-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model revision to edit; omission creates a new model. 'latest' requires an existing model."
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
-          "parent_ref",
           "dynamical_model_spec"
         ],
         "title": "EditModelInput[GitOid]",
@@ -14028,19 +14090,26 @@
       },
       "EditModelInput_RevisionSelector_": {
         "additionalProperties": false,
-        "description": "Revise a saved model, starting with the model produced by edit_question.",
+        "description": "Create a model or merge an edit into a selected saved revision.",
         "properties": {
           "parent_ref": {
-            "$ref": "#/components/schemas/RevisionSelector",
-            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model."
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionSelector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Model revision to edit; omission creates a new model. 'latest' requires an existing model."
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions, question text, outcome, time window/step and core_query. Creation requires all four metadata fields. Later edits merge supplied fields into the parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
-          "parent_ref",
           "dynamical_model_spec"
         ],
         "title": "EditModelInput[RevisionSelector]",
@@ -14206,153 +14275,6 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "EditModelRequest<RevisionSelector>",
-        "x-python-module": "grassmoth_server.actions.contracts.requests",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "EditQuestionInput-Input": {
-        "additionalProperties": false,
-        "description": "The study question, its required outcome, and any named intervention queries.",
-        "properties": {
-          "question": {
-            "$ref": "#/components/schemas/QuestionSpec_ConstructSpec_-Input",
-            "description": "The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome."
-          }
-        },
-        "required": [
-          "question"
-        ],
-        "title": "EditQuestionInput",
-        "type": "object",
-        "x-python-module": "grassmoth_server.actions.contracts.inputs",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "EditQuestionInput-Output": {
-        "additionalProperties": false,
-        "description": "The study question, its required outcome, and any named intervention queries.",
-        "properties": {
-          "question": {
-            "$ref": "#/components/schemas/QuestionSpec_ConstructSpec_-Output",
-            "description": "The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome."
-          }
-        },
-        "required": [
-          "question"
-        ],
-        "title": "EditQuestionInput",
-        "type": "object",
-        "x-python-module": "grassmoth_server.actions.contracts.inputs",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "EditQuestionOutput": {
-        "additionalProperties": false,
-        "description": "The saved question, its initial outcome-only model and readiness findings.",
-        "properties": {
-          "question": {
-            "$ref": "#/components/schemas/QuestionSpec_ConstructId_",
-            "description": "The saved question, including its outcome and intervention queries."
-          },
-          "dynamical_model_spec": {
-            "$ref": "#/components/schemas/DynamicalModelSpec-Output",
-            "description": "Initial outcome-only model."
-          },
-          "checks": {
-            "$ref": "#/components/schemas/ModelCheckReport",
-            "description": "Initial specification and question findings."
-          },
-          "identification": {
-            "$ref": "#/components/schemas/IdentificationReport",
-            "description": "Initial causal identification findings."
-          }
-        },
-        "required": [
-          "question",
-          "dynamical_model_spec",
-          "checks",
-          "identification"
-        ],
-        "title": "EditQuestionOutput",
-        "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.io",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "EditQuestionRequest-Input": {
-        "additionalProperties": false,
-        "description": "Save the question and initial model; the successful body is ``EditQuestionOutput``.",
-        "properties": {
-          "action": {
-            "const": "edit_question",
-            "default": "edit_question",
-            "description": "Scientific action that owns this request or result.",
-            "title": "Action",
-            "type": "string"
-          },
-          "input": {
-            "$ref": "#/components/schemas/EditQuestionInput-Input",
-            "description": "Typed arguments of the scientific action."
-          },
-          "reasoning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Why the caller is taking this action and what goal it serves. Retained with the original call and shown at the top of its action log; excluded from call identity.",
-            "title": "Reasoning"
-          }
-        },
-        "required": [
-          "input"
-        ],
-        "title": "EditQuestionRequest",
-        "type": "object",
-        "x-python-module": "grassmoth_server.actions.contracts.requests",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "EditQuestionRequest-Output": {
-        "additionalProperties": false,
-        "description": "Save the question and initial model; the successful body is ``EditQuestionOutput``.",
-        "properties": {
-          "action": {
-            "const": "edit_question",
-            "default": "edit_question",
-            "description": "Scientific action that owns this request or result.",
-            "title": "Action",
-            "type": "string"
-          },
-          "input": {
-            "$ref": "#/components/schemas/EditQuestionInput-Output",
-            "description": "Typed arguments of the scientific action."
-          },
-          "reasoning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Why the caller is taking this action and what goal it serves. Retained with the original call and shown at the top of its action log; excluded from call identity.",
-            "title": "Reasoning"
-          }
-        },
-        "required": [
-          "action",
-          "input",
-          "reasoning"
-        ],
-        "title": "EditQuestionRequest",
-        "type": "object",
         "x-python-module": "grassmoth_server.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
@@ -19219,17 +19141,6 @@
         "additionalProperties": false,
         "description": "Scientific values selected from recorded action dependencies.",
         "properties": {
-          "question": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/QuestionSpec_ConstructId_"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
           "dynamical_model_spec": {
             "anyOf": [
               {
@@ -19351,7 +19262,6 @@
           }
         },
         "required": [
-          "question",
           "dynamical_model_spec",
           "workspace_id",
           "commit_id",
@@ -19371,6 +19281,29 @@
         "x-python-module": "grassmoth_server.study.snapshot",
         "x-layer": "read_models",
         "x-concern": "read_models"
+      },
+      "ModelTimeSpec": {
+        "additionalProperties": false,
+        "description": "The fitting window, initial-state origin, and regular state interval.",
+        "properties": {
+          "window": {
+            "$ref": "#/components/schemas/TimeWindowSpec"
+          },
+          "step": {
+            "description": "Fixed state interval and default measurement and coefficient-authoring interval.",
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "window",
+          "step"
+        ],
+        "title": "ModelTimeSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.model.time",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "MovementQuantiles": {
         "additionalProperties": false,
@@ -21059,11 +20992,18 @@
         "additionalProperties": false,
         "description": "The outcome construct selected by the study question.",
         "properties": {
+          "kind": {
+            "const": "outcome",
+            "default": "outcome",
+            "title": "Kind",
+            "type": "string"
+          },
           "outcome": {
             "$ref": "#/components/schemas/ConstructRef-Output"
           }
         },
         "required": [
+          "kind",
           "outcome"
         ],
         "title": "OutcomeSubject",
@@ -23296,20 +23236,14 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "QueryName": {
-        "minLength": 1,
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.model.question",
-        "x-layer": "authored",
-        "x-concern": "scientific_model",
-        "description": "A query name labels one contrast of the study question."
-      },
       "QueryTargetSubject": {
         "additionalProperties": false,
-        "description": "An intervention target in one named query.",
+        "description": "An intervention target in the core query.",
         "properties": {
-          "query": {
-            "title": "Query",
+          "kind": {
+            "const": "query_target",
+            "default": "query_target",
+            "title": "Kind",
             "type": "string"
           },
           "target": {
@@ -23317,7 +23251,7 @@
           }
         },
         "required": [
-          "query",
+          "kind",
           "target"
         ],
         "title": "QueryTargetSubject",
@@ -23328,15 +23262,17 @@
       },
       "QueryWindowSubject": {
         "additionalProperties": false,
-        "description": "The observation window of one named query.",
+        "description": "The observation window of the core query.",
         "properties": {
-          "query": {
-            "title": "Query",
+          "kind": {
+            "const": "query_window",
+            "default": "query_window",
+            "title": "Kind",
             "type": "string"
           }
         },
         "required": [
-          "query"
+          "kind"
         ],
         "title": "QueryWindowSubject",
         "type": "object",
@@ -23386,163 +23322,16 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "QuestionSpec_Annotated_Any__WithJsonSchema__": {
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "description": "The user's question in their own words.",
-            "minLength": 1,
-            "title": "Text",
-            "type": "string"
-          },
-          "outcome": {
-            "description": "The construct whose course answers the question.",
-            "title": "Outcome",
-            "tsType": "OutcomeT",
-            "type": "string"
-          },
-          "queries": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SimulationSpec-Output"
-            },
-            "description": "Named contrasts against the recorded course, each with at least one intervention.",
-            "propertyNames": {
-              "$ref": "#/components/schemas/QueryName"
-            },
-            "title": "Queries",
-            "type": "object"
-          }
-        },
-        "required": [
-          "text",
-          "outcome",
-          "queries"
-        ],
-        "title": "QuestionSpec[Annotated[Any, WithJsonSchema]]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-python-module": "grassmoth.artifacts.model.question",
-        "x-typescript-parameters": [
-          "OutcomeT"
-        ],
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "QuestionSpec_ConstructId_": {
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "description": "The user's question in their own words.",
-            "minLength": 1,
-            "title": "Text",
-            "type": "string"
-          },
-          "outcome": {
-            "$ref": "#/components/schemas/ConstructId-Output",
-            "description": "The construct whose course answers the question."
-          },
-          "queries": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SimulationSpec-Output"
-            },
-            "description": "Named contrasts against the recorded course, each with at least one intervention.",
-            "propertyNames": {
-              "$ref": "#/components/schemas/QueryName"
-            },
-            "title": "Queries",
-            "type": "object"
-          }
-        },
-        "required": [
-          "text",
-          "outcome",
-          "queries"
-        ],
-        "title": "QuestionSpec[ConstructId]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-typescript-type": "QuestionSpec<ConstructId>",
-        "x-python-module": "grassmoth.artifacts.model.question",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "QuestionSpec_ConstructSpec_-Input": {
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "description": "The user's question in their own words.",
-            "minLength": 1,
-            "title": "Text",
-            "type": "string"
-          },
-          "outcome": {
-            "$ref": "#/components/schemas/ConstructSpec-Input",
-            "description": "The construct whose course answers the question."
-          },
-          "queries": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SimulationSpec-Input"
-            },
-            "description": "Named contrasts against the recorded course, each with at least one intervention.",
-            "propertyNames": {
-              "$ref": "#/components/schemas/QueryName"
-            },
-            "title": "Queries",
-            "type": "object"
-          }
-        },
-        "required": [
-          "text",
-          "outcome"
-        ],
-        "title": "QuestionSpec[ConstructSpec]",
-        "type": "object",
-        "x-typescript-mode": "validation",
-        "x-typescript-type": "QuestionSpec<ConstructSpec>",
-        "x-python-module": "grassmoth.artifacts.model.question",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "QuestionSpec_ConstructSpec_-Output": {
-        "additionalProperties": false,
-        "properties": {
-          "text": {
-            "description": "The user's question in their own words.",
-            "minLength": 1,
-            "title": "Text",
-            "type": "string"
-          },
-          "outcome": {
-            "$ref": "#/components/schemas/ConstructSpec-Output",
-            "description": "The construct whose course answers the question."
-          },
-          "queries": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SimulationSpec-Output"
-            },
-            "description": "Named contrasts against the recorded course, each with at least one intervention.",
-            "propertyNames": {
-              "$ref": "#/components/schemas/QueryName"
-            },
-            "title": "Queries",
-            "type": "object"
-          }
-        },
-        "required": [
-          "text",
-          "outcome",
-          "queries"
-        ],
-        "title": "QuestionSpec[ConstructSpec]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-typescript-type": "QuestionSpec<ConstructSpec>",
-        "x-python-module": "grassmoth.artifacts.model.question",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "QuestionSubject": {
-        "anyOf": [
+        "discriminator": {
+          "mapping": {
+            "outcome": "#/components/schemas/OutcomeSubject",
+            "query_target": "#/components/schemas/QueryTargetSubject",
+            "query_window": "#/components/schemas/QueryWindowSubject"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
           {
             "$ref": "#/components/schemas/OutcomeSubject"
           },
@@ -24434,7 +24223,6 @@
       },
       "ScientificActionId": {
         "enum": [
-          "edit_question",
           "edit_model",
           "prepare_data",
           "fit",
@@ -24450,7 +24238,6 @@
         "discriminator": {
           "mapping": {
             "edit_model": "#/components/schemas/EditModelRequest_GitOid_",
-            "edit_question": "#/components/schemas/EditQuestionRequest-Output",
             "fit": "#/components/schemas/FitRequest_GitOid_",
             "prepare_data": "#/components/schemas/PrepareDataRequest_GitOid_FileSourceRef_",
             "simulate": "#/components/schemas/SimulateRequest_GitOid_"
@@ -24458,9 +24245,6 @@
           "propertyName": "action"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/EditQuestionRequest-Output"
-          },
           {
             "$ref": "#/components/schemas/EditModelRequest_GitOid_"
           },
@@ -25037,18 +24821,10 @@
       },
       "SimulationSpec-Input": {
         "additionalProperties": false,
-        "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nAuthored initial states apply at the start. A retained trajectory law with a\ncalendar origin places the start on that law's model-day axis.",
+        "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
         "properties": {
-          "start": {
-            "description": "Calendar day the window starts, at 00:00 UTC.",
-            "format": "date",
-            "title": "Start",
-            "type": "string"
-          },
-          "horizon": {
-            "description": "How long the window lasts, such as 9w or 61d.",
-            "title": "Horizon",
-            "type": "string"
+          "window": {
+            "$ref": "#/components/schemas/TimeWindowSpec"
           },
           "interventions": {
             "default": [],
@@ -25060,8 +24836,7 @@
           }
         },
         "required": [
-          "start",
-          "horizon"
+          "window"
         ],
         "title": "SimulationSpec",
         "type": "object",
@@ -25071,18 +24846,10 @@
       },
       "SimulationSpec-Output": {
         "additionalProperties": false,
-        "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nAuthored initial states apply at the start. A retained trajectory law with a\ncalendar origin places the start on that law's model-day axis.",
+        "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
         "properties": {
-          "start": {
-            "description": "Calendar day the window starts, at 00:00 UTC.",
-            "format": "date",
-            "title": "Start",
-            "type": "string"
-          },
-          "horizon": {
-            "description": "How long the window lasts, such as 9w or 61d.",
-            "title": "Horizon",
-            "type": "string"
+          "window": {
+            "$ref": "#/components/schemas/TimeWindowSpec"
           },
           "interventions": {
             "default": [],
@@ -25094,8 +24861,7 @@
           }
         },
         "required": [
-          "start",
-          "horizon",
+          "window",
           "interventions"
         ],
         "title": "SimulationSpec",
@@ -25713,54 +25479,6 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
-      "SuccessfulPoll_Literal__edit_question___EditQuestionOutput_": {
-        "additionalProperties": false,
-        "description": "A published scientific result and the complete execution log of its call.",
-        "properties": {
-          "call_id": {
-            "$ref": "#/components/schemas/CallId-Output"
-          },
-          "action": {
-            "const": "edit_question",
-            "title": "Action",
-            "type": "string"
-          },
-          "status": {
-            "const": "success",
-            "default": "success",
-            "title": "Status",
-            "type": "string"
-          },
-          "commit_id": {
-            "$ref": "#/components/schemas/GitOid-Output"
-          },
-          "body": {
-            "$ref": "#/components/schemas/EditQuestionOutput"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ExecutionMessage"
-            },
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "call_id",
-          "action",
-          "status",
-          "commit_id",
-          "body",
-          "messages"
-        ],
-        "title": "SuccessfulPoll[Literal['edit_question'], EditQuestionOutput]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-typescript-type": "SuccessfulPoll<\"edit_question\", EditQuestionOutput>",
-        "x-python-module": "grassmoth_server.actions.contracts.polling",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
       "SuccessfulPoll_Literal__fit___FitOutput_": {
         "additionalProperties": false,
         "description": "A published scientific result and the complete execution log of its call.",
@@ -25978,6 +25696,32 @@
         "title": "TemporalStatus",
         "type": "string",
         "x-python-module": "grassmoth.artifacts.model.construct",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "TimeWindowSpec": {
+        "additionalProperties": false,
+        "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+        "properties": {
+          "start": {
+            "description": "Calendar start at midnight UTC.",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "horizon": {
+            "description": "Elapsed duration from the start to the final state.",
+            "title": "Horizon",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "horizon"
+        ],
+        "title": "TimeWindowSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.model.time",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -26504,6 +26248,20 @@
         "additionalProperties": false,
         "description": "A connected causal graph with owned scientific detail, built to answer the study question.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConstructId-Input"
+          },
+          "time": {
+            "$ref": "#/components/schemas/ModelTimeSpec"
+          },
+          "core_query": {
+            "$ref": "#/components/schemas/SimulationSpec-Input"
+          },
           "constructs": {
             "default": [],
             "items": {
@@ -26549,20 +26307,14 @@
             },
             "title": "Law Layouts",
             "type": "object"
-          },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Measurement Clock"
           }
         },
+        "required": [
+          "question",
+          "outcome",
+          "time",
+          "core_query"
+        ],
         "title": "_ModelEntities",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.model.dynamical_model_spec",
@@ -26573,6 +26325,20 @@
         "additionalProperties": false,
         "description": "A connected causal graph with owned scientific detail, built to answer the study question.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConstructId-Output"
+          },
+          "time": {
+            "$ref": "#/components/schemas/ModelTimeSpec"
+          },
+          "core_query": {
+            "$ref": "#/components/schemas/SimulationSpec-Output"
+          },
           "constructs": {
             "default": [],
             "items": {
@@ -26619,20 +26385,8 @@
             "title": "Law Layouts",
             "type": "object"
           },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Measurement Clock"
-          },
           "time_points": {
-            "description": "Endogenous trajectory coordinates own the model's retained state grid.",
+            "description": "The fixed state coordinates of the authored model window.",
             "items": {
               "type": "number"
             },
@@ -26642,12 +26396,15 @@
           }
         },
         "required": [
+          "question",
+          "outcome",
+          "time",
+          "core_query",
           "constructs",
           "edges",
           "parameters",
           "distributions",
           "law_layouts",
-          "measurement_clock",
           "time_points"
         ],
         "title": "_ModelEntities",
@@ -26686,7 +26443,6 @@
           "mapping": {
             "data_diff": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__data_diff___DataDiffOutput_",
             "edit_model": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_",
-            "edit_question": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_",
             "fit": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__fit___FitOutput_",
             "model_diff": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__model_diff___ModelDiffOutput_",
             "prepare_data": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__prepare_data___PrepareDataOutput_",
@@ -26695,9 +26451,6 @@
           "propertyName": "action"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_"
-          },
           {
             "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_"
           },
@@ -26917,6 +26670,94 @@
         "additionalProperties": false,
         "description": "One identity-addressed scientific document, usable for creation and partial edits.\n\nOmission carries no update. Null entity entries are deletion instructions. The\nediting boundary materializes and checks the complete document before publication.\nScientific consumers resolve its owned entities at that boundary.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "outcome": {
+            "pattern": "^construct:[A-Za-z0-9_.-]+$",
+            "tsType": "`construct:${string}`",
+            "type": "string"
+          },
+          "time": {
+            "additionalProperties": false,
+            "description": "The fitting window, initial-state origin, and regular state interval.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "step": {
+                "description": "Fixed state interval and default measurement and coefficient-authoring interval.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "core_query": {
+            "additionalProperties": false,
+            "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "interventions": {
+                "items": {
+                  "additionalProperties": false,
+                  "description": "Set a state some time after the design's start, then let its dynamics resume.",
+                  "properties": {
+                    "target": {
+                      "pattern": "^construct:[A-Za-z0-9_.-]+$",
+                      "tsType": "`construct:${string}`",
+                      "type": "string"
+                    },
+                    "after": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Offset from the design's start; omitted means at the start."
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "constructs": {
             "additionalProperties": {
               "anyOf": [
@@ -30968,16 +30809,6 @@
               "$ref": "#/components/schemas/DistributionId-Input"
             },
             "type": "object"
-          },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "title": "DynamicalModelSpec",
@@ -30990,6 +30821,115 @@
         "additionalProperties": false,
         "description": "One identity-addressed scientific document, usable for creation and partial edits.\n\nOmission carries no update. Null entity entries are deletion instructions. The\nediting boundary materializes and checks the complete document before publication.\nScientific consumers resolve its owned entities at that boundary.",
         "properties": {
+          "question": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "outcome": {
+            "tsType": "`construct:${string}`",
+            "type": "string"
+          },
+          "time": {
+            "additionalProperties": false,
+            "description": "The fitting window, initial-state origin, and regular state interval.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "horizon"
+                ],
+                "type": "object"
+              },
+              "step": {
+                "description": "Fixed state interval and default measurement and coefficient-authoring interval.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "window",
+              "step"
+            ],
+            "type": "object"
+          },
+          "core_query": {
+            "additionalProperties": false,
+            "description": "Generate from a calendar day over a horizon, with interventions placed after the start.\n\nInitial states apply at the model window's start. Query windows use the\nmodel's fixed grid and may extend beyond its fitting window.",
+            "properties": {
+              "window": {
+                "additionalProperties": false,
+                "description": "A calendar start and positive elapsed duration, including both state endpoints.",
+                "properties": {
+                  "start": {
+                    "description": "Calendar start at midnight UTC.",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "horizon": {
+                    "description": "Elapsed duration from the start to the final state.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start",
+                  "horizon"
+                ],
+                "type": "object"
+              },
+              "interventions": {
+                "default": [],
+                "items": {
+                  "additionalProperties": false,
+                  "description": "Set a state some time after the design's start, then let its dynamics resume.",
+                  "properties": {
+                    "target": {
+                      "tsType": "`construct:${string}`",
+                      "type": "string"
+                    },
+                    "after": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "default": null,
+                      "description": "Offset from the design's start; omitted means at the start."
+                    },
+                    "value": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "target",
+                    "after",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "window",
+              "interventions"
+            ],
+            "type": "object"
+          },
           "constructs": {
             "additionalProperties": {
               "additionalProperties": false,
@@ -35941,26 +35881,18 @@
               "$ref": "#/components/schemas/DistributionId-Output"
             },
             "type": "object"
-          },
-          "measurement_clock": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           }
         },
         "required": [
+          "question",
+          "outcome",
+          "time",
+          "core_query",
           "constructs",
           "edges",
           "parameters",
           "distributions",
-          "law_layouts",
-          "measurement_clock"
+          "law_layouts"
         ],
         "title": "DynamicalModelSpec",
         "type": "object",
@@ -35996,39 +35928,6 @@
           "pruning"
         ],
         "title": "EditModelOutput",
-        "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.io",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
-      "JsonResponse_EditQuestionOutput": {
-        "additionalProperties": false,
-        "description": "The saved question, its initial outcome-only model and readiness findings.",
-        "properties": {
-          "question": {
-            "$ref": "#/components/schemas/QuestionSpec_ConstructId_",
-            "description": "The saved question, including its outcome and intervention queries."
-          },
-          "dynamical_model_spec": {
-            "$ref": "#/components/schemas/JsonResponse_DynamicalModelSpec-Output",
-            "description": "Initial outcome-only model."
-          },
-          "checks": {
-            "$ref": "#/components/schemas/ModelCheckReport",
-            "description": "Initial specification and question findings."
-          },
-          "identification": {
-            "$ref": "#/components/schemas/IdentificationReport",
-            "description": "Initial causal identification findings."
-          }
-        },
-        "required": [
-          "question",
-          "dynamical_model_spec",
-          "checks",
-          "identification"
-        ],
-        "title": "EditQuestionOutput",
         "type": "object",
         "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
@@ -37394,54 +37293,6 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
-      "JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_": {
-        "additionalProperties": false,
-        "description": "A published scientific result and the complete execution log of its call.",
-        "properties": {
-          "call_id": {
-            "$ref": "#/components/schemas/CallId-Output"
-          },
-          "action": {
-            "const": "edit_question",
-            "title": "Action",
-            "type": "string"
-          },
-          "status": {
-            "const": "success",
-            "default": "success",
-            "title": "Status",
-            "type": "string"
-          },
-          "commit_id": {
-            "$ref": "#/components/schemas/GitOid-Output"
-          },
-          "body": {
-            "$ref": "#/components/schemas/JsonResponse_EditQuestionOutput"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ExecutionMessage"
-            },
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "call_id",
-          "action",
-          "status",
-          "commit_id",
-          "body",
-          "messages"
-        ],
-        "title": "SuccessfulPoll[Literal['edit_question'], EditQuestionOutput]",
-        "type": "object",
-        "x-typescript-mode": "serialization",
-        "x-typescript-type": "SuccessfulPoll<\"edit_question\", EditQuestionOutput>",
-        "x-python-module": "grassmoth_server.actions.contracts.polling",
-        "x-layer": "transport",
-        "x-concern": "api_tools"
-      },
       "JsonResponse_SuccessfulPoll_Literal__fit___FitOutput_": {
         "additionalProperties": false,
         "description": "A published scientific result and the complete execution log of its call.",
@@ -37662,9 +37513,6 @@
     }
   },
   "x-contract-roots": {
-    "QuestionSpec[ConstructId]": {
-      "$ref": "#/components/schemas/QuestionSpec_ConstructId_"
-    },
     "PreparedDataMetadata": {
       "$ref": "#/components/schemas/PreparedDataMetadata"
     },
@@ -37825,9 +37673,6 @@
     },
     "PrepareDataRequest": {
       "$ref": "#/components/schemas/PrepareDataRequest_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__"
-    },
-    "QuestionSpec": {
-      "$ref": "#/components/schemas/QuestionSpec_Annotated_Any__WithJsonSchema__"
     },
     "Removed": {
       "$ref": "#/components/schemas/Removed_Annotated_Any__WithJsonSchema__"

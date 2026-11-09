@@ -82,8 +82,12 @@ def report(settings):
 def native_target_storage():
     """Trace actual nonlinear projection and mixed-law noise factor owners."""
     model = compile_fit_fixture(
-        load_model_fixture(
-            "ecosystem_consumer/nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model.json"
+        revise_fixture(
+            load_model_fixture(
+                "ecosystem_consumer/nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model.json"
+            ),
+            time={"window": {"start": "2024-01-01", "horizon": "8d"}, "step": "1d"},
+            core_query={"window": {"start": "2024-01-01", "horizon": "8d"}},
         )
     )
     panel = bind_panel_fixture(
@@ -255,8 +259,12 @@ def test_parameter_dimensions_follow_support_and_reparameterization_shapes():
     assert _unconstrained_size(transformed, transformed.batch_shape + transformed.event_shape) == 2
 
 
-def test_metadata_uses_compiled_model_and_merged_observation_grid():
-    model = load_model_fixture("fit_preflight/standardized_channel_model.json")
+def test_metadata_uses_the_complete_declared_model_grid():
+    model = revise_fixture(
+        load_model_fixture("fit_preflight/standardized_channel_model.json"),
+        time={"window": {"start": "2026-01-01", "horizon": "5d"}, "step": "1d"},
+        core_query={"window": {"start": "2026-01-01", "horizon": "5d"}},
+    )
     compiled = compile_fit_fixture(model)
     origin = datetime(2026, 1, 1, tzinfo=UTC)
     rows = [
@@ -281,7 +289,9 @@ def test_metadata_uses_compiled_model_and_merged_observation_grid():
     )
     result = particle_mgrad_memory_shape(StructuralSelection(model, None), observations)
     assert isinstance(result, ParticleMgradMemoryShape), result
-    assert result.time_points == 3  # The grid owner inserts initial day zero.
+    assert (
+        result.time_points == 6
+    )  # Missing leading, interior and trailing readings keep their states.
     assert result.state_dimensions == compiled.compiled_dynamical_model.state_space.size
     assert result.observation_dimensions == len(compiled.compiled_dynamical_model.observations)
     assert result.sweep_block_size == SWEEP_BLOCK_SIZE

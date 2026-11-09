@@ -11,9 +11,8 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.preparation import SemanticExtractionSpec
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.simulation import SimulationSpec
@@ -25,7 +24,6 @@ from grassmoth_server.actions.contracts.call_state import (
 from grassmoth_server.actions.contracts.inputs import (
     DataDiffInput,
     EditModelInput,
-    EditQuestionInput,
     FitInput,
     ModelDiffInput,
     NewFitTarget,
@@ -36,7 +34,6 @@ from grassmoth_server.actions.contracts.preparation import FileSourceRef
 from grassmoth_server.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
-    EditQuestionRequest,
     FitRequest,
     ModelDiffRequest,
     PrepareDataRequest,
@@ -46,7 +43,7 @@ from grassmoth_server.actions.contracts.requests import (
 )
 from grassmoth_server.actions.temporal.study import workflow as study_workflow
 from grassmoth_server.actions.temporal.study.activities import (
-    edit_question_activity,
+    edit_model_activity,
     journal_activity,
     read_inputs_activity,
 )
@@ -56,13 +53,14 @@ from grassmoth_server.storage import paths as data
 from grassmoth_server.study import calls as study_api
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import Applied, Rejected
-from grassmoth_server_test_support.question import authored_question
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
+
 
 pytestmark = pytest.mark.contract
 
@@ -78,13 +76,11 @@ async def _execute_action(
 @pytest.mark.parametrize(
     "action_request",
     [
-        EditQuestionRequest(
-            input=EditQuestionInput(
-                question=authored_question(
-                    QuestionSpec[ConstructId](
-                        text="Does exercise improve sleep?",
-                        outcome=fixture_entity_id("construct", "sleep"),
-                    )
+        EditModelRequest(
+            input=EditModelInput(
+                dynamical_model_spec=initial_model(
+                    question="Does exercise improve sleep?",
+                    outcome=fixture_entity_id("construct", "sleep"),
                 )
             )
         ),
@@ -114,7 +110,7 @@ async def _execute_action(
         ),
         SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
-                simulation=SimulationSpec(start=date(2026, 1, 1), horizon="1d"),
+                simulation=SimulationSpec(window={"start": date(2026, 1, 1), "horizon": "1d"}),
                 dynamical_model_spec_ref=git_oid(1),
             )
         ),
@@ -149,14 +145,12 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     monkeypatch.setattr(study_workflow.workflow, "now", lambda: datetime(2026, 10, 4, tzinfo=UTC))
     monkeypatch.setattr(study_workflow.workflow, "upsert_memo", lambda _: None)
-    request = EditQuestionRequest(
+    request = EditModelRequest(
         reasoning="Define the outcome to guide model construction.",
-        input=EditQuestionInput(
-            question=authored_question(
-                QuestionSpec[ConstructId](
-                    text="Does exercise improve sleep?",
-                    outcome=fixture_entity_id("construct", "sleep"),
-                )
+        input=EditModelInput(
+            dynamical_model_spec=initial_model(
+                question="Does exercise improve sleep?",
+                outcome=fixture_entity_id("construct", "sleep"),
             )
         ),
     )
@@ -171,11 +165,11 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
             name = name if isinstance(name, str) else name.__name__
             if name == "read_inputs_activity":
                 return await read_inputs_activity(payload)
-            if name == "edit_question_activity":
+            if name == "edit_model_activity":
                 executions += 1
                 entered.set()
                 await release.wait()
-                return await edit_question_activity(payload)
+                return await edit_model_activity(payload)
             if name == "evaluate_model_checks_activity":
                 from grassmoth_server.actions.temporal.study.activities import (
                     evaluate_model_checks_activity,
@@ -226,14 +220,10 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
         assert restored.attempt == applied.attempt
         assert executions == 1
         assert len(repository.attempts()) == 1
-        failure = EditQuestionRequest(
+        failure = EditModelRequest(
             reasoning="Reframe the study goal.",
-            input=EditQuestionInput(
-                question=authored_question(
-                    QuestionSpec[ConstructId](
-                        text="A different question", outcome=fixture_entity_id("construct", "sleep")
-                    )
-                )
+            input=EditModelInput(
+                dynamical_model_spec=DynamicalModelSpec(question="Incomplete model")
             ),
         )
         for attempt_id in (5, 6):
@@ -252,9 +242,9 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     asyncio.run(scenario())
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
     client = TestClient(tool_server.app)
-    first = client.post("/api/studies/CALLS/edit_question", json=request.model_dump(mode="json"))
+    first = client.post("/api/studies/CALLS/edit_model", json=request.model_dump(mode="json"))
     second = client.post(
-        "/api/studies/CALLS/edit_question",
+        "/api/studies/CALLS/edit_model",
         json=revise_fixture(request, reasoning=None).model_dump(mode="json"),
     )
     assert first.status_code == second.status_code == 200
@@ -266,19 +256,16 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert set(result) == {"call_id", "action", "status", "commit_id", "body", "messages"}
     assert result["status"] == "success"
     assert result["call_id"] == call_identity(request)
-    assert result["body"]["question"] == {
-        "text": request.input.question.text,
-        "outcome": request.input.question.outcome.id,
-        "queries": {},
-    }
-    assert set(result["body"]) == {"question", "dynamical_model_spec", "checks", "identification"}
     assert (
-        client.get(f"/api/studies/CALLS/edit_question/{result['call_id']}").content == first.content
+        result["body"]["dynamical_model_spec"]["question"]
+        == request.input.dynamical_model_spec.question
     )
+    assert set(result["body"]) == {"dynamical_model_spec", "checks", "identification", "pruning"}
+    assert client.get(f"/api/studies/CALLS/edit_model/{result['call_id']}").content == first.content
     failure = repository.attempts()[-1].record.attempt.request
     assert failure is not None
     cached_failure = client.post(
-        "/api/studies/CALLS/edit_question", json=failure.model_dump(mode="json")
+        "/api/studies/CALLS/edit_model", json=failure.model_dump(mode="json")
     )
     failed = msgpack.unpackb(cached_failure.content)
     assert failed["status"] == "failed"
@@ -286,26 +273,21 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert failed["commit_id"] is not None
     assert any(message["kind"] == "failure" for message in failed["messages"])
     assert (
-        client.get(f"/api/studies/CALLS/edit_question/{failed['call_id']}").content
+        client.get(f"/api/studies/CALLS/edit_model/{failed['call_id']}").content
         == cached_failure.content
     )
     assert client.get(f"/api/studies/CALLS/fit/{result['call_id']}").status_code == 404
-    assert client.get(f"/api/studies/MISSING/edit_question/{result['call_id']}").status_code == 404
+    assert client.get(f"/api/studies/MISSING/edit_model/{result['call_id']}").status_code == 404
     timeline = client.get("/api/studies/CALLS/timeline").json()
     assert timeline["attempts"][0]["record"]["attempt"]["request"]["reasoning"] == request.reasoning
     assert all(set(entry["record"]) == {"seq", "ts", "attempt"} for entry in timeline["attempts"])
     assert len(repository.attempts()) == 2
     assert (
         client.post(
-            "/api/studies/CALLS/edit_question",
+            "/api/studies/CALLS/edit_model",
             json={
-                "action": "edit_question",
-                "input": {
-                    "question": {
-                        "text": "Unsaved",
-                        "outcome": request.input.question.outcome.model_dump(mode="json"),
-                    }
-                },
+                "action": "edit_model",
+                "input": {"dynamical_model_spec": {"question": "Unsaved"}},
             },
         ).status_code
         == 403
@@ -315,12 +297,10 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
 def test_get_reads_running_call_without_starting_workflow_or_work(tmp_path, monkeypatch):
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     monkeypatch.delenv("READ_ONLY_FACADE", raising=False)
-    request = EditQuestionRequest(
-        input=EditQuestionInput(
-            question=authored_question(
-                QuestionSpec[ConstructId](
-                    text="A question", outcome=fixture_entity_id("construct", "sleep")
-                )
+    request = EditModelRequest(
+        input=EditModelInput(
+            dynamical_model_spec=initial_model(
+                question="A question", outcome=fixture_entity_id("construct", "sleep")
             )
         )
     )
@@ -344,14 +324,14 @@ def test_get_reads_running_call_without_starting_workflow_or_work(tmp_path, monk
     monkeypatch.setattr(study_api.TemporalClientProvider, "get", get)
     with TestClient(tool_server.app) as client:
         for payload in (
-            {"action": "edit_question", "input": {"question": {"text": "Missing outcome"}}},
+            {"action": "edit_model", "input": {"question": {"text": "Missing outcome"}}},
             {
-                "action": "edit_question",
+                "action": "edit_model",
                 "input": {"question": {"text": "Null outcome", "outcome": None}},
             },
             {"input": {"question": {"text": "Missing action", "outcome": "construct:sleep"}}},
             {
-                "action": "edit_question",
+                "action": "edit_model",
                 "question": {"text": "Missing input", "outcome": "construct:sleep"},
             },
             {
@@ -359,21 +339,19 @@ def test_get_reads_running_call_without_starting_workflow_or_work(tmp_path, monk
                 "input": {"question": {"text": "Wrong action", "outcome": "construct:sleep"}},
             },
         ):
-            assert (
-                client.post("/api/studies/RUNNING/edit_question", json=payload).status_code == 422
-            )
-        response = client.get(f"/api/studies/RUNNING/edit_question/{identity}")
+            assert client.post("/api/studies/RUNNING/edit_model", json=payload).status_code == 422
+        response = client.get(f"/api/studies/RUNNING/edit_model/{identity}")
         assert response.status_code == 200
         assert msgpack.unpackb(response.content) == {
             "call_id": identity,
-            "action": "edit_question",
+            "action": "edit_model",
             "status": "running",
             "commit_id": None,
             "body": None,
             "messages": [],
         }
         assert client.get(f"/api/studies/RUNNING/fit/{identity}").status_code == 404
-        assert client.get(f"/api/studies/RUNNING/edit_question/call:{'0' * 64}").status_code == 404
+        assert client.get(f"/api/studies/RUNNING/edit_model/call:{'0' * 64}").status_code == 404
     assert len(calls) == 3
     assert not (tmp_path / "RUNNING" / "study" / "history.git").exists()
 
@@ -384,11 +362,9 @@ def test_running_timeline_discovers_calls_without_collecting_execution_logs(monk
     from grassmoth_server.actions.contracts.call_state import RunningCall
     from grassmoth_server.study import calls
 
-    request = EditQuestionRequest(
-        input=EditQuestionInput(
-            question=authored_question(
-                QuestionSpec[ConstructId](text="Timeline?", outcome="construct:outcome")
-            )
+    request = EditModelRequest(
+        input=EditModelInput(
+            dynamical_model_spec=initial_model(question="Timeline?", outcome="construct:outcome")
         )
     )
     running = RunningCall(attempt_id=UUID(int=11), seq=1, request=request)
@@ -411,7 +387,7 @@ def test_running_timeline_discovers_calls_without_collecting_execution_logs(monk
     assert [call.model_dump(mode="json") for call in discovered] == [
         {
             "call_id": call_identity(request),
-            "action": "edit_question",
+            "action": "edit_model",
             "request": request.model_dump(mode="json"),
         }
     ]

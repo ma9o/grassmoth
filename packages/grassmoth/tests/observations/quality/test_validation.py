@@ -74,7 +74,11 @@ def test_recorded_point_cadence_uses_declared_window_and_only_observed_times():
 def simple_causal_design():
     stress = _make_spec()
     sleep = _make_spec(indicator_name="sleep_hours", construct_name="sleep")
-    return stress.with_entities(
+    return DynamicalModelSpec.from_entities(
+        question=stress.question,
+        outcome=sleep.constructs[0].id,
+        time=stress.time,
+        core_query=stress.core_query,
         edges=replace_constructs(
             (
                 CausalEdgeSpec(
@@ -85,7 +89,7 @@ def simple_causal_design():
                 ),
             ),
             (stress.constructs[0], sleep.constructs[0]),
-        )
+        ),
     )
 
 
@@ -104,9 +108,7 @@ def validate_extraction(
     """Exercise stored data quality and model compatibility as distinct owners."""
     definitions = tuple(
         item.observation.resolved(
-            item.observation.observation_window
-            or dynamical_model_spec.measurement_clock
-            or Duration("1d")
+            item.observation.observation_window or dynamical_model_spec.time.step or Duration("1d")
         )
         for item in dynamical_model_spec.indicators
     )
@@ -220,7 +222,11 @@ def _make_spec(
             "indicators": definitions,
         }
     )
-    return revise_fixture(dynamical_model_spec, measurement_clock=model_clock).with_entities(
+    return revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": "2024-01-01", "horizon": model_clock}, "step": model_clock},
+        core_query={"window": {"start": "2024-01-01", "horizon": model_clock}},
+    ).with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, [construct]),
     )
 
@@ -314,7 +320,7 @@ class TestValidateExtraction:
 
     def test_data_quality_is_retained_independently_of_construct_time_status(self):
         """A model time status does not reinterpret the stored empirical profile."""
-        dynamical_model_spec = _make_spec(model_clock=None, temporal_status="time_invariant")
+        dynamical_model_spec = _make_spec(temporal_status="time_invariant")
         records = [
             {
                 "indicator_id": "indicator:3696aef3ff6f446744e5",
@@ -727,7 +733,7 @@ class TestCheckTimeCoverage:
 
     def test_data_coverage_is_independent_of_construct_temporal_status(self):
         """The stored data profile retains coverage evidence for every construct role."""
-        dynamical_model_spec = _make_spec(model_clock=None, temporal_status="time_invariant")
+        dynamical_model_spec = _make_spec(temporal_status="time_invariant")
         records = [
             {
                 "indicator_id": "indicator:3696aef3ff6f446744e5",

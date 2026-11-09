@@ -76,7 +76,7 @@ export function clockTime(timestamp: string): string {
 /** A finding subject as the identifiers or labels the API gives it. */
 function subjectText(subject: FindingSubject): string {
   if (typeof subject === "string") return subject;
-  if ("kind" in subject) return subject.id;
+  if ("id" in subject) return subject.id;
   if ("construct_id" in subject)
     return [
       subject.construct_id,
@@ -86,8 +86,9 @@ function subjectText(subject: FindingSubject): string {
       .join(" · ");
   if ("parameter" in subject || "state" in subject) return subject.label;
   if ("outcome" in subject) return subject.outcome.id;
-  if ("query" in subject)
-    return "target" in subject ? `${subject.query} · ${subject.target.id}` : subject.query;
+  if ("kind" in subject && subject.kind === "query_target")
+    return `Core query · ${subject.target.id}`;
+  if ("kind" in subject) return "Core query";
   return subject.target.id;
 }
 

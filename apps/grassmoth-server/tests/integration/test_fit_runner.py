@@ -10,7 +10,7 @@ from uuid import UUID
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.public import SamplerSpec
 from grassmoth_server.actions.call_logs import collect_call_log
@@ -24,7 +24,7 @@ from grassmoth_server.study.persistence.store import read_model
 from grassmoth_server.study.state import apply_effects
 from grassmoth_server_test_support import runner_fixtures as fx
 from grassmoth_server_test_support.git import artifact_revisions
-from grassmoth_server_test_support.helpers import run_async, write_question
+from grassmoth_server_test_support.helpers import run_async
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_model_fixture,
@@ -81,7 +81,9 @@ def test_inference_advances_model_and_uses_the_selected_input(
     authored = read_model(artifact_store, original.revision)
     parameters = parameter_draws(authored, 4)
     states = tuple(numerics.state_ids(compile_model_fixture(authored)))
-    paths = jnp.arange(4 * 2 * len(states), dtype=jnp.float32).reshape(4, 2, len(states))
+    paths = jnp.arange(4 * len(authored.time_points) * len(states), dtype=jnp.float32).reshape(
+        4, len(authored.time_points), len(states)
+    )
     fitted_inputs = []
 
     def fake_fit_model(inputs, *_args: Any, **_kwargs: Any) -> FittedModelResult:
@@ -114,20 +116,10 @@ def test_inference_advances_model_and_uses_the_selected_input(
             settings=FitSettingsSpec(num_chains=1, num_samples_per_chain=4),
         )
     )
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth_test_support.model import construct_named
 
-    question = write_question(
-        artifact_store,
-        QuestionSpec[ConstructId](
-            text="What does the model imply about sleep?",
-            outcome=construct_named(authored, "Sleep").id,
-        ),
-    )
     pins: dict[ArtifactId, GitOid] = {
         "model": original.revision,
         "panel": panel.revision,
-        "question": question.revision,
     }
     from grassmoth.actions.contracts.io import FitOutput
     from grassmoth_server.study.queries import data
@@ -136,7 +128,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
     assert isinstance(request.input.target, NewFitTarget)
     expected_checks = model_findings(
         integration_workspace,
-        revise_fixture(state.with_artifacts([question]), data=request.input.target.data_ref),
+        revise_fixture(state, data=request.input.target.data_ref),
         action="fit",
     )
     history_reader = Mock(wraps=data.read_data_history)
@@ -154,7 +146,6 @@ def test_inference_advances_model_and_uses_the_selected_input(
         assert {
             "model": request.input.target.dynamical_model_spec_ref,
             "panel": request.input.target.data_ref.revision,
-            "question": question.revision,
         } == info.derived_from
 
         report = artifact_store.read_result(applied.result, FitOutput).inference
@@ -194,7 +185,6 @@ def test_library_fit_failure_stops_before_publication(
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
-    question = write_question(artifact_store)
     compute = Mock(
         return_value=ModelFitFailure.model_validate(
             {"error": "unsupported", "duration_seconds": 0.01}
@@ -218,7 +208,7 @@ def test_library_fit_failure_stops_before_publication(
             run_action_locally(
                 integration_workspace,
                 request,
-                {"model": model.revision, "question": question.revision},
+                {"model": model.revision},
             )
         )
     assert caught.value.diagnostics == {"duration_seconds": 0.01}
@@ -235,7 +225,6 @@ def test_capacity_rejection_stops_before_remote_dispatch(
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
-    question = write_question(artifact_store)
     rejection = Rejected(code="FIT_CAPACITY_EXCEEDED", subject="fit", detail="Insufficient memory")
     admission, dispatch = Mock(return_value=rejection), Mock()
     monkeypatch.setattr(capacity, "admit_sampler", admission)
@@ -250,9 +239,7 @@ def test_capacity_rejection_stops_before_remote_dispatch(
         )
     )
     result = run_async(
-        run_action_locally(
-            integration_workspace, request, {"model": model.revision, "question": question.revision}
-        )
+        run_action_locally(integration_workspace, request, {"model": model.revision})
     )
     assert result == rejection
     admission.assert_called_once()
@@ -267,7 +254,6 @@ def test_capacity_estimate_is_persisted_before_remote_dispatch(
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
-    question = write_question(artifact_store)
     admitted = FitAdmission(
         sampler=SamplerSpec(hardware="L40S", num_chains=3),
         detail=(
@@ -301,7 +287,7 @@ def test_capacity_estimate_is_persisted_before_remote_dispatch(
             run_action_locally(
                 integration_workspace,
                 request,
-                {"model": model.revision, "question": question.revision},
+                {"model": model.revision},
             )
         )
     dispatch.assert_called_once()

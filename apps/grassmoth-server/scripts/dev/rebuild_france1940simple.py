@@ -25,7 +25,6 @@ from grassmoth_server.actions.contracts.requests import (
     ActionInput,
     DataDiffRequest,
     EditModelRequest,
-    EditQuestionRequest,
     ModelDiffRequest,
     PrepareDataRequest,
     SimulateRequest,
@@ -37,7 +36,7 @@ SOURCE = Path(__file__).with_name("france1940simple")
 
 @dataclass(frozen=True)
 class Recipe:
-    question: EditQuestionRequest
+    initial_model: EditModelRequest[RevisionSelector]
     model: EditModelRequest[RevisionSelector]
     preparation: PrepareDataRequest[RevisionSelector, SourceFolder]
     simulation: SimulateRequest[RevisionSelector]
@@ -45,8 +44,8 @@ class Recipe:
     @classmethod
     def read(cls) -> Recipe:
         return cls(
-            question=EditQuestionRequest.model_validate_json(
-                (SOURCE / "01-edit_question.json").read_bytes()
+            initial_model=EditModelRequest[RevisionSelector].model_validate_json(
+                (SOURCE / "01-create_model.json").read_bytes()
             ),
             model=EditModelRequest[RevisionSelector].model_validate_json(
                 (SOURCE / "02-edit_model.json").read_bytes()
@@ -133,7 +132,7 @@ def rebuild(study: Study, recipe: Recipe) -> None:
                 files={"file": ("historical_inputs.csv", source, "text/csv")},
             )
         )
-    initial_model = study.produced(study.run(recipe.question), "model")
+    initial_model = study.produced(study.run(recipe.initial_model), "model")
     model = study.produced(
         study.run(
             EditModelRequest[RevisionSelector](

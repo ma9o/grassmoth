@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
@@ -60,7 +60,7 @@ from grassmoth_server_test_support.action import (
     applied_record,
     empty_simulation_summary,
     fixture_request,
-    question_root,
+    model_root,
 )
 from grassmoth_server_test_support.storage import (
     result_blob,
@@ -69,6 +69,7 @@ from grassmoth_server_test_support.storage import (
     stage_result,
 )
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -129,17 +130,15 @@ def study(tmp_path, monkeypatch):
     source = tmp_path / "LATEST/input/data.csv"
     source.parent.mkdir(parents=True)
     source.write_text("date,value\n2026-01-01,1\n")
-    question_root("LATEST")
+    model_root("LATEST")
     repository, store = StudyRepository("LATEST"), ArtifactStore("LATEST")
     models = tuple(
         seed_record(
             store,
             "model",
             produced_by="edit_model",
-            derived_from={"question": repository.question().revision},
-            json_files={
-                "model.json": DynamicalModelSpec(measurement_clock=clock).model_dump(mode="json")
-            },
+            derived_from={"model": repository.state().current["model"].revision},
+            json_files={"model.json": initial_model(question=clock).model_dump(mode="json")},
         )
         for clock in ("1d", "2d")
     )
@@ -173,7 +172,7 @@ def study(tmp_path, monkeypatch):
             support_end_times=NumericalArray.from_numpy(np.zeros((2, 0))),
             mask=NumericalArray.from_numpy(np.zeros((2, 2, 0), dtype=bool)),
         ),
-        assignments=SimulationSpec(start=date(2026, 1, 1), horizon="1d").assignments(
+        assignments=SimulationSpec(window={"start": date(2026, 1, 1), "horizon": "1d"}).assignments(
             datetime(2026, 1, 1, tzinfo=UTC)
         ),
     )
@@ -199,7 +198,9 @@ def study(tmp_path, monkeypatch):
                 request=SimulateRequest(
                     input=SimulateInput(
                         dynamical_model_spec_ref=models[-1].revision,
-                        simulation=SimulationSpec(start=date(2026, 1, 1), horizon="1d"),
+                        simulation=SimulationSpec(
+                            window={"start": date(2026, 1, 1), "horizon": "1d"}
+                        ),
                         seed=seed,
                     )
                 ),
@@ -225,7 +226,7 @@ def study(tmp_path, monkeypatch):
         "model",
         produced_by="edit_model",
         derived_from={},
-        json_files={"model.json": {"measurement_clock": "3d"}},
+        json_files={"model.json": initial_model(question="Unpublished").model_dump(mode="json")},
     )
     return repository, store, models, panel, simulation.commit_id
 
@@ -279,7 +280,7 @@ def client(monkeypatch):
             "simulate",
             {
                 "dynamical_model_spec_ref": "latest",
-                "simulation": {"start": "2026-01-01", "horizon": "2d"},
+                "simulation": {"window": {"start": "2026-01-01", "horizon": "2d"}},
             },
         ),
         (
@@ -627,21 +628,20 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
 
 
 @pytest.mark.parametrize("parent_kind", ["initial", "edited"])
-def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
+def test_edit_model_parent_pins_the_selected_model_for_identity_checks_and_provenance(
     study, client, parent_kind
 ):
     from grassmoth.actions.contracts.io import EditModelOutput
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.study.records import record_dependencies
-    from grassmoth_server_test_support.helpers import initial_model_record, write_question
+    from grassmoth_server_test_support.helpers import write_initial_model
     from grassmoth_test_support.helpers import make_model
+    from grassmoth_test_support.purpose import initial_model
 
     repository, store, models, _, _ = study
     http, dispatched = client
     path = "/api/studies/LATEST/edit_model"
     dynamical_model_spec = make_model(["X"])
-    original_question = repository.question()
     parent = (
         repository.state(repository.attempts()[0].commit_id).current["model"]
         if parent_kind == "initial"
@@ -663,13 +663,13 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     response = http.post(path, json=arguments)
     assert response.status_code == 200, response.text
     original = dispatched[0]
-    question = write_question(
+    question = write_initial_model(
         store,
-        QuestionSpec[ConstructId](
-            text="A different question", outcome=dynamical_model_spec.edges[0].effect.id
+        initial_model(
+            question="A different question", outcome=dynamical_model_spec.edges[0].effect.id
         ),
     )
-    replacement = initial_model_record(store, question)
+    replacement = question
     _publish(repository, question, replacement)
     assert (
         msgpack.unpackb(http.post(path, json=original.model_dump(mode="json")).content)["call_id"]
@@ -688,14 +688,12 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     )
     selected = dispatched[1]
     assert selected.input.parent_ref == replacement.revision
-    assert input_state(repository, selected).current == {"question": question, "model": replacement}
+    assert input_state(repository, selected).current == {"model": replacement}
     state = input_state(repository, original)
-    assert state.current["question"] == original_question
     assert state.current["model"] == parent
     outcome = edit_model(store.workspace_id, original)
     assert isinstance(outcome, Applied)
     assert outcome.effects.produced[0].derived_from == {
-        "question": original_question.revision,
         "model": parent.revision,
     }
     checks = store.read_result(outcome.result, EditModelOutput).checks
@@ -715,8 +713,8 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     )
 
 
-@pytest.mark.parametrize("parent", [{}, {"parent_ref": None}, {"parent_ref": "invalid"}])
-def test_edit_model_requires_a_parent_selector(client, parent):
+@pytest.mark.parametrize("parent", [{"parent_ref": "invalid"}])
+def test_edit_model_rejects_an_invalid_parent_selector(client, parent):
     http, dispatched = client
     response = http.post(
         "/api/studies/LATEST/edit_model",
@@ -733,7 +731,7 @@ def test_latest_model_parent_selects_initial_model_or_rejects_missing_model(
 ):
     repository, _, _, _, _ = study
     if selection == "initial":
-        question_root("INITIAL")
+        model_root("INITIAL")
         repository = StudyRepository("INITIAL")
     else:
         _publish(

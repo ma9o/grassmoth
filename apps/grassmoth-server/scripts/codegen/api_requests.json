@@ -91,27 +91,41 @@
         },
         "parameters": {},
         "distributions": {},
-        "law_layouts": {},
-        "measurement_clock": null
+        "law_layouts": {}
       }
     }
   },
   {
-    "action": "edit_question",
+    "action": "edit_model",
     "input": {
-      "question": {
-        "text": "Synthetic example: how does treatment affect the outcome?",
-        "outcome": {
-          "id": "construct:00000000000000000003",
-          "name": "outcome",
-          "reasoning": {
-            "text": "Synthetic outcome for interface examples.",
-            "reference_urls": []
+      "dynamical_model_spec": {
+        "question": "Synthetic example: how does treatment affect the outcome?",
+        "outcome": "construct:00000000000000000003",
+        "time": {
+          "window": {
+            "start": "2026-01-01",
+            "horizon": "90d"
           },
-          "role": "endogenous",
-          "temporal_status": "time_varying"
+          "step": "1d"
         },
-        "queries": {}
+        "core_query": {
+          "window": {
+            "start": "2026-01-01",
+            "horizon": "90d"
+          },
+          "interventions": []
+        },
+        "constructs": {
+          "construct:00000000000000000003": {
+            "name": "outcome",
+            "reasoning": {
+              "text": "Synthetic outcome for interface examples.",
+              "reference_urls": []
+            },
+            "role": "endogenous",
+            "temporal_status": "time_varying"
+          }
+        }
       }
     }
   },
@@ -172,15 +186,17 @@
     "input": {
       "dynamical_model_spec_ref": "0000068000000000000000000000000000000000",
       "simulation": {
-        "start": "2026-01-01",
-        "horizon": "3d",
         "interventions": [
           {
             "target": "construct:00000000000000000002",
             "after": "1d",
             "value": 2.0
           }
-        ]
+        ],
+        "window": {
+          "start": "2026-01-01",
+          "horizon": "3d"
+        }
       },
       "seed": 0,
       "num_replicates": 2

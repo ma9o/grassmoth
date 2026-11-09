@@ -164,7 +164,7 @@
         }
       ],
       "innovation_family": "gaussian",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "reasoning": {
@@ -335,7 +335,7 @@
         }
       ],
       "innovation_family": "gaussian",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "reasoning": {
@@ -374,7 +374,7 @@
   "parameters": {
     "parameter:78d5767e06a3d1515ea8d5387cfb07bcd37096757720bb58606fc176a8c95c15": {
       "name": "rho_treatment",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "transform": {
         "kind": "identity"
       },
@@ -384,7 +384,7 @@
     },
     "parameter:279585fe4ef2bce5a87546777c0788476675435d79f539c6d25c67fa357e2778": {
       "name": "rho_outcome",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "transform": {
         "kind": "identity"
       },
@@ -394,7 +394,7 @@
     },
     "parameter:58d9d11a14b807b28b376c88488612536f37b7af747725282c4177e6b16b610e": {
       "name": "beta_treatment_outcome",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "transform": {
         "kind": "identity"
       },
@@ -404,7 +404,7 @@
     },
     "parameter:6a1b6341754182920efb9d3468d9e3c43857daa90cc063538e050cc85abb3404": {
       "name": "sigma_treatment",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "transform": {
         "kind": "identity"
       },
@@ -414,7 +414,7 @@
     },
     "parameter:45ab650e8918992bbc18cb937edddf7e7750fa8fd64abcdc657ac2bd523b8550": {
       "name": "sigma_outcome",
-      "distribution": "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167",
+      "distribution": "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c",
       "transform": {
         "kind": "identity"
       },
@@ -424,7 +424,7 @@
     }
   },
   "distributions": {
-    "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167": {
+    "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c": {
       "distribution": "MixtureSameFamily",
       "params": {
         "mixing_distribution": {
@@ -497,7 +497,7 @@
     }
   },
   "law_layouts": {
-    "distribution:11e4f020071e1671d26ee93c55f6be662b4e8d630fda1d876cca03881c1ca167": {
+    "distribution:5cccafb1ea6fe8d71e8eda36c9b589405ab182a8b2f3387c8eabc5dc3c659d8c": {
       "parameters": [
         [
           "parameter:279585fe4ef2bce5a87546777c0788476675435d79f539c6d25c67fa357e2778",
@@ -544,8 +544,24 @@
         "element:1186fcbe0c71d3f4b7328151a0b8867927ad6a6ce1571c9235897d6a91937357": "beta_treatment_outcome",
         "element:67504e3e93a1423ba45b91be19783e09ceb56acbde2126e17d725a3de690249e": "sigma_treatment",
         "element:3cfc5ce717170d7546e07573efcdbb2541dc7a8c450423d8d7f61a39b294d0d3": "rho_treatment"
-      }
+      },
+      "time_origin": "2024-01-01T00:00:00+00:00"
     }
   },
-  "measurement_clock": "1d"
+  "question": "Test model.",
+  "outcome": "construct:a1cddfa8657e4a8cb3ae",
+  "time": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "86400s"
+    },
+    "step": "86400s"
+  },
+  "core_query": {
+    "window": {
+      "start": "2024-01-01",
+      "horizon": "86400s"
+    },
+    "interventions": []
+  }
 }

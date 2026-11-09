@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.model.construct import ConstructSpec
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.model.indicator import IndicatorSpec
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.observations.duration import Duration
     from grassmoth.artifacts.reports.identification import IdentificationReport
 
@@ -57,12 +56,9 @@ class StructuralSelection:
         validate_parameter_anchors(self)
 
     @classmethod
-    def for_question(
-        cls, dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec[ConstructId]
-    ) -> StructuralSelection:
-        """The question's outcome scopes the model once the model defines it."""
-        defined = question.outcome in dynamical_model_spec._constructs
-        return cls(dynamical_model_spec, question.outcome if defined else None)
+    def for_model(cls, dynamical_model_spec: DynamicalModelSpec) -> StructuralSelection:
+        """Use the outcome owned by the saved model revision."""
+        return cls(dynamical_model_spec, dynamical_model_spec.outcome)
 
     @cached_property
     def identification(self) -> IdentificationReport:
@@ -351,7 +347,7 @@ def validate_parameter_anchors(selection: StructuralSelection) -> None:
     from grassmoth.artifacts.probability.families import DistributionFamily
 
     dynamical_model_spec = selection.dynamical_model_spec
-    if dynamical_model_spec.measurement_clock is None or not dynamical_model_spec.indicators:
+    if not dynamical_model_spec.indicators:
         return
 
     for identity in selected_state_ids(selection):
@@ -484,5 +480,4 @@ def get_reference_indicator_lookup(selection: StructuralSelection) -> dict[str, 
 def get_model_clock(dynamical_model_spec: DynamicalModelSpec) -> Duration:
     """Require a measurement-ready model and return its authored clock duration."""
     dynamical_model_spec.require_measurements()
-    assert dynamical_model_spec.measurement_clock is not None
-    return dynamical_model_spec.measurement_clock
+    return dynamical_model_spec.time.step

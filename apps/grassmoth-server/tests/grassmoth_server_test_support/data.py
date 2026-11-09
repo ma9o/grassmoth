@@ -20,7 +20,7 @@ from grassmoth_test_support.values import revise_fixture
 
 def metadata_for_model(model):
     preparation = DataPreparationSpec(
-        default_window=model.measurement_clock,
+        default_window=model.time.step,
         variables=tuple(
             DataVariableSpec(
                 observation=indicator.observation,
@@ -44,6 +44,9 @@ def simulation_layout(model, times, mask, write_array):
     support = simulation_observation_support(
         compiled_dynamical_model, np.asarray(times), time_origin=datetime(2024, 1, 1, tzinfo=UTC)
     )
+    from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
+
+    assert not isinstance(support, ObservationPreflightFailure), support
     return SimulationObservationLayout(
         variables=tuple(
             model.indicator(observation.id).observation.resolved(observation.observation_window)
@@ -66,7 +69,14 @@ def preparation_input(store, preparation):
     variables = preparation.definition.variables
     dynamical_model_spec = make_model([item.observation.name for item in variables])
     dynamical_model_spec = revise_fixture(
-        dynamical_model_spec, measurement_clock=preparation.definition.default_window
+        dynamical_model_spec,
+        time={
+            "window": {
+                "start": "2024-01-01",
+                "horizon": preparation.definition.default_window.source,
+            },
+            "step": preparation.definition.default_window.source,
+        },
     ).with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,

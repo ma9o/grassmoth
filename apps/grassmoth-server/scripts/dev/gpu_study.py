@@ -146,26 +146,32 @@ def run_study(
                     if item["artifact_id"] == artifact
                 )
 
-            question = run(
-                "edit_question",
+            initial = run(
+                "edit_model",
                 {
-                    "question": {
-                        "text": "How persistent is daily volatility?",
-                        "outcome": {
-                            "id": "construct:h",
-                            "name": "Daily volatility",
-                            "reasoning": {"text": "The modeled course of daily volatility."},
-                            "role": "endogenous",
-                            "temporal_status": "time_varying",
+                    "dynamical_model_spec": {
+                        "question": "How persistent is daily volatility?",
+                        "outcome": "construct:h",
+                        "time": {
+                            "window": {"start": "2020-01-01", "horizon": "2999d"},
+                            "step": "1d",
                         },
-                        "queries": {},
+                        "core_query": {"window": {"start": "2020-01-01", "horizon": "2999d"}},
+                        "constructs": {
+                            "construct:h": {
+                                "name": "Daily volatility",
+                                "reasoning": {"text": "The modeled course of daily volatility."},
+                                "role": "endogenous",
+                                "temporal_status": "time_varying",
+                            }
+                        },
                     }
                 },
             )
             truth = run(
                 "edit_model",
                 {
-                    "parent_ref": produced(question.commit_id, "model"),
+                    "parent_ref": produced(initial.commit_id, "model"),
                     "dynamical_model_spec": json.loads(truth_json),
                 },
             )
@@ -174,7 +180,7 @@ def run_study(
                 "simulate",
                 {
                     "dynamical_model_spec_ref": truth_ref,
-                    "simulation": {"start": "2020-01-01", "horizon": "2999d"},
+                    "simulation": {"window": {"start": "2020-01-01", "horizon": "2999d"}},
                     "seed": 721,
                     "num_replicates": 1,
                 },

@@ -7,8 +7,6 @@ import modal
 import pytest
 
 from grassmoth.actions.contracts.io import FitInputs
-from grassmoth.artifacts.identity import ConstructId
-from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import (
     GuidedMethodSpec,
     InferenceHardware,
@@ -28,7 +26,6 @@ from grassmoth_server.actions.fit.remote import (
     encode_fit_result,
 )
 from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_VOLUME, AnalysisCall
-from grassmoth_test_support.helpers import fixture_entity_id
 from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
@@ -70,9 +67,6 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     )
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
-        question=QuestionSpec[ConstructId](
-            text="Test", outcome=fixture_entity_id("construct", "outcome")
-        ),
         observations=b"pinned-history",
         sampler=SamplerSpec(
             num_chains=4,
@@ -122,7 +116,6 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
 def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_attempt):
     payload = FitComputeInput(
         b"model",
-        QuestionSpec[ConstructId](text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
         SamplerSpec(),
         False,
@@ -144,7 +137,7 @@ def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeyp
     from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_ROOT, fit_profile_directory
     from grassmoth_server_test_support.fit_cache import fixture
 
-    question, selection, data = fixture()
+    selection, data = fixture()
 
     class ReachedCompute(Exception):
         pass
@@ -155,7 +148,6 @@ def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeyp
         remote.fit_on_modal(
             FitInputs(
                 selection=selection,
-                question=question,
                 data_for_model=data,
                 sampler=SamplerSpec(hardware=InferenceHardware.L40S),
                 compute_loo_diagnostics=False,
@@ -212,7 +204,6 @@ def test_interrupted_result_stream_does_not_decode_partial_output(monkeypatch):
     monkeypatch.setattr(remote, "decode_fit_result", decode)
     payload = FitComputeInput(
         b"model",
-        QuestionSpec[ConstructId](text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
         SamplerSpec(),
         False,

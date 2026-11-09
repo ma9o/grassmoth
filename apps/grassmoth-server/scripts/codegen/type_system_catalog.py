@@ -170,7 +170,7 @@ CONCERNS = {
     "scientific_model": (
         "Scientific model",
         (
-            "artifacts.model.question",
+            "artifacts.model.time",
             "artifacts.model.dynamical_model_spec",
             "artifacts.model.construct",
             "artifacts.model.reasoning",

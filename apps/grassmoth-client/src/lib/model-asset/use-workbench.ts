@@ -147,7 +147,7 @@ export function useWorkbench({
     dismissComparison();
     viewAt(seq);
   };
-  const question = modelSnapshot.question?.text;
+  const question = modelSnapshot.dynamical_model_spec?.question;
   const simulationResult = modelSnapshot.simulation;
   const context: ScopeContext = {
     modelSnapshot,

@@ -52,13 +52,15 @@ from grassmoth.artifacts.model.document import (
 )
 from grassmoth.artifacts.model.expressions import expression_states
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
-from grassmoth.artifacts.observations.duration import Duration
+from grassmoth.artifacts.model.time import ModelTimeSpec, TimeGridFailure
 from grassmoth.artifacts.probability.joint_layout import JointLawLayout
 from grassmoth.artifacts.probability.serialization import (
     NumPyroDistribution,
     NumPyroObject,
     serialize_constructor,
 )
+from grassmoth.artifacts.simulation import SimulationSpec
+from grassmoth.artifacts.text import NonBlankText
 from grassmoth.compilation_errors import IncompleteModelError
 from grassmoth.json_types import JsonObject
 
@@ -76,6 +78,11 @@ if TYPE_CHECKING:
 
 class _ModelEntities(Value):
     """A connected causal graph with owned scientific detail, built to answer the study question."""
+
+    question: NonBlankText
+    outcome: ConstructId
+    time: ModelTimeSpec
+    core_query: SimulationSpec
 
     constructs: tuple[ConstructSpec, ...] = ()
     edges: tuple[CausalEdgeSpec, ...] = ()
@@ -128,23 +135,30 @@ class _ModelEntities(Value):
             ),
             "distributions": value.distribution_definitions,
             "law_layouts": value.layout_definitions,
-            "measurement_clock": value.measurement_clock,
+            "question": value.question_text,
+            "outcome": value.outcome_id,
+            "time": value.time_definition,
+            "core_query": value.query_definition,
         }
 
     @computed_field
     @property
-    def time_points(self) -> tuple[FiniteFloat, ...]:
-        """Endogenous trajectory coordinates own the model's retained state grid."""
-        return next(
-            (
-                layout.time_points
-                for layout in self.law_layouts.values()
-                if any(self.get_construct(key).role == Role.ENDOGENOUS for key in layout.constructs)
-            ),
-            (),
-        )
+    def time_points(self) -> tuple[float, ...]:
+        """The fixed state coordinates of the authored model window."""
+        return self.time.time_points
 
-    measurement_clock: Duration | None = None
+    @model_validator(mode="after")
+    def admit_purpose(self) -> _ModelEntities:
+        """Own the model's outcome and aligned core query once at materialization."""
+        outcome = self._constructs.get(self.outcome)
+        if outcome is None or outcome.role != Role.ENDOGENOUS:
+            raise ValueError("The model outcome must reference an endogenous construct")
+        grid = self.core_query.grid(self.time)
+        if isinstance(grid, TimeGridFailure):
+            raise ValueError(grid.reason)
+        if any(event.target == self.outcome for event in self.core_query.interventions):
+            raise ValueError("The core query cannot intervene on the outcome")
+        return self
 
     @field_validator("edges", mode="wrap")
     @classmethod
@@ -390,9 +404,9 @@ class _ModelEntities(Value):
         return self
 
     def require_measurements(self) -> None:
-        """Require both a measurement clock and indicators before preparing or binding observations."""
-        if self.measurement_clock is None or not self.indicators:
-            raise IncompleteModelError("Measurements require a measurement clock and indicators")
+        """Require indicators before preparing or binding observations."""
+        if not self.indicators:
+            raise IncompleteModelError("Measurements require indicators")
 
 
 class DynamicalModelSpec(Value):
@@ -420,7 +434,10 @@ class DynamicalModelSpec(Value):
     layout_definitions: Mapping[DistributionId, JsonObject | None] = Field(
         default_factory=dict, alias="law_layouts"
     )
-    measurement_clock: Duration | None = None
+    question_text: NonBlankText | None = Field(default=None, alias="question")
+    outcome_id: ConstructId | None = Field(default=None, alias="outcome")
+    time_definition: JsonObject = Field(default_factory=dict, alias="time")
+    query_definition: JsonObject = Field(default_factory=dict, alias="core_query")
 
     @field_serializer("distribution_definitions", mode="wrap")
     def serialize_laws(  # noqa: ANN201 -- The scientific owner supplies the native constructor schema.
@@ -503,7 +520,10 @@ class DynamicalModelSpec(Value):
         parameters: tuple[ParameterSpec, ...] = (),
         distributions: Mapping[DistributionId, NumPyroDistribution] | None = None,
         law_layouts: Mapping[DistributionId, JointLawLayout] | None = None,
-        measurement_clock: Duration | str | None = None,
+        question: NonBlankText,
+        outcome: ConstructId,
+        time: ModelTimeSpec,
+        core_query: SimulationSpec,
     ) -> DynamicalModelSpec:
         """Build a complete document from resolved scientific values at their owner."""
         values = _ModelEntities.model_validate(
@@ -521,7 +541,10 @@ class DynamicalModelSpec(Value):
                 "parameters": parameters,
                 "distributions": distributions or {},
                 "law_layouts": law_layouts or {},
-                "measurement_clock": measurement_clock,
+                "question": question,
+                "outcome": outcome,
+                "time": time,
+                "core_query": core_query,
             }
         )
         return cls._from_entities(values)
@@ -547,7 +570,10 @@ class DynamicalModelSpec(Value):
             },
             distributions=values.distributions,
             law_layouts=serialized["law_layouts"],
-            measurement_clock=values.measurement_clock,
+            question=values.question,
+            outcome=values.outcome,
+            time=serialized["time"],
+            core_query=serialized["core_query"],
         )
 
     def with_entities(
@@ -577,8 +603,31 @@ class DynamicalModelSpec(Value):
             parameters=self.parameters if parameters is None else parameters,
             distributions=self.distributions if distributions is None else distributions,
             law_layouts=self.law_layouts if law_layouts is None else law_layouts,
-            measurement_clock=self.measurement_clock,
+            question=self.question,
+            outcome=self.outcome,
+            time=self.time,
+            core_query=self.core_query,
         )
+
+    @property
+    def question(self) -> NonBlankText:
+        """The question answered by this revision."""
+        return self._entities.question
+
+    @property
+    def outcome(self) -> ConstructId:
+        """The endogenous outcome selected by this revision."""
+        return self._entities.outcome
+
+    @property
+    def time(self) -> ModelTimeSpec:
+        """The authored window and fixed state interval."""
+        return self._entities.time
+
+    @property
+    def core_query(self) -> SimulationSpec:
+        """The single aligned simulation plan this model is constructed to answer."""
+        return self._entities.core_query
 
     @property
     def constructs(self) -> tuple[ConstructSpec, ...]:
@@ -751,10 +800,18 @@ def _with_law_key(
     return {**definition, "distribution": keys[DistributionId(law)]}
 
 
+def _without_law(
+    definition: JsonObject | None, removed: frozenset[DistributionId]
+) -> JsonObject | None:
+    """Clear references to retained trajectories invalidated by a grid edit."""
+    if definition is not None and definition.get("distribution") in removed:
+        return {**definition, "distribution": None}
+    return definition
+
+
 def apply_model_edit(
     parent: DynamicalModelSpec,
     supplied: DynamicalModelSpec,
-    outcome: ConstructId,
     *,
     context: object = None,
 ) -> MaterializedModel:
@@ -765,9 +822,25 @@ def apply_model_edit(
             supplied.model_dump(mode="python", context={"binary_arrays": True}),
         )
     )
+    model_time = ModelTimeSpec.from_document(document.time_definition)
+    invalidated = frozenset(
+        identity
+        for identity in parent.layout_definitions
+        if identity not in supplied.layout_definitions
+        for layout in (parent.law_layouts[identity],)
+        if any(
+            (definition := document.construct_definitions.get(member)) is not None
+            and definition.get("role") == "endogenous"
+            for member in layout.constructs
+        )
+        and (
+            layout.time_points != model_time.time_points
+            or layout.time_origin != model_time.window.start_instant
+        )
+    )
     graph = _pruning_graph(document)
     edges = graph.edges
-    retained = frozenset({outcome})
+    retained = frozenset({document.outcome_id})
     while (
         expanded := retained
         | {
@@ -811,7 +884,7 @@ def apply_model_edit(
         for identity, distribution in graph.memberships.items()
         if identity in constructs or identity in parameters
     }
-    removed_distributions = prior_memberships - kept_memberships
+    removed_distributions = (prior_memberships - kept_memberships) | invalidated
     laws = {
         identity: value
         for identity, value in document.distribution_definitions.items()
@@ -834,12 +907,21 @@ def apply_model_edit(
     }
     stored = {keys.get(identity, identity) for identity in laws}
     complete = DynamicalModelSpec(
-        constructs={identity: _with_law_key(value, keys) for identity, value in constructs.items()},
+        constructs={
+            identity: _with_law_key(_without_law(value, invalidated), keys)
+            for identity, value in constructs.items()
+        },
         edges=retained_edges,
-        parameters={identity: _with_law_key(value, keys) for identity, value in parameters.items()},
+        parameters={
+            identity: _with_law_key(_without_law(value, invalidated), keys)
+            for identity, value in parameters.items()
+        },
         distributions={keys.get(identity, identity): value for identity, value in laws.items()},
         law_layouts={keys.get(identity, identity): value for identity, value in layouts.items()},
-        measurement_clock=document.measurement_clock,
+        question=document.question_text,
+        outcome=document.outcome_id,
+        time=document.time_definition,
+        core_query=document.query_definition,
     ).materialized(context=context)
     return MaterializedModel(
         dynamical_model_spec=complete,
@@ -859,7 +941,7 @@ def apply_model_edit(
             ),
             distributions=tuple(
                 identity
-                for identity in document.distribution_definitions
+                for identity in sorted(set(document.distribution_definitions) | invalidated)
                 if identity in removed_distributions and identity not in stored
             ),
         ),

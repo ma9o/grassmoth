@@ -12,7 +12,6 @@ from grassmoth.public import AggregatedCompileError, IncompleteModelError
 from grassmoth_server.actions.call_logs import collect_call_snapshot
 from grassmoth_server.actions.contracts.requests import PrepareDataRequest, call_identity
 from grassmoth_server.actions.edit_model import edit_model
-from grassmoth_server.actions.edit_question import edit_question
 from grassmoth_server.actions.errors import ActionExecutionError
 from grassmoth_server.actions.input_resolution import input_state
 from grassmoth_server.actions.messages import (
@@ -32,7 +31,6 @@ from grassmoth_server.actions.temporal.study.messages import (
     AttemptPublication,
     ChecksResult,
     EditModelActivityInput,
-    EditQuestionActivityInput,
     EvaluateChecksInput,
     ReadInputsInput,
 )
@@ -44,7 +42,6 @@ from grassmoth_server.study.records import (
     ActionBase,
     Applied,
     EditAttempt,
-    EditQuestionAttempt,
     Rejected,
     StudyRevision,
     action_attempt,
@@ -68,9 +65,7 @@ async def run_action_activity(activity_input: ActionInput) -> ActionAttempt:
             not retry this scientific failure.
     """
     try:
-        result = await run_action(
-            activity_input.workspace_id, activity_input.request, activity_input.state
-        )
+        result = await run_action(activity_input.workspace_id, activity_input.request)
     except StudyLookupError as exc:
         return action_attempt(
             activity_input.request,
@@ -96,21 +91,10 @@ async def edit_model_activity(activity_input: EditModelActivityInput) -> EditAtt
 
 
 @activity.defn
-async def edit_question_activity(
-    activity_input: EditQuestionActivityInput,
-) -> EditQuestionAttempt:
-    """Save the question and return the attempt that owns its publication effect."""
-    result = edit_question(activity_input.workspace_id, activity_input.request)
-    return EditQuestionAttempt(
-        request=activity_input.request, outcome=result, action="edit_question"
-    )
-
-
-@activity.defn
 async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the action's complete checks and produce its completion messages."""
-    from grassmoth.public import EditModelOutput, EditQuestionOutput, FitOutput, ModelEditResult
-    from grassmoth_server.actions.contracts.requests import EditQuestionRequest, FitRequest
+    from grassmoth.public import EditModelOutput, FitOutput
+    from grassmoth_server.actions.contracts.requests import FitRequest
 
     store = ArtifactStore(activity_input.workspace_id)
     if isinstance(activity_input.request, FitRequest):
@@ -124,19 +108,14 @@ async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) ->
         )
     if isinstance(activity_input.request, PrepareDataRequest):
         raise TypeError("Model checks require an edit or fit request")
-    if isinstance(activity_input.request, EditQuestionRequest):
-        result = await asyncio.to_thread(
-            lambda: store.read_result(activity_input.applied.result, EditQuestionOutput)
-        )
-        pruning = ModelEditResult()
-    else:
-        result = await asyncio.to_thread(
-            lambda: store.read_result(activity_input.applied.result, EditModelOutput)
-        )
-        pruning = result.pruning
+    result = await asyncio.to_thread(
+        lambda: store.read_result(activity_input.applied.result, EditModelOutput)
+    )
     return ChecksResult(
         reports={},
-        messages=edit_messages(result.checks, result.identification, pruning, datetime.now(UTC)),
+        messages=edit_messages(
+            result.checks, result.identification, result.pruning, datetime.now(UTC)
+        ),
     )
 
 
@@ -215,7 +194,6 @@ async def collect_completed_runs_activity(workspace_id: str) -> None:
 
 ALL_ACTIVITIES = [
     run_action_activity,
-    edit_question_activity,
     edit_model_activity,
     journal_activity,
     read_inputs_activity,

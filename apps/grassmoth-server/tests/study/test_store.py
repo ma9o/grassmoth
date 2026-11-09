@@ -17,7 +17,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied, AttemptRecord, Raised, action_attempt
 from grassmoth_server.study.sweep import collect_completed_runs
-from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_server_test_support.action import applied_record, model_root
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.values import revise_fixture
 
@@ -35,9 +35,7 @@ def _edit(workspace, clock, seq):
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
             parent_ref=repository.state().current["model"].revision,
-            dynamical_model_spec=revise_fixture(
-                make_model(["unmeasured_outcome"]), measurement_clock=clock
-            ),
+            dynamical_model_spec=revise_fixture(make_model(["unmeasured_outcome"]), question=clock),
         )
     )
     result = edit_model(workspace, request)
@@ -49,11 +47,10 @@ def test_format_and_single_publication_root(workspace):
     store = ArtifactStore(workspace)
     assert Path(store.repo.path) == Path(paths.history_dir(workspace))
     assert store.repo.config.get_int("grassmoth.format") == 33
-    root = question_root(workspace)
+    root = model_root(workspace)
     published = StudyRepository(workspace).append(_edit(workspace, "2d", 2))
     repo = store.repo
     assert set(repo.references) == {
-        "refs/question",
         *(
             f"refs/calls/{call_identity(r.record.attempt.request).removeprefix('call:')}"
             for r in (root, published)
@@ -77,7 +74,7 @@ def test_format_and_single_publication_root(workspace):
 
 def test_out_of_order_publication_and_first_saved_call_wins_after_cleanup(workspace):
     repository = StudyRepository(workspace)
-    question_root(workspace)
+    model_root(workspace)
     first, last = _edit(workspace, "2d", 2), _edit(workspace, "10d", 10)
     last_saved = repository.append(last)
     first_saved = repository.append(first)
@@ -89,7 +86,7 @@ def test_out_of_order_publication_and_first_saved_call_wins_after_cleanup(worksp
         last.attempt.request,
         input=revise_fixture(
             last.attempt.request.input,
-            dynamical_model_spec=DynamicalModelSpec(measurement_clock="11d"),
+            dynamical_model_spec=DynamicalModelSpec(question="11d"),
         ),
     )
     repository.append(
@@ -112,7 +109,7 @@ def test_out_of_order_publication_and_first_saved_call_wins_after_cleanup(worksp
 
 def test_packed_repository_alone_serves_calls_and_timeline(workspace, tmp_path, monkeypatch):
     repository = StudyRepository(workspace)
-    question_root(workspace)
+    model_root(workspace)
     repository.append(_edit(workspace, "2d", 2))
     expected = [(r, completed_call_msgpack(workspace, r)) for r in repository.attempts()]
     subprocess.run(["git", "--git-dir", str(repository.path), "repack", "-ad"], check=True)
@@ -168,7 +165,7 @@ def test_concurrent_publication_indexes_only_law_arrays_and_keeps_first_owner(
             revise_fixture(
                 output,
                 dynamical_model_spec=revise_fixture(
-                    output.dynamical_model_spec, measurement_clock=f"{seq}d"
+                    output.dynamical_model_spec, question=f"{seq}d"
                 ),
             ),
             call_id=call_identity(request),

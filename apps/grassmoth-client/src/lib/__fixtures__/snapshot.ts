@@ -13,7 +13,6 @@ export const emptySnapshot: ModelSnapshot = {
   workspace_id: "TEST",
   commit_id: "0".repeat(40),
   selected_seq: 0,
-  question: null,
   dynamical_model_spec: null,
   state: { current: {}, data: null },
   metadata: null,
@@ -32,21 +31,12 @@ export const authoredSnapshot: ModelSnapshot = {
   commit_id: "3".repeat(40),
   selected_seq: 3,
   dynamical_model_spec: modelFixture,
-  question: { text: "How does treatment change the outcome?", outcome: outcome.id, queries: {} },
   state: {
     current: {
-      question: {
-        artifact_id: "question",
-        revision: "2".repeat(40),
-        derived_from: {},
-        produced_by: "edit_question",
-        created_at: "2026-01-01T00:00:00Z",
-        source: { kind: "files" },
-      },
       model: {
         artifact_id: "model",
         revision: dynamicalModelSpecRef.revision,
-        derived_from: { question: "2".repeat(40) },
+        derived_from: {},
         produced_by: "edit_model",
         created_at: "2026-01-01T00:00:00Z",
         source: { kind: "files" },

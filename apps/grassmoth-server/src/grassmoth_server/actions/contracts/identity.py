@@ -61,10 +61,10 @@ type RevisionSelector = Annotated[
 ]
 
 
-type ArtifactId = Literal["question", "raw_data", "model", "panel"]
+type ArtifactId = Literal["raw_data", "model", "panel"]
 
 
-type ScientificActionId = Literal["edit_question", "edit_model", "prepare_data", "fit", "simulate"]
+type ScientificActionId = Literal["edit_model", "prepare_data", "fit", "simulate"]
 
 
 type ActionId = ScientificActionId | Literal["data_diff", "model_diff"]

@@ -4,7 +4,6 @@ import {
   FileInput,
   GitCompareArrows,
   type LucideIcon,
-  MessageCircleQuestionMark,
   Network,
   Play,
   SlidersHorizontal,
@@ -13,7 +12,6 @@ import {
 
 /** Each action's color and icon, shared by the timeline and the action record. */
 export const ACTION_STYLE: Record<ActionId, { color: string; icon: LucideIcon }> = {
-  edit_question: { color: "#b45309", icon: MessageCircleQuestionMark },
   edit_model: { color: "#475569", icon: Network },
   prepare_data: { color: "#0f766e", icon: FileInput },
   fit: { color: "#2563eb", icon: SlidersHorizontal },

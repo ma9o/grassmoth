@@ -6,7 +6,8 @@ Covers: semantic prior binding and fit-input preparation.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import numpy as np
@@ -14,9 +15,8 @@ import numpyro.distributions as dist
 import polars as pl
 import pytest
 
-from grassmoth.artifacts.identity import ConstructId, DistributionId, IndicatorId, ParameterId
+from grassmoth.artifacts.identity import DistributionId, IndicatorId, ParameterId
 from grassmoth.artifacts.model.construct import replace_constructs
-from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import (
     Expression,
     coefficient,
@@ -44,6 +44,7 @@ from grassmoth.models.ssm.compile.observation_windows import compile_observation
 from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.ssm.preparation.binding import (
     BoundPanel,
+    PanelPreparationFailure,
     bind_panel,
     prepare_fit_inputs,
 )
@@ -68,7 +69,11 @@ from grassmoth_test_support.model import (
     replace_parameters,
     without_parameters,
 )
+from grassmoth_test_support.purpose import initial_model
 from grassmoth_test_support.values import revise_fixture
+
+if TYPE_CHECKING:
+    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
 
 def _initial_state_correlation_prior_indices_are_dense_after_mask_filtering__make_spec() -> (
@@ -273,7 +278,7 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
     )
 
 
-def _stress_interval_model(window="31d") -> DynamicalModelSpec:
+def _stress_interval_model(window="31d", *, horizon="31d", step="1d") -> DynamicalModelSpec:
     _STRESS_SCORE_INDICATOR_ID = IndicatorId("indicator:3696aef3ff6f446744e5")
     _LATENT_0_STRESS_SCORE_MANIFEST_VAR_DIAG_PARAMETER_ID = ParameterId(
         "parameter:cfa73aad8f98fefa2c03e109a6c5619b67bc4f1ab79bcaf100e70f7cfe7abc80"
@@ -282,6 +287,11 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
         "distribution:6e81bd018a8f326fe633d69e5b75bb5a5b47a3f4480e625579f1b3aa986def0b"
     )
     dynamical_model_spec = one_state_gaussian_model()
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec,
+        time={"window": {"start": "2024-01-01", "horizon": horizon}, "step": step},
+        core_query={"window": {"start": "2024-01-01", "horizon": horizon}},
+    )
     latent_0 = construct_named(dynamical_model_spec, "latent_0")
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
@@ -473,14 +483,6 @@ class TestBuilderPriorConversion:
                 else:
                     assert isinstance(target, CompiledNodeTarget)
 
-    def test_cross_lag_prior_requires_the_declared_measurement_clock(self):
-        dynamical_model_spec = revise_fixture(_stress_mood_model(), measurement_clock=None)
-        with pytest.raises(ValueError, match="measurement clock"):
-            compile_priors(
-                compile_model_fixture(dynamical_model_spec),
-                StructuralSelection(dynamical_model_spec, None),
-            )
-
 
 @pytest.mark.contract
 class TestObservationSupportValidation:
@@ -560,22 +562,23 @@ class TestPrepareFitInputs:
 
 class TestPrepareModelRuntime:
     @pytest.mark.contract
-    def test_augments_numeric_grid_with_support_boundaries(self, caplog):
+    @pytest.mark.parametrize("offset", [0.0, 0.5, -1.0])
+    def test_interval_support_uses_the_declared_state_grid(self, caplog, offset):
         data_for_model = pl.DataFrame(
             {
                 "indicator_id": ["indicator:3696aef3ff6f446744e5"],
                 "value": [1.0],
-                "anchor_time": ["2024-02-01T00:00:00"],
+                "anchor_time": [datetime(2024, 2, 1) + timedelta(days=offset)],
                 "support_kind": ["interval"],
                 "summary_operator": ["mean"],
                 "anchor_policy": ["support_end"],
                 "observation_window": ["31d"],
-                "support_start": ["2024-01-01T00:00:00"],
-                "support_end": ["2024-02-01T00:00:00"],
+                "support_start": [datetime(2024, 1, 1) + timedelta(days=offset)],
+                "support_end": [datetime(2024, 2, 1) + timedelta(days=offset)],
             }
         )
 
-        inputs = compile_fit_fixture(_stress_interval_model())
+        inputs = compile_fit_fixture(_stress_interval_model(step="31d", horizon="62d"))
 
         with caplog.at_level("INFO"):
             runtime = bind_panel(
@@ -584,15 +587,21 @@ class TestPrepareModelRuntime:
                     tuple(
                         item.observation for item in inputs.compiled_dynamical_model.observations
                     ),
-                    time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+                    time_origin=datetime(2023, 12, 1, tzinfo=UTC),
                 ),
                 compiled_dynamical_model=inputs.compiled_dynamical_model,
                 compiler=compile_program,
             )
 
+        if offset:
+            assert isinstance(runtime, PanelPreparationFailure)
+            assert ("align" if offset > 0 else "boundary") in runtime.message
+            return
+
         assert isinstance(runtime, BoundPanel)
-        assert isinstance(runtime, BoundPanel)
-        assert runtime.times.tolist() == [0.0, 31.0]
+        assert runtime.time_origin == datetime(2024, 1, 1, tzinfo=UTC)
+        assert np.isnan(runtime.observations[[0, 2], :]).all()
+        assert runtime.times.tolist() == [0.0, 31.0, 62.0]
         assert runtime.observation_support is not None
         assert runtime.observation_support.manifest_names == ("stress_score",)
         assert runtime.observation_support.support_kinds == ("interval",)
@@ -601,15 +610,15 @@ class TestPrepareModelRuntime:
         assert runtime.observation_support.observation_windows == ("31d",)
         assert runtime.observation_support.requires_interval_summary_handling is True
         assert runtime.observation_support.interval_summary_manifest_names == ("stress_score",)
-        assert runtime.observation_support.support_start_times.shape == (2, 1)
-        assert runtime.observation_support.support_end_times.shape == (2, 1)
+        assert runtime.observation_support.support_start_times.shape == (3, 1)
+        assert runtime.observation_support.support_end_times.shape == (3, 1)
         assert runtime.observation_support.support_start_times[1, 0] == pytest.approx(0.0)
         assert runtime.observation_support.support_end_times[1, 0] == pytest.approx(31.0)
         scan = compile_observation_scan(runtime.observation_support.window_plan)
-        assert scan.prev_coeffs.shape == (2, 1, 1)
-        assert scan.curr_coeffs.shape == (2, 1, 1)
-        assert scan.weights.shape == (2, 1, 1)
-        assert scan.emission_slots.tolist() == [[-1], [0]]
+        assert scan.prev_coeffs.shape == (3, 1, 1)
+        assert scan.curr_coeffs.shape == (3, 1, 1)
+        assert scan.weights.shape == (3, 1, 1)
+        assert scan.emission_slots.tolist() == [[-1], [0], [-1]]
         assert scan.prev_coeffs[1, 0, 0] == pytest.approx(15.5)
         assert scan.curr_coeffs[1, 0, 0] == pytest.approx(15.5)
         assert scan.weights[1, 0, 0] == pytest.approx(31.0)
@@ -634,7 +643,7 @@ class TestPrepareModelRuntime:
             }
         )
 
-        inputs = compile_fit_fixture(_stress_interval_model("2d"))
+        inputs = compile_fit_fixture(_stress_interval_model("2d", horizon="3d"))
 
         runtime = bind_panel(
             observation_dataset(
@@ -733,7 +742,7 @@ def test_compiled_inputs_own_runtime_derivations(monkeypatch):
     assert panel.indicator_ids == tuple(
         observation.id for observation in inputs.compiled_dynamical_model.observations
     )
-    assert panel.values.shape == (2, 1)
+    assert panel.values.shape == (3, 1)
     with pytest.raises(AttributeError):
         panel.compiled_dynamical_model = inputs.compiled_dynamical_model
     with pytest.raises(ValueError, match="read-only"):
@@ -745,7 +754,7 @@ def test_compile_distinguishes_incomplete_unsupported_and_bugs(monkeypatch):
     from grassmoth.models.ssm.compile import inputs as compiler
 
     incomplete = compiler.compile_ssm_inputs_from_model(
-        StructuralSelection(DynamicalModelSpec(), None)
+        StructuralSelection.for_model(initial_model())
     )
     assert isinstance(incomplete, compiler.IncompleteModel)
     dynamical_model_spec = one_state_gaussian_model()
@@ -775,15 +784,10 @@ def test_fit_resolves_incomplete_model_before_panel_preparation(monkeypatch):
 
     monkeypatch.setattr(runtime, "bind_panel", unexpected_panel)
     from grassmoth.actions.contracts.io import FitInputs
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth_test_support.helpers import fixture_entity_id
 
     result = fitting.fit_model(
         FitInputs(
-            selection=StructuralSelection(DynamicalModelSpec(), None),
-            question=QuestionSpec[ConstructId](
-                text="Test", outcome=fixture_entity_id("construct", "outcome")
-            ),
+            selection=StructuralSelection.for_model(initial_model()),
             data_for_model=ObservationDataset(
                 series={}, time_origin=datetime(2024, 1, 1, tzinfo=UTC)
             ),

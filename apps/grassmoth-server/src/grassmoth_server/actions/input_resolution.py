@@ -24,7 +24,6 @@ from grassmoth_server.actions.contracts.requests import (
     ActionInput,
     DataDiffRequest,
     EditModelRequest,
-    EditQuestionRequest,
     FitRequest,
     ModelDiffRequest,
     PrepareDataRequest,
@@ -34,7 +33,7 @@ from grassmoth_server.actions.contracts.requests import (
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data
 from grassmoth_server.study.errors import StudyLookupError
-from grassmoth_server.study.records import Applied, recorded_question
+from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import ArtifactRecord, StudyState, is_stale
 
 if TYPE_CHECKING:
@@ -92,13 +91,13 @@ def resolve_action_inputs(
         return tuple(data_ref(source) for source in value)
 
     match request:
-        case EditQuestionRequest():
-            resolved = request
         case EditModelRequest():
             resolved = EditModelRequest[GitOid](
                 reasoning=request.reasoning,
                 input=EditModelInput[GitOid](
-                    parent_ref=resolve(request.input.parent_ref, "model"),
+                    parent_ref=None
+                    if request.input.parent_ref is None
+                    else resolve(request.input.parent_ref, "model"),
                     dynamical_model_spec=request.input.dynamical_model_spec,
                 ),
             )
@@ -163,11 +162,13 @@ def resolve_action_inputs(
     return resolved, contents
 
 
-def model_edit_state(store: ArtifactStore, parent_ref: GitOid) -> StudyState:
-    """Resolve a model parent and its pinned question."""
-    parent = store.read_meta("model", parent_ref)
-    question = store.read_meta("question", parent.derived_from["question"])
-    return StudyState(current={"question": question, "model": parent})
+def model_edit_state(store: ArtifactStore, parent_ref: GitOid | None) -> StudyState:
+    """Resolve only the selected model; creation has no dependencies."""
+    return (
+        StudyState()
+        if parent_ref is None
+        else StudyState(current={"model": store.read_meta("model", parent_ref)})
+    )
 
 
 def _source_files(
@@ -207,10 +208,7 @@ def input_state(
     if isinstance(request, EditModelRequest):
         return model_edit_state(store, request.input.parent_ref)
     records = repository.attempts()
-    question = recorded_question(records)
-    current: dict[ArtifactId, ArtifactRecord] = (
-        {"question": question} if question is not None else {}
-    )
+    current: dict[ArtifactId, ArtifactRecord] = {}
     from grassmoth_server.actions.fit.selection import fit_source
 
     source = fit_source(store, request.input.target) if isinstance(request, FitRequest) else None
@@ -230,10 +228,6 @@ def input_state(
             panel = data_source.revision
     if dynamical_model_spec_revision is not None:
         current["model"] = store.read_meta("model", dynamical_model_spec_revision)
-        if source is not None:
-            current["question"] = store.read_meta(
-                "question", current["model"].derived_from["question"]
-            )
     if panel is not None:
         current["panel"] = store.read_meta("panel", panel)
         effects = next(

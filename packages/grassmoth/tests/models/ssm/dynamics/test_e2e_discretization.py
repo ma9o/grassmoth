@@ -347,7 +347,10 @@ def two_construct_structure() -> DynamicalModelSpec:
                     "reasoning": {"text": "Stress impairs mood"},
                 }
             },
-            "measurement_clock": "1d",
+            "question": "How does stress affect mood?",
+            "outcome": "construct:bbc87212909e45b9e6c3",
+            "time": {"window": {"start": "2024-01-01", "horizon": "2d"}, "step": "1d"},
+            "core_query": {"window": {"start": "2024-01-01", "horizon": "2d"}},
         }
     )
 

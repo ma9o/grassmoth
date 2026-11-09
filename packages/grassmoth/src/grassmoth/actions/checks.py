@@ -11,8 +11,6 @@ from grassmoth.artifacts.reports.checks import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.identity import ConstructId
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.inference import FitCheckReport
     from grassmoth.artifacts.reports.model_checks import ModelCheckReport
@@ -97,9 +95,7 @@ def check_specification(
     return tuple(findings)
 
 
-def model_check_report(
-    selection: StructuralSelection, question: QuestionSpec[ConstructId]
-) -> ModelCheckReport:
+def model_check_report(selection: StructuralSelection) -> ModelCheckReport:
     """Evaluate specification and question findings on the supplied model."""
     from grassmoth.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
     from grassmoth.models.causal.question_checks import question_findings
@@ -109,13 +105,12 @@ def model_check_report(
     inputs = compile_fit_inputs(compiled, selection)
     return ModelCheckReport(
         specification=check_specification(compiled, inputs),
-        question=QuestionCheckReport(findings=question_findings(question, selection, history=None)),
+        question=QuestionCheckReport(findings=question_findings(selection, history=None)),
     )
 
 
 def fit_check_report(
     selection: StructuralSelection,
-    question: QuestionSpec[ConstructId],
     observations: ObservationDataset,
 ) -> FitCheckReport:
     """Retain input findings after a successful fit has admitted and used these values."""
@@ -134,7 +129,5 @@ def fit_check_report(
                 evidence="Measurement support, discrete levels, standardization and eligible location laws match the prepared observations.",
             ),
         ),
-        question=QuestionCheckReport(
-            findings=question_findings(question, selection, history=observations)
-        ),
+        question=QuestionCheckReport(findings=question_findings(selection, history=observations)),
     )

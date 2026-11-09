@@ -22,7 +22,6 @@ from grassmoth.models.causal.graphs import get_all_treatments
 from grassmoth.models.ssm.preparation.binding import reading_level
 from grassmoth.models.structure import (
     StructuralSelection,
-    StructuralSelectionError,
     selected_state_ids,
 )
 
@@ -32,14 +31,12 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.model.construct import ConstructSpec
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.model_checks import QuestionAssessment
     from grassmoth.artifacts.simulation import SimulationSpec
 
 
 def question_findings(
-    question: QuestionSpec[ConstructId],
     selection: StructuralSelection,
     *,
     history: ObservationDataset | None,
@@ -47,51 +44,27 @@ def question_findings(
     """Each check names what the model or the record still lacks for one query."""
     dynamical_model_spec = selection.dynamical_model_spec
     constructs = {construct.id: construct for construct in dynamical_model_spec.constructs}
+    query = dynamical_model_spec.core_query
+    targets = sorted({event.target for event in query.interventions})
     if history is not None:
-        return tuple(
-            finding
-            for name, query in question.queries.items()
-            for finding in (
-                _window_finding(name, query, history),
-                *(
-                    _range_finding(name, target, query, constructs.get(target), history)
-                    for target in sorted({event.target for event in query.interventions})
-                ),
-            )
+        return (
+            _window_finding(query, history),
+            *(_range_finding(target, query, constructs.get(target), history) for target in targets),
         )
     states = frozenset(selected_state_ids(selection))
-    outcome = _outcome_finding(question, constructs)
-    findings: list[QuestionAssessment] = [outcome]
-    for name, query in question.queries.items():
-        targets = sorted({event.target for event in query.interventions})
-        findings.extend(
-            _target_finding(name, target, constructs.get(target), states) for target in targets
-        )
-        findings.extend(
-            _identification_finding(name, target, outcome, selection) for target in targets
-        )
-    return tuple(findings)
+    return (
+        _outcome_finding(dynamical_model_spec),
+        *(_target_finding(target, constructs.get(target), states) for target in targets),
+        *(_identification_finding(target, selection) for target in targets),
+    )
 
 
-def _outcome_finding(
-    question: QuestionSpec[ConstructId], constructs: dict[ConstructId, ConstructSpec]
-) -> QuestionAssessment:
-    subject = OutcomeSubject(outcome=ConstructRef(id=question.outcome))
-    construct = constructs.get(question.outcome)
-    if construct is None:
-        return NotEvaluated(
-            code="outcome",
-            subject=subject,
-            reason="CONSTRUCT_UNDEFINED",
-            detail="The model does not define the question's outcome yet.",
-        )
+def _outcome_finding(model: DynamicalModelSpec) -> QuestionAssessment:
+    subject = OutcomeSubject(outcome=ConstructRef(id=model.outcome))
+    construct = model.get_construct(model.outcome)
     problems = [
         problem
         for failed, problem in (
-            (
-                construct.role != Role.ENDOGENOUS,
-                "it is exogenous, supplied by a deterministic trajectory",
-            ),
             (
                 construct.temporal_status == TemporalStatus.TIME_INVARIANT,
                 "it is time-invariant, so it has no course to contrast",
@@ -111,9 +84,9 @@ def _outcome_finding(
 
 
 def _target_finding(
-    query: str, target: ConstructId, construct: ConstructSpec | None, states: frozenset[ConstructId]
+    target: ConstructId, construct: ConstructSpec | None, states: frozenset[ConstructId]
 ) -> QuestionAssessment:
-    subject = QueryTargetSubject(query=query, target=ConstructRef(id=target))
+    subject = QueryTargetSubject(target=ConstructRef(id=target))
     if construct is None:
         return NotEvaluated(
             code="target",
@@ -137,19 +110,19 @@ def _target_finding(
 
 
 def _identification_finding(
-    query: str, target: ConstructId, outcome: QuestionAssessment, selection: StructuralSelection
+    target: ConstructId, selection: StructuralSelection
 ) -> QuestionAssessment:
     dynamical_model_spec, identification = selection.dynamical_model_spec, selection.identification
     constructs = {construct.id: construct for construct in dynamical_model_spec.constructs}
     states = frozenset(selected_state_ids(selection))
-    subject = QueryTargetSubject(query=query, target=ConstructRef(id=target))
+    subject = QueryTargetSubject(target=ConstructRef(id=target))
     construct = constructs.get(target)
-    if construct is None or not isinstance(outcome, Evaluated):
+    if construct is None:
         return NotEvaluated(
             code="identification",
             subject=subject,
             reason="CONSTRUCT_UNDEFINED",
-            detail="Identification waits until the model defines the outcome and this target.",
+            detail="Identification waits until the model defines this target.",
         )
     assert identification.outcome is not None
     effect = f"The effect of {construct.name} on {constructs[identification.outcome].name}"
@@ -190,19 +163,9 @@ def _identification_finding(
     )
 
 
-def _window_finding(
-    query: str, design: SimulationSpec, history: ObservationDataset
-) -> QuestionAssessment:
-    subject = QueryWindowSubject(query=query)
+def _window_finding(design: SimulationSpec, history: ObservationDataset) -> QuestionAssessment:
+    subject = QueryWindowSubject()
     time_origin = history.time_origin
-    if design.start_instant < time_origin:
-        return Evaluated(
-            code="window",
-            subject=subject,
-            outcome="failed",
-            evidence=f"It starts on {design.start}, before the record begins on "
-            f"{time_origin.date()}; the initial-state law applies only from then.",
-        )
     ends = [
         float(end)
         for series in history.series.values()
@@ -217,7 +180,7 @@ def _window_finding(
             detail="The record has no known measurement support.",
         )
     record_end = ModelTime(max(ends)).at(ObservationInstant(time_origin)).value
-    window_end = design.start_instant + timedelta(seconds=design.horizon.seconds)
+    window_end = design.window.start_instant + timedelta(seconds=design.window.horizon.seconds)
     return Evaluated(
         code="window",
         subject=subject,
@@ -226,20 +189,19 @@ def _window_finding(
         if window_end <= record_end
         else f"It runs past the record's end on {record_end.date()}; from there, inputs hold "
         "their last reading in both arms."
-        if design.start_instant <= record_end
+        if design.window.start_instant <= record_end
         else f"It starts after the record ends on {record_end.date()}, so the model forecasts "
         "the gap while inputs hold their last reading.",
     )
 
 
 def _range_finding(
-    query: str,
     target: ConstructId,
     design: SimulationSpec,
     construct: ConstructSpec | None,
     history: ObservationDataset,
 ) -> QuestionAssessment:
-    subject = QueryTargetSubject(query=query, target=ConstructRef(id=target))
+    subject = QueryTargetSubject(target=ConstructRef(id=target))
     if construct is None:
         return NotEvaluated(
             code="range",
@@ -306,25 +268,3 @@ def _recorded_levels(construct: ConstructSpec, history: ObservationDataset) -> I
                 yield reading_level(
                     float(value), float(start), float(end), indicator.observation.summary_operator
                 )
-
-
-def question_edit_reason(
-    dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec[ConstructId]
-) -> str | None:
-    """Reject edits that cannot answer the question or violate scoped parameter anchors."""
-    from grassmoth.artifacts.model.construct import Role
-
-    if missing := sorted(
-        identity
-        for identity in {question.outcome, *question.targets}
-        if identity not in dynamical_model_spec._constructs
-    ):
-        return "The model must define the question's constructs: " + ", ".join(missing)
-    outcome_construct = dynamical_model_spec.get_construct(question.outcome)
-    if outcome_construct.role != Role.ENDOGENOUS:
-        return "The question's outcome must reference an endogenous construct"
-    try:
-        StructuralSelection(dynamical_model_spec, question.outcome)
-    except StructuralSelectionError as exc:
-        return str(exc)
-    return None
