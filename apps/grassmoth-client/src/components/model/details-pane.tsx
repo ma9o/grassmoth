@@ -158,7 +158,7 @@ export function DetailsPane({
   return (
     <section
       aria-label="Model details"
-      className="flex h-[460px] min-h-0 min-w-0 flex-none flex-col gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-3 md:max-h-[52%]"
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-3"
     >
       <div className="flex flex-none items-center gap-2 text-xs">
         <h2 className="min-w-0 flex-1 font-semibold">

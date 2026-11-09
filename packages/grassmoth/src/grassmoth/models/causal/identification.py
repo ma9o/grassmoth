@@ -23,8 +23,7 @@ import re
 from typing import TYPE_CHECKING
 
 import networkx as nx
-from y0.algorithm.identify import identify_outcomes
-from y0.algorithm.simplify_latent import simplify_latent_dag
+from y0.algorithm.identify import CompiledADMG, identify_outcomes
 from y0.dsl import Variable
 from y0.graph import NxMixedGraph
 
@@ -107,8 +106,10 @@ def check_identifiability(
     identifiable_treatments: dict[ConstructId, IdentifiedTreatmentStatus] = {}
     non_identifiable_treatments: dict[ConstructId, NonIdentifiableTreatmentStatus] = {}
 
-    # Convert DAG to ADMG via 2-timestep unrolling
-    admg, unobserved_confounders = dag_to_admg(constructs, edges, observed_constructs)
+    # Project and compile once for every treatment query, retaining latent cliques.
+    admg, unobserved_confounders = _compile_identification_graph(
+        constructs, edges, observed_constructs
+    )
 
     for treatment in all_treatments:
         # Build timestamped variable names for y0 query
@@ -122,16 +123,15 @@ def check_identifiability(
         treatment_var = Variable(treatment_node)
         outcome_var = Variable(outcome_node)
 
-        # y0 0.2.12.dev0 (cc6644d3b470) correctly identifies the napkin graph,
-        # but returns the incorrect estimand P(Y | X). A positive ID verdict
-        # therefore does not certify the returned formula.
-        # See https://arxiv.org/html/2610.03519#A6.SS4 (Appendix F.4).
+        # The pinned y0 fork retains derived kernels, fixing upstream's napkin
+        # estimand error (https://arxiv.org/html/2610.03519#A6.SS4). Its numerical
+        # SCM checks cover formulas as well as graphical identification verdicts.
         estimand = identify_outcomes(
             admg,
             treatments={treatment_var},
             outcomes={outcome_var},
         )
-        if estimand is not None:  # ty: ignore[redundant-condition-strict]  # pyright: ignore[reportUnnecessaryComparison] - y0 returns None for unidentifiable queries; static analysis narrows its exception path incorrectly.
+        if estimand is not None:
             # Map estimand back to original names for readability
             estimand_str = _canonicalize_estimand_string(str(estimand))
             identifiable_treatments[identities[treatment]] = IdentifiedTreatmentStatus(
@@ -318,7 +318,8 @@ def dag_to_admg(
 ) -> tuple[NxMixedGraph, set[str]]:
     """Convert a temporal DAG to ADMG via 2-timestep unrolling.
 
-    Projects the finite graph using y0's latent simplification and ADMG conversion.
+    Projects the finite graph using y0's compact latent projection, then materializes
+    its edges for callers that inspect the mixed graph.
     Temporal placement follows construct status, independently of solver step size.
     See docs/assumptions.md#causal-identification for the temporal limitation.
 
@@ -331,7 +332,16 @@ def dag_to_admg(
         Tuple of (NxMixedGraph, set of unobserved confounder names)
 
     """
-    # Build 2-timestep unrolled DAG
+    graph, confounders = _compile_identification_graph(constructs, edges, observed_constructs)
+    return graph.to_graph(), confounders
+
+
+def _compile_identification_graph(
+    constructs: Sequence[ConstructSpec],
+    edges: Sequence[CausalEdgeSpec],
+    observed_constructs: set[str],
+) -> tuple[CompiledADMG, set[str]]:
+    """Project the temporal DAG without expanding latent confounding cliques."""
     dag = unroll_temporal_dag(constructs, edges, observed_constructs)
 
     # Find unobserved constructs that will create confounding
@@ -356,16 +366,7 @@ def dag_to_admg(
         if len(observed_children) >= 2:
             unobserved_confounders.add(construct)
 
-    # y0's converter expects root latents with observed children. Simplify first
-    # so hidden carryover and hidden mediators never become observed ADMG nodes.
-    projection = nx.relabel_nodes(dag, {node: Variable(node) for node in dag})
-    simplified = simplify_latent_dag(projection).graph
-    admg = NxMixedGraph.from_latent_variable_dag(simplified)
-    for node, data in simplified.nodes(data=True):
-        if not data["hidden"]:
-            admg.add_node(node)
-
-    return admg, unobserved_confounders
+    return CompiledADMG.from_latent_variable_dag(dag), unobserved_confounders
 
 
 def find_blocking_confounders(

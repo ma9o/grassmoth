@@ -26,6 +26,7 @@ import {
 import { ActionRecord } from "./action-record";
 import { DetailsPane } from "./details-pane";
 import { VersionScrubber } from "./version-scrubber";
+import { WorkbenchPanes } from "./workbench-panes";
 
 export interface CausalModelAssetViewProps {
   workspaceId: string;
@@ -188,7 +189,7 @@ function ModelRevision({
 
   return (
     <div
-      className="flex min-h-screen flex-col bg-muted/20 md:h-dvh md:overflow-hidden"
+      className="flex h-dvh flex-col overflow-hidden bg-muted/20"
       onKeyDown={(event) => {
         if (event.key === "Escape" && activeComparison) {
           event.stopPropagation();
@@ -220,137 +221,144 @@ function ModelRevision({
       />
       <main
         aria-busy={loadingRevision}
-        className="relative grid min-h-0 flex-1 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px] lg:px-5 lg:pb-4 xl:grid-cols-[minmax(0,1fr)_400px]"
+        className="relative flex min-h-0 flex-1 p-3 lg:px-5 lg:pb-4"
       >
-        <div className="flex min-h-0 min-w-0 flex-col gap-3">
-          <section
-            aria-label="Causal graph"
-            className="relative flex h-[480px] flex-none flex-col overflow-hidden rounded-2xl border bg-card md:h-auto md:min-h-0 md:flex-1"
-          >
-            <div className="flex min-h-11 flex-none flex-wrap items-center justify-between gap-2 border-b px-4 py-1.5">
-              <h1 className="text-sm font-semibold">Causal model</h1>
-              {activeComparison ? (
-                <div
-                  ref={comparisonPane}
-                  id="model-comparison-preview"
-                  role="region"
-                  aria-label="Model comparison preview"
-                  tabIndex={-1}
-                  className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]"
-                  onPointerEnter={retainPreview}
-                  onPointerLeave={endPreview}
-                  onFocus={retainPreview}
-                >
-                  <span className="whitespace-nowrap font-medium text-amber-700">
-                    Spec · {playhead} → {activeComparison.after.record.seq}
-                  </span>
-                  {compared.data &&
-                    (Object.keys(compared.data.changes).length === 0 ? (
-                      <span className="whitespace-nowrap text-muted-foreground">
-                        No spec changes
-                      </span>
-                    ) : (
-                      <span className="hidden items-center gap-2 text-[10px] text-muted-foreground sm:flex">
-                        <span className="text-amber-700">~ changed</span>
-                        <span className="text-emerald-700">+ added</span>
-                        <span className="text-rose-700">− removed</span>
-                      </span>
-                    ))}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={activeComparison.pinned ? "secondary" : "ghost"}
-                    aria-label="Keep comparison"
-                    aria-pressed={activeComparison.pinned}
-                    onClick={toggleComparison}
-                  >
-                    Keep
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Close comparison"
-                    onClick={dismissComparison}
-                  >
-                    ×
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-            <div
-              className="relative min-h-0 flex-1"
-              onPointerEnter={retainPreview}
-              onPointerLeave={endPreview}
+        <WorkbenchPanes
+          layoutId={`${workspaceId}:${tick?.commit_id ?? "unselected"}`}
+          graph={
+            <section
+              aria-label="Causal graph"
+              className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card"
             >
-              {dataReport && !dataDiff && (
-                <p
-                  role={dataComparison.error ? "alert" : "status"}
-                  className="absolute top-3 left-3 z-20 rounded border bg-card px-3 py-2 text-xs"
-                >
-                  {dataComparison.error?.message ?? "Reading compared histories…"}
-                </p>
-              )}
-              {activeComparison && !modelComparison && (
-                <p
-                  role={compared.error || comparisonError ? "alert" : "status"}
-                  className="absolute top-3 left-3 z-20 rounded border bg-card px-3 py-2 text-xs"
-                >
-                  {compared.error || comparisonError
-                    ? (compared.error ?? comparisonError)?.message
-                    : compared.isLoading || compared.data
-                      ? "Reading differences…"
-                      : "No saved comparison for these model versions."}
-                </p>
-              )}
-              {graphEntities(context.entities).constructs.length > 0 ||
-              activeComparison ||
-              recordedComparison ? (
-                <LayeredCausalGraph
-                  modelSnapshot={modelSnapshot}
-                  entities={context.entities}
-                  simulation={step === "simulate" ? simulationResult : null}
-                  simulationPaths={step === "simulate" ? (recordedPaths.data ?? null) : null}
-                  dataDiff={dataDiff}
-                  step={step}
-                  selection={selection}
-                  onSelect={select}
-                  comparison={modelComparison}
-                />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
-                  <p className="text-sm font-medium">No structure defined yet</p>
-                  <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-                    The graph will appear when the agent harness records a model definition.
+              <div className="flex min-h-11 flex-none flex-wrap items-center justify-between gap-2 border-b px-4 py-1.5">
+                <h1 className="text-sm font-semibold">Causal model</h1>
+                {activeComparison ? (
+                  <div
+                    ref={comparisonPane}
+                    id="model-comparison-preview"
+                    role="region"
+                    aria-label="Model comparison preview"
+                    tabIndex={-1}
+                    className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]"
+                    onPointerEnter={retainPreview}
+                    onPointerLeave={endPreview}
+                    onFocus={retainPreview}
+                  >
+                    <span className="whitespace-nowrap font-medium text-amber-700">
+                      Spec · {playhead} → {activeComparison.after.record.seq}
+                    </span>
+                    {compared.data &&
+                      (Object.keys(compared.data.changes).length === 0 ? (
+                        <span className="whitespace-nowrap text-muted-foreground">
+                          No spec changes
+                        </span>
+                      ) : (
+                        <span className="hidden items-center gap-2 text-[10px] text-muted-foreground sm:flex">
+                          <span className="text-amber-700">~ changed</span>
+                          <span className="text-emerald-700">+ added</span>
+                          <span className="text-rose-700">− removed</span>
+                        </span>
+                      ))}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={activeComparison.pinned ? "secondary" : "ghost"}
+                      aria-label="Keep comparison"
+                      aria-pressed={activeComparison.pinned}
+                      onClick={toggleComparison}
+                    >
+                      Keep
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Close comparison"
+                      onClick={dismissComparison}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div
+                className="relative min-h-0 flex-1"
+                onPointerEnter={retainPreview}
+                onPointerLeave={endPreview}
+              >
+                {dataReport && !dataDiff && (
+                  <p
+                    role={dataComparison.error ? "alert" : "status"}
+                    className="absolute top-3 left-3 z-20 rounded border bg-card px-3 py-2 text-xs"
+                  >
+                    {dataComparison.error?.message ?? "Reading compared histories…"}
                   </p>
-                </div>
-              )}
-            </div>
-          </section>
-          <DetailsPane
-            selection={selection}
-            context={context}
-            loading={loadingRevision || dataComparison.isLoading}
-            tick={tick}
-          />
-        </div>
-        <aside
-          aria-label="Action record"
-          className="relative flex h-[480px] min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card md:h-auto"
-        >
-          <ActionRecord
-            tick={tick}
-            attempts={attempts}
-            dependencies={dependencies}
-            running={
-              // Work still running has no completed timeline node yet.
-              navigation.seq === null ? running : []
-            }
-            useActionPoll={useActionPoll}
-            hrefAt={navigation.hrefAt}
-            onSelectVersion={selectVersion}
-          />
-        </aside>
+                )}
+                {activeComparison && !modelComparison && (
+                  <p
+                    role={compared.error || comparisonError ? "alert" : "status"}
+                    className="absolute top-3 left-3 z-20 rounded border bg-card px-3 py-2 text-xs"
+                  >
+                    {compared.error || comparisonError
+                      ? (compared.error ?? comparisonError)?.message
+                      : compared.isLoading || compared.data
+                        ? "Reading differences…"
+                        : "No saved comparison for these model versions."}
+                  </p>
+                )}
+                {graphEntities(context.entities).constructs.length > 0 ||
+                activeComparison ||
+                recordedComparison ? (
+                  <LayeredCausalGraph
+                    modelSnapshot={modelSnapshot}
+                    entities={context.entities}
+                    simulation={step === "simulate" ? simulationResult : null}
+                    simulationPaths={step === "simulate" ? (recordedPaths.data ?? null) : null}
+                    dataDiff={dataDiff}
+                    step={step}
+                    selection={selection}
+                    onSelect={select}
+                    comparison={modelComparison}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+                    <p className="text-sm font-medium">No structure defined yet</p>
+                    <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                      The graph will appear when the agent harness records a model definition.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          }
+          details={
+            <DetailsPane
+              selection={selection}
+              context={context}
+              loading={loadingRevision || dataComparison.isLoading}
+              tick={tick}
+            />
+          }
+          record={
+            <aside
+              aria-label="Action record"
+              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card"
+            >
+              <ActionRecord
+                tick={tick}
+                attempts={attempts}
+                dependencies={dependencies}
+                running={
+                  // Work still running has no completed timeline node yet.
+                  navigation.seq === null ? running : []
+                }
+                useActionPoll={useActionPoll}
+                hrefAt={navigation.hrefAt}
+                onSelectVersion={selectVersion}
+              />
+            </aside>
+          }
+        />
       </main>
     </div>
   );
