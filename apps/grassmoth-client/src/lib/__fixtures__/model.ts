@@ -103,6 +103,14 @@ export const outcome: ConstructSpec = {
   ],
 };
 
+export const initialOutcome: ConstructSpec = {
+  ...outcome,
+  indicators: [],
+  dynamics: [],
+  coefficients: [],
+  distribution: null,
+};
+
 function constructEntry({ id, indicators, dynamics, ...value }: ConstructSpec) {
   return [
     id,

@@ -32,7 +32,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Edit Question
-         * @description Set the study question from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.
+         * @description Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.
          */
         readonly post: operations["edit_question"];
         readonly delete?: never;
@@ -52,7 +52,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Edit Model
-         * @description Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+         * @description Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
          */
         readonly post: operations["edit_model"];
         readonly delete?: never;
@@ -611,6 +611,18 @@ export interface components {
          * BernoulliLogitsLawSpec[Expression]
          * @description The BernoulliLogits conditional law.
          */
+        readonly "BernoulliLogitsLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "BernoulliLogits";
+            readonly logits: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * BernoulliLogitsLawSpec[Expression]
+         * @description The BernoulliLogits conditional law.
+         */
         readonly "BernoulliLogitsLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -618,6 +630,18 @@ export interface components {
              */
             readonly distribution: "BernoulliLogits";
             readonly logits: components["schemas"]["Expression-Output"];
+        };
+        /**
+         * BernoulliProbsLawSpec[Expression]
+         * @description The BernoulliProbs conditional law.
+         */
+        readonly "BernoulliProbsLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "BernoulliProbs";
+            readonly probs: components["schemas"]["Expression-Input"];
         };
         /**
          * BernoulliProbsLawSpec[Expression]
@@ -635,6 +659,19 @@ export interface components {
          * BetaLawSpec[Expression]
          * @description The Beta conditional law.
          */
+        readonly "BetaLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Beta";
+            readonly concentration1: components["schemas"]["Expression-Input"];
+            readonly concentration0: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * BetaLawSpec[Expression]
+         * @description The Beta conditional law.
+         */
         readonly "BetaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -643,6 +680,20 @@ export interface components {
             readonly distribution: "Beta";
             readonly concentration1: components["schemas"]["Expression-Output"];
             readonly concentration0: components["schemas"]["Expression-Output"];
+        };
+        /**
+         * BinaryExpression
+         * @description A supported scalar operation composing two expressions.
+         */
+        readonly "BinaryExpression-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "binary";
+            readonly operator: components["schemas"]["BinaryOperator"];
+            readonly left: components["schemas"]["Expression-Input"];
+            readonly right: components["schemas"]["Expression-Input"];
         };
         /**
          * BinaryExpression
@@ -691,6 +742,20 @@ export interface components {
          * CallExpression
          * @description A supported mathematical function, including explicit discrete contrasts.
          */
+        readonly "CallExpression-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "call";
+            readonly function: components["schemas"]["ExpressionFunction"];
+            /** Arguments */
+            readonly arguments: readonly components["schemas"]["Expression-Input"][];
+        };
+        /**
+         * CallExpression
+         * @description A supported mathematical function, including explicit discrete contrasts.
+         */
         readonly "CallExpression-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -703,6 +768,18 @@ export interface components {
         };
         readonly "CallId-Input": `call:${string}`;
         readonly "CallId-Output": `call:${string}`;
+        /**
+         * CategoricalLawSpec[Expression]
+         * @description The Categorical conditional law.
+         */
+        readonly "CategoricalLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Categorical";
+            readonly logits: components["schemas"]["Expression-Input"];
+        };
         /**
          * CategoricalLawSpec[Expression]
          * @description The Categorical conditional law.
@@ -816,6 +893,30 @@ export interface components {
         /** @enum {string} */
         readonly CheckOutcome: "passed" | "failed";
         readonly CheckStatus: components["schemas"]["CheckOutcome"] | "not_evaluated";
+        /**
+         * CoefficientExpression
+         * @description A scientifically typed coefficient operand, literal or parameter reference.
+         */
+        readonly "CoefficientExpression-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "coefficient";
+            readonly role: components["schemas"]["CoefficientRole"];
+            /**
+             * Value
+             * @description Fixed coefficients are finite literals; uncertain coefficients reference a persistent parameter ID. Null leaves the operand unassigned.
+             * @default null
+             */
+            readonly value?: number | components["schemas"]["ParameterId-Input"] | null;
+            /**
+             * Construct Ids
+             * @description Additional constructs participating in this coefficient use.
+             * @default []
+             */
+            readonly construct_ids?: readonly components["schemas"]["ConstructId-Input"][];
+        };
         /**
          * CoefficientExpression
          * @description A scientifically typed coefficient operand, literal or parameter reference.
@@ -971,6 +1072,51 @@ export interface components {
              */
             readonly kind: "construct";
             readonly id: components["schemas"]["ConstructId-Output"];
+        };
+        /**
+         * ConstructSpec
+         * @description A specification of a theoretical entity in the scientific causal model.
+         */
+        readonly "ConstructSpec-Input": {
+            /** @description Persistent identity. Preserve when revising or renaming. */
+            readonly id: components["schemas"]["ConstructId-Input"];
+            /**
+             * Name
+             * @description Construct name (e.g., 'stress', 'sleep_quality')
+             */
+            readonly name: string;
+            /** @description What this construct is and why the model needs it. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Input"];
+            /**
+             * Indicators
+             * @default []
+             */
+            readonly indicators?: readonly components["schemas"]["IndicatorSpec-Input"][];
+            /**
+             * Dynamics
+             * @default []
+             */
+            readonly dynamics?: readonly components["schemas"]["DynamicsMechanismSpec-Input"][];
+            /**
+             * Coefficients
+             * @default []
+             */
+            readonly coefficients?: readonly components["schemas"]["CoefficientExpression-Input"][];
+            /**
+             * Innovation Family
+             * @default gaussian
+             * @enum {string}
+             */
+            readonly innovation_family?: "gaussian" | "student_t";
+            /**
+             * @description Trajectory law in DynamicalModelSpec.distributions, with coordinates in its law_layouts entry. Exogenous trajectories use Delta and hold each value until the next point, including after the last point.
+             * @default null
+             */
+            readonly distribution?: components["schemas"]["DistributionId-Input"] | null;
+            /** @description 'endogenous' means modeled, with or without parents; 'exogenous' means supplied by a deterministic trajectory law, without endogenous dynamics or noise. */
+            readonly role: components["schemas"]["Role"];
+            /** @description 'time_varying' (changes over time) or 'time_invariant' (fixed) */
+            readonly temporal_status: components["schemas"]["TemporalStatus"];
         };
         /**
          * ConstructSpec
@@ -1322,6 +1468,18 @@ export interface components {
          * DeltaLawSpec[Expression]
          * @description The Delta conditional law.
          */
+        readonly "DeltaLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Delta";
+            readonly v: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * DeltaLawSpec[Expression]
+         * @description The Delta conditional law.
+         */
         readonly "DeltaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1350,6 +1508,19 @@ export interface components {
         readonly DiagnosticPhase: "warmup" | "post_warmup";
         readonly "DistributionId-Input": `distribution:${string}`;
         readonly "DistributionId-Output": `distribution:${string}`;
+        /**
+         * DriftMechanismSpec
+         * @description An additive drift contribution on a construct or directed edge.
+         */
+        readonly "DriftMechanismSpec-Input": {
+            readonly id: components["schemas"]["MechanismId-Input"];
+            readonly expression: components["schemas"]["Expression-Input"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "drift";
+        };
         /**
          * DriftMechanismSpec
          * @description An additive drift contribution on a construct or directed edge.
@@ -3604,6 +3775,8 @@ export interface components {
             readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_grassmoth__artifacts__model__expressions__Expression-Input__1_"][];
         };
         /** @description A dynamics mechanism declares one contribution to continuous-time drift. */
+        readonly "DynamicsMechanismSpec-Input": components["schemas"]["DriftMechanismSpec-Input"] | components["schemas"]["PotentialMechanismSpec-Input"];
+        /** @description A dynamics mechanism declares one contribution to continuous-time drift. */
         readonly "DynamicsMechanismSpec-Output": components["schemas"]["DriftMechanismSpec-Output"] | components["schemas"]["PotentialMechanismSpec-Output"];
         /** @description A persistent edge identity identifies one authored causal relationship. */
         readonly "EdgeId-Input": `edge:${string}`;
@@ -3623,22 +3796,22 @@ export interface components {
         };
         /**
          * EditModelInput[GitOid]
-         * @description Create or revise a model from a question or model parent.
+         * @description Revise a saved model, starting with the model produced by edit_question.
          */
         readonly EditModelInput_GitOid_: {
-            /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
+            /** @description Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model. */
             readonly parent_ref: components["schemas"]["GitOid-Input"];
-            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
+            /** @description Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
         };
         /**
          * EditModelInput[RevisionSelector]
-         * @description Create or revise a model from a question or model parent.
+         * @description Revise a saved model, starting with the model produced by edit_question.
          */
         readonly EditModelInput_RevisionSelector_: {
-            /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
+            /** @description Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model. */
             readonly parent_ref: components["schemas"]["RevisionSelector"];
-            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
+            /** @description Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
         };
         /**
@@ -3698,28 +3871,34 @@ export interface components {
          * @description The study question, its required outcome, and any named intervention queries.
          */
         readonly "EditQuestionInput-Input": {
-            /** @description The replacement study question, including the required outcome and any intervention queries to assess against candidate models. */
-            readonly question: components["schemas"]["QuestionSpec-Input"];
+            /** @description The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome. */
+            readonly question: components["schemas"]["QuestionSpec_ConstructSpec_-Input"];
         };
         /**
          * EditQuestionInput
          * @description The study question, its required outcome, and any named intervention queries.
          */
         readonly "EditQuestionInput-Output": {
-            /** @description The replacement study question, including the required outcome and any intervention queries to assess against candidate models. */
-            readonly question: components["schemas"]["QuestionSpec-Output"];
+            /** @description The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome. */
+            readonly question: Domain.QuestionSpec<Domain.ConstructSpec>;
         };
         /**
          * EditQuestionOutput
-         * @description The question saved by this action.
+         * @description The saved question, its initial outcome-only model and readiness findings.
          */
         readonly EditQuestionOutput: {
             /** @description The saved question, including its outcome and intervention queries. */
-            readonly question: components["schemas"]["QuestionSpec-Output"];
+            readonly question: Domain.QuestionSpec<Domain.ConstructId>;
+            /** @description Initial outcome-only model. */
+            readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Output"];
+            /** @description Initial specification and question findings. */
+            readonly checks: components["schemas"]["ModelCheckReport"];
+            /** @description Initial causal identification findings. */
+            readonly identification: components["schemas"]["IdentificationReport"];
         };
         /**
          * EditQuestionRequest
-         * @description Save the supplied question; the successful body is ``EditQuestionOutput``.
+         * @description Save the question and initial model; the successful body is ``EditQuestionOutput``.
          */
         readonly "EditQuestionRequest-Input": {
             /**
@@ -3738,7 +3917,7 @@ export interface components {
         };
         /**
          * EditQuestionRequest
-         * @description Save the supplied question; the successful body is ``EditQuestionOutput``.
+         * @description Save the question and initial model; the successful body is ``EditQuestionOutput``.
          */
         readonly "EditQuestionRequest-Output": {
             /**
@@ -3887,6 +4066,8 @@ export interface components {
         };
         /** @description An execution message retains a lifecycle entry, structured progress, an LLM trace, or failure details. */
         readonly ExecutionMessage: components["schemas"]["ActionMessage"] | components["schemas"]["ProgressMessage"] | components["schemas"]["TraceLogMessage"] | components["schemas"]["FailureMessage"];
+        /** @description A scalar expression composes supported arithmetic with scientific state and coefficient references. */
+        readonly "Expression-Input": components["schemas"]["LiteralExpression-Input"] | components["schemas"]["StateExpression-Input"] | components["schemas"]["CoefficientExpression-Input"] | components["schemas"]["BinaryExpression-Input"] | components["schemas"]["CallExpression-Input"];
         /** @description A scalar expression composes supported arithmetic with scientific state and coefficient references. */
         readonly "Expression-Output": components["schemas"]["LiteralExpression-Output"] | components["schemas"]["StateExpression-Output"] | components["schemas"]["CoefficientExpression-Output"] | components["schemas"]["BinaryExpression-Output"] | components["schemas"]["CallExpression-Output"];
         /**
@@ -4515,6 +4696,19 @@ export interface components {
          * GammaLawSpec[Expression]
          * @description The Gamma conditional law.
          */
+        readonly "GammaLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Gamma";
+            readonly concentration: components["schemas"]["Expression-Input"];
+            readonly rate: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * GammaLawSpec[Expression]
+         * @description The Gamma conditional law.
+         */
         readonly "GammaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -4770,6 +4964,22 @@ export interface components {
              */
             readonly kind: "indicator";
             readonly id: components["schemas"]["IndicatorId-Output"];
+        };
+        /**
+         * IndicatorSpec
+         * @description Bind an observed-variable ID to a construct and an emission likelihood.
+         *
+         *     Extraction instructions belong to DataPreparationSpec. The shared observation
+         *     schema also permits generative models before any observations have been collected.
+         */
+        readonly "IndicatorSpec-Input": {
+            readonly observation: components["schemas"]["ObservationSpec_Annotated_Union_ObservationWindow__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___-Input"];
+            /** @description What this indicator measures and how it is read (for example exact, noisy or rounded), including why its observation law is appropriate. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Input"];
+            /** @default null */
+            readonly likelihood?: components["schemas"]["LikelihoodSpec-Input"] | null;
+            /** @description Whether higher values move with (positive) or against (negative) the construct. */
+            readonly construct_polarity: components["schemas"]["IndicatorPolarity"];
         };
         /**
          * IndicatorSpec
@@ -5262,6 +5472,19 @@ export interface components {
          * LikelihoodSpec
          * @description An indicator's conditional probability law and observation standardization.
          */
+        readonly "LikelihoodSpec-Input": {
+            readonly law: components["schemas"]["ObservationLawSpec-Input"];
+            /**
+             * Standardized
+             * @description Whether observations are mean-centered and scaled before fitting.
+             * @default false
+             */
+            readonly standardized?: boolean;
+        };
+        /**
+         * LikelihoodSpec
+         * @description An indicator's conditional probability law and observation standardization.
+         */
         readonly "LikelihoodSpec-Output": {
             readonly law: components["schemas"]["ObservationLawSpec-Output"];
             /**
@@ -5270,6 +5493,19 @@ export interface components {
              * @default false
              */
             readonly standardized: boolean;
+        };
+        /**
+         * LiteralExpression
+         * @description A finite scalar constant in a model equation.
+         */
+        readonly "LiteralExpression-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "literal";
+            /** Value */
+            readonly value: number;
         };
         /**
          * LiteralExpression
@@ -5394,28 +5630,28 @@ export interface components {
         };
         /**
          * ModelDiffInput[GitOid]
-         * @description Base and target specs for a directional patch, selected by question or model revisions.
+         * @description Base and target specs for a directional patch, selected by model revisions.
          *
          *     The selections need not be chronologically ordered or share an editing parent.
          *     Before/after determine patch direction; ModelDiffOutput defines its contract.
          */
         readonly ModelDiffInput_GitOid_: {
-            /** @description Question or model revision used as the base; a question denotes an empty spec. */
+            /** @description Model revision used as the base, including the initial outcome-only model. */
             readonly before_ref: components["schemas"]["GitOid-Output"];
-            /** @description Question or model revision reconstructed by applying the patch to the base. */
+            /** @description Model revision reconstructed by applying the patch to the base. */
             readonly after_ref: components["schemas"]["GitOid-Output"];
         };
         /**
          * ModelDiffInput[RevisionSelector]
-         * @description Base and target specs for a directional patch, selected by question or model revisions.
+         * @description Base and target specs for a directional patch, selected by model revisions.
          *
          *     The selections need not be chronologically ordered or share an editing parent.
          *     Before/after determine patch direction; ModelDiffOutput defines its contract.
          */
         readonly ModelDiffInput_RevisionSelector_: {
-            /** @description Question or model revision used as the base; a question denotes an empty spec. */
+            /** @description Model revision used as the base, including the initial outcome-only model. */
             readonly before_ref: components["schemas"]["RevisionSelector"];
-            /** @description Question or model revision reconstructed by applying the patch to the base. */
+            /** @description Model revision reconstructed by applying the patch to the base. */
             readonly after_ref: components["schemas"]["RevisionSelector"];
         };
         /**
@@ -5429,7 +5665,7 @@ export interface components {
          *     are computed here; those remain owned by their producing actions.
          */
         readonly ModelDiffOutput: {
-            /** @description Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec. */
+            /** @description Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. Both revisions select saved models. */
             readonly changes: components["schemas"]["DynamicalModelSpec-Input"];
         };
         /**
@@ -5504,7 +5740,7 @@ export interface components {
          */
         readonly ModelSnapshot: {
             /** @default null */
-            readonly question: components["schemas"]["QuestionSpec-Output"] | null;
+            readonly question: Domain.QuestionSpec<Domain.ConstructId> | null;
             /** @default null */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Output"] | null;
             /** Workspace Id */
@@ -5575,6 +5811,19 @@ export interface components {
          * NegativeBinomial2LawSpec[Expression]
          * @description The NegativeBinomial2 conditional law.
          */
+        readonly "NegativeBinomial2LawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "NegativeBinomial2";
+            readonly mean: components["schemas"]["Expression-Input"];
+            readonly concentration: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * NegativeBinomial2LawSpec[Expression]
+         * @description The NegativeBinomial2 conditional law.
+         */
         readonly "NegativeBinomial2LawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5636,6 +5885,19 @@ export interface components {
              * @description Unobserved constructs blocking identification
              */
             readonly confounders: readonly components["schemas"]["ConstructId-Output"][];
+        };
+        /**
+         * NormalLawSpec[Expression]
+         * @description The Normal conditional law.
+         */
+        readonly "NormalLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Normal";
+            readonly loc: components["schemas"]["Expression-Input"];
+            readonly scale: components["schemas"]["Expression-Input"];
         };
         /**
          * NormalLawSpec[Expression]
@@ -5972,7 +6234,27 @@ export interface components {
             readonly support_end: components["schemas"]["ScalarValues"];
             readonly empirical: components["schemas"]["EmpiricalDistribution"];
         };
+        readonly "ObservationLawSpec-Input": components["schemas"]["DeltaLawSpec_Expression_-Input"] | components["schemas"]["NormalLawSpec_Expression_-Input"] | components["schemas"]["StudentTLawSpec_Expression_-Input"] | components["schemas"]["PoissonLawSpec_Expression_-Input"] | components["schemas"]["GammaLawSpec_Expression_-Input"] | components["schemas"]["BernoulliLogitsLawSpec_Expression_-Input"] | components["schemas"]["BernoulliProbsLawSpec_Expression_-Input"] | components["schemas"]["NegativeBinomial2LawSpec_Expression_-Input"] | components["schemas"]["BetaLawSpec_Expression_-Input"] | components["schemas"]["OrderedLogisticLawSpec_Expression_-Input"] | components["schemas"]["CategoricalLawSpec_Expression_-Input"];
         readonly "ObservationLawSpec-Output": Domain.DeltaLawSpec<Domain.Expression> | Domain.NormalLawSpec<Domain.Expression> | Domain.StudentTLawSpec<Domain.Expression> | Domain.PoissonLawSpec<Domain.Expression> | Domain.GammaLawSpec<Domain.Expression> | Domain.BernoulliLogitsLawSpec<Domain.Expression> | Domain.BernoulliProbsLawSpec<Domain.Expression> | Domain.NegativeBinomial2LawSpec<Domain.Expression> | Domain.BetaLawSpec<Domain.Expression> | Domain.OrderedLogisticLawSpec<Domain.Expression> | Domain.CategoricalLawSpec<Domain.Expression>;
+        /** ObservationSpec[Annotated[Union[ObservationWindow, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]] */
+        readonly "ObservationSpec_Annotated_Union_ObservationWindow__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___-Input": {
+            /** @description Persistent identity. Preserve when revising or renaming. */
+            readonly id: components["schemas"]["IndicatorId-Input"];
+            /**
+             * Name
+             * @description Indicator name (e.g., 'hrv', 'self_reported_stress')
+             */
+            readonly name: string;
+            /** @description How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1. */
+            readonly measurement: components["schemas"]["Measurement"];
+            /** @description Aggregation function applied when bucketing raw extractions within the indicator support window. Supported operators: first, last, sum, count, mean, std. A computed_rule must produce this same summary. */
+            readonly aggregation: components["schemas"]["SummaryOperator"];
+            /**
+             * @description Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock.
+             * @default null
+             */
+            readonly observation_window?: components["schemas"]["ObservationWindow"] | null;
+        };
         /** ObservationSpec[Annotated[Union[ObservationWindow, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]] */
         readonly "ObservationSpec_Annotated_Union_ObservationWindow__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___-Output": {
             /** @description Persistent identity. Preserve when revising or renaming. */
@@ -6009,6 +6291,19 @@ export interface components {
             readonly observation_window: components["schemas"]["ObservationWindow"];
         };
         readonly ObservationWindow: string;
+        /**
+         * OrderedLogisticLawSpec[Expression]
+         * @description The OrderedLogistic conditional law.
+         */
+        readonly "OrderedLogisticLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "OrderedLogistic";
+            readonly predictor: components["schemas"]["Expression-Input"];
+            readonly cutpoints: components["schemas"]["Expression-Input"];
+        };
         /**
          * OrderedLogisticLawSpec[Expression]
          * @description The OrderedLogistic conditional law.
@@ -6534,6 +6829,18 @@ export interface components {
          * PoissonLawSpec[Expression]
          * @description The Poisson conditional law.
          */
+        readonly "PoissonLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "Poisson";
+            readonly rate: components["schemas"]["Expression-Input"];
+        };
+        /**
+         * PoissonLawSpec[Expression]
+         * @description The Poisson conditional law.
+         */
         readonly "PoissonLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -6584,6 +6891,19 @@ export interface components {
             readonly overlays: readonly components["schemas"]["PPCOverlay"][];
             /** Test Stats */
             readonly test_stats: readonly components["schemas"]["PPCTestStat"][];
+        };
+        /**
+         * PotentialMechanismSpec
+         * @description A construct potential whose negative gradient contributes to its drift.
+         */
+        readonly "PotentialMechanismSpec-Input": {
+            readonly id: components["schemas"]["MechanismId-Input"];
+            readonly expression: components["schemas"]["Expression-Input"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "potential";
         };
         /**
          * PotentialMechanismSpec
@@ -6824,35 +7144,8 @@ export interface components {
             /** Findings */
             readonly findings: readonly components["schemas"]["QuestionAssessment"][];
         };
-        /**
-         * QuestionSpec
-         * @description What the study asks: the user's words, the outcome, and named contrasts.
-         *
-         *     Each query is a contrast of its interventions against the recorded course.
-         *     Constructs are named by identity before a model defines them.
-         */
-        readonly "QuestionSpec-Input": {
-            /**
-             * Text
-             * @description The user's question in their own words.
-             */
-            readonly text: string;
-            /** @description The construct whose course answers the question. */
-            readonly outcome: components["schemas"]["ConstructId-Input"];
-            /**
-             * Queries
-             * @description Named contrasts against the recorded course, each with at least one intervention.
-             */
-            readonly queries?: Readonly<Partial<Record<components["schemas"]["QueryName"], components["schemas"]["SimulationSpec-Input"]>>>;
-        };
-        /**
-         * QuestionSpec
-         * @description What the study asks: the user's words, the outcome, and named contrasts.
-         *
-         *     Each query is a contrast of its interventions against the recorded course.
-         *     Constructs are named by identity before a model defines them.
-         */
-        readonly "QuestionSpec-Output": {
+        /** QuestionSpec[ConstructId] */
+        readonly QuestionSpec_ConstructId_: {
             /**
              * Text
              * @description The user's question in their own words.
@@ -6860,6 +7153,36 @@ export interface components {
             readonly text: string;
             /** @description The construct whose course answers the question. */
             readonly outcome: components["schemas"]["ConstructId-Output"];
+            /**
+             * Queries
+             * @description Named contrasts against the recorded course, each with at least one intervention.
+             */
+            readonly queries: Readonly<Partial<Record<components["schemas"]["QueryName"], components["schemas"]["SimulationSpec-Output"]>>>;
+        };
+        /** QuestionSpec[ConstructSpec] */
+        readonly "QuestionSpec_ConstructSpec_-Input": {
+            /**
+             * Text
+             * @description The user's question in their own words.
+             */
+            readonly text: string;
+            /** @description The construct whose course answers the question. */
+            readonly outcome: components["schemas"]["ConstructSpec-Input"];
+            /**
+             * Queries
+             * @description Named contrasts against the recorded course, each with at least one intervention.
+             */
+            readonly queries?: Readonly<Partial<Record<components["schemas"]["QueryName"], components["schemas"]["SimulationSpec-Input"]>>>;
+        };
+        /** QuestionSpec[ConstructSpec] */
+        readonly "QuestionSpec_ConstructSpec_-Output": {
+            /**
+             * Text
+             * @description The user's question in their own words.
+             */
+            readonly text: string;
+            /** @description The construct whose course answers the question. */
+            readonly outcome: components["schemas"]["ConstructSpec-Output"];
             /**
              * Queries
              * @description Named contrasts against the recorded course, each with at least one intervention.
@@ -6922,6 +7245,23 @@ export interface components {
             readonly stretches: number;
             readonly refresh_quantiles: components["schemas"]["MovementQuantiles"] | null;
             readonly delta_quantiles: components["schemas"]["MovementQuantiles"] | null;
+        };
+        /**
+         * ReasoningSpec
+         * @description A scientific explanation with a consistent list of numbered references.
+         */
+        readonly "ReasoningSpec-Input": {
+            /**
+             * Text
+             * @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.
+             */
+            readonly text: string;
+            /**
+             * Reference Urls
+             * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+             * @default []
+             */
+            readonly reference_urls?: readonly string[];
         };
         /**
          * ReasoningSpec
@@ -7547,6 +7887,18 @@ export interface components {
          * StateExpression
          * @description A construct's state or declared known input, referenced by identity.
          */
+        readonly "StateExpression-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "state";
+            readonly construct_id: components["schemas"]["ConstructId-Input"];
+        };
+        /**
+         * StateExpression
+         * @description A construct's state or declared known input, referenced by identity.
+         */
         readonly "StateExpression-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7591,6 +7943,20 @@ export interface components {
         };
         /** @enum {string} */
         readonly StepStatus: "running" | "completed" | "failed";
+        /**
+         * StudentTLawSpec[Expression]
+         * @description The StudentT conditional law.
+         */
+        readonly "StudentTLawSpec_Expression_-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly distribution: "StudentT";
+            readonly df: components["schemas"]["Expression-Input"];
+            readonly loc: components["schemas"]["Expression-Input"];
+            readonly scale: components["schemas"]["Expression-Input"];
+        };
         /**
          * StudentTLawSpec[Expression]
          * @description The StudentT conditional law.

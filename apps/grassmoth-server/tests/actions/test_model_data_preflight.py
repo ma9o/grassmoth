@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from grassmoth.actions.checks import check_specification
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
@@ -22,7 +22,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import edit_and_check, prepared_profile
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import initial_model_record, write_question
 from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
 from grassmoth_server_test_support.storage import seed_record
@@ -61,7 +61,7 @@ def test_specification_reports_each_distinct_fit_law_reason_once(monkeypatch):
     assert finding.evidence.count("Invalid scale.") == 1
 
 
-def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch):
+def test_noisy_interval_summary_is_rejected_before_sampler_dispatch(monkeypatch):
     from grassmoth.models.ssm.inference.samplers.mpgibbs import (
         fit as marginal_particle_gibbs,
     )
@@ -92,14 +92,11 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
         sampler=sampler,
         execution_context=execution_context,
     )
-    assert result is dispatch.return_value
-    dispatch.assert_called_once_with(
-        prepared.inputs.prior_runtime_bundle,
-        prepared.panel,
-        sampler=sampler,
-        execution_context=execution_context,
-        continuation=None,
-    )
+    from grassmoth.models.ssm.inference.fit import ObservationPreflightFailure
+
+    assert isinstance(result, ObservationPreflightFailure)
+    assert "Interval readings" in result.message
+    dispatch.assert_not_called()
 
 
 def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeypatch):
@@ -133,7 +130,7 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         [
             write_question(
                 store,
-                QuestionSpec(
+                QuestionSpec[ConstructId](
                     text="How does sleep change?",
                     outcome=construct_named(stress_sleep_causal_model(), "Sleep").id,
                 ),
@@ -141,11 +138,12 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
             record,
         ]
     )
+    state = state.with_artifacts([initial_model_record(store, state.current["question"])])
     edited = edit_and_check(
         "TEST",
         EditModelRequest[GitOid](
             input=EditModelInput[GitOid](
-                parent_ref=state.current["question"].revision,
+                parent_ref=state.current["model"].revision,
                 dynamical_model_spec=stress_sleep_causal_model(),
             )
         ),

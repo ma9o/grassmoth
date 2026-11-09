@@ -98,12 +98,24 @@ class Study:
                 return {item["artifact_id"]: item["revision"] for item in effects["produced"]}
         raise ActionFailed(f"no journal entry {commit_id}")
 
-    def question(self) -> str:
-        payload = {"question": {"text": QUESTION, "outcome": "construct:x", "queries": {}}}
-        return self.produced(self.run("edit_question", payload)["commit_id"])["question"]
+    def initial_model(self) -> str:
+        payload = {
+            "question": {
+                "text": QUESTION,
+                "outcome": {
+                    "id": "construct:x",
+                    "name": "x",
+                    "reasoning": {"text": QUESTION},
+                    "role": "endogenous",
+                    "temporal_status": "time_varying",
+                },
+                "queries": {},
+            }
+        }
+        return self.produced(self.run("edit_question", payload)["commit_id"])["model"]
 
-    def model(self, question: str, spec: Json) -> str:
-        envelope = self.run("edit_model", {"parent_ref": question, "dynamical_model_spec": spec})
+    def model(self, parent: str, spec: Json) -> str:
+        envelope = self.run("edit_model", {"parent_ref": parent, "dynamical_model_spec": spec})
         return self.produced(envelope["commit_id"])["model"]
 
     def simulate(self, model: str, *, seed: int = 7) -> tuple[str, Json]:

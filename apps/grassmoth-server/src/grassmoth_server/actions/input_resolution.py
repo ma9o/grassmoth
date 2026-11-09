@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from grassmoth_server.study.persistence.history import StudyRepository
     from grassmoth_server.study.persistence.store import ArtifactStore
 
-type RevisionInputKind = Literal["question", "model", "panel", "simulation", "model_parent", "fit"]
+type RevisionInputKind = Literal["model", "panel", "simulation", "fit"]
 
 
 def resolve_action_inputs(
@@ -55,7 +55,7 @@ def resolve_action_inputs(
 ]:
     """Pin selectors before call identity, keeping unpublished and failed outputs ineligible.
 
-    Question, model and panel selectors use derived current selections, honoring retractions
+    Model and panel selectors use derived current selections, honoring retractions
     and input freshness. Simulation and fit selectors use submission order.
     Explicit hashes retain their meaning.
     """
@@ -65,8 +65,6 @@ def resolve_action_inputs(
 
     @cache
     def latest(kind: RevisionInputKind) -> GitOid:
-        if kind == "model_parent":
-            return latest("model" if state.has("model") else "question")
         if kind == "simulation" or kind == "fit":
             for revision in reversed(records):
                 attempt = revision.record.attempt
@@ -100,7 +98,7 @@ def resolve_action_inputs(
             resolved = EditModelRequest[GitOid](
                 reasoning=request.reasoning,
                 input=EditModelInput[GitOid](
-                    parent_ref=resolve(request.input.parent_ref, "model_parent"),
+                    parent_ref=resolve(request.input.parent_ref, "model"),
                     dynamical_model_spec=request.input.dynamical_model_spec,
                 ),
             )
@@ -158,22 +156,18 @@ def resolve_action_inputs(
             resolved = ModelDiffRequest[GitOid](
                 reasoning=request.reasoning,
                 input=ModelDiffInput[GitOid](
-                    before_ref=resolve(request.input.before_ref, "model_parent"),
-                    after_ref=resolve(request.input.after_ref, "model_parent"),
+                    before_ref=resolve(request.input.before_ref, "model"),
+                    after_ref=resolve(request.input.after_ref, "model"),
                 ),
             )
     return resolved, contents
 
 
 def model_edit_state(store: ArtifactStore, parent_ref: GitOid) -> StudyState:
-    """Resolve a question parent or a model parent with its pinned question."""
-    parent = store.read_record(parent_ref)
-    if parent.artifact_id == "question":
-        return StudyState(current={"question": parent})
-    if parent.artifact_id == "model":
-        question = store.read_meta("question", parent.derived_from["question"])
-        return StudyState(current={"question": question, "model": parent})
-    raise StudyLookupError("Model edits require a question or model parent")
+    """Resolve a model parent and its pinned question."""
+    parent = store.read_meta("model", parent_ref)
+    question = store.read_meta("question", parent.derived_from["question"])
+    return StudyState(current={"question": question, "model": parent})
 
 
 def _source_files(

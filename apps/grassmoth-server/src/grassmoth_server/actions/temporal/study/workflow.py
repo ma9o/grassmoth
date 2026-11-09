@@ -230,7 +230,7 @@ class StudyWorkflow:
                     else _ACTIVITY_RETRY,
                 )
             if isinstance(
-                action, (EditModelRequest, FitRequest, PrepareDataRequest)
+                action, (EditQuestionRequest, EditModelRequest, FitRequest, PrepareDataRequest)
             ) and isinstance(attempt.outcome, Applied):
                 result = attempt.outcome
                 running = running.with_messages(

@@ -13,6 +13,7 @@ import polars as pl
 
 from grassmoth.actions.contracts.io import FitInputs, FitOutput
 from grassmoth.actions.fit.action import fit
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.reports.inference import FitRuntime
@@ -38,7 +39,7 @@ ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
 def fixture(scale=1.0, offset=0.0):
     model = json.loads((ROOT / "benchmarks/cases/suite/C0/fit.json").read_text())
     model["distributions"]["distribution:tiny-beta"]["params"]["scale"] = scale
-    question = QuestionSpec.model_validate(
+    question = QuestionSpec[ConstructId].model_validate(
         {
             "text": "Identify the input effect on y.",
             "outcome": "construct:y",

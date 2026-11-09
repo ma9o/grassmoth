@@ -44,7 +44,7 @@ def _format_indicators(measurement_structure: MeasurementContext) -> str:
 class WorkerMessages:
     """Build the prompt messages for one measurement-extraction chunk."""
 
-    question: str
+    context: str
     measurement_structure: MeasurementContext
     window_text: str
     n_windows: int
@@ -57,7 +57,7 @@ class WorkerMessages:
             {
                 "role": "user",
                 "content": USER.format(
-                    question=self.question,
+                    context=self.context,
                     indicators=indicators_text,
                     n_windows=self.n_windows,
                     window_text=self.window_text,

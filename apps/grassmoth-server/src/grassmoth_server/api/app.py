@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 _API_DESCRIPTION = """\
-Seven actions carry out a study. Set the question with `edit_question` and build
+Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend
 the model with `edit_model`. Upload tables with `/api/upload`, extract
 observations with `prepare_data`, and condition the model on them with `fit`.
 `simulate` samples an authored or fitted model; `data_diff` and `model_diff`

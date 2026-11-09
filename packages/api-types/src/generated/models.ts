@@ -238,7 +238,6 @@ export type QueryTargetSubject = components["schemas"]["QueryTargetSubject"];
 export type QueryWindowSubject = components["schemas"]["QueryWindowSubject"];
 export type QuestionAssessment = components["schemas"]["QuestionAssessment"];
 export type QuestionCheckReport = components["schemas"]["QuestionCheckReport"];
-export type QuestionSpec = components["schemas"]["QuestionSpec-Output"];
 export type QuestionSubject = components["schemas"]["QuestionSubject"];
 export type Raised = components["schemas"]["Raised"];
 export type RankHistogram = components["schemas"]["RankHistogram"];
@@ -426,10 +425,10 @@ export type DeltaLawSpec<A> = {
 export type EditModelInput<RevisionT> = {
     /**
      * Parent Ref
-     * @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head.
+     * @description Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model.
      */
     readonly parent_ref: RevisionT;
-    /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
+    /** @description Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
     readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
 };
 export type EditModelRequest<RevisionT> = {
@@ -508,12 +507,12 @@ export type GammaLawSpec<A> = {
 export type ModelDiffInput<RevisionT> = {
     /**
      * Before Ref
-     * @description Question or model revision used as the base; a question denotes an empty spec.
+     * @description Model revision used as the base, including the initial outcome-only model.
      */
     readonly before_ref: RevisionT;
     /**
      * After Ref
-     * @description Question or model revision reconstructed by applying the patch to the base.
+     * @description Model revision reconstructed by applying the patch to the base.
      */
     readonly after_ref: RevisionT;
 };
@@ -661,6 +660,23 @@ export type PrepareDataRequest<RevisionT, SourceT> = {
      * @default null
      */
     readonly reasoning: string | null;
+};
+export type QuestionSpec<OutcomeT> = {
+    /**
+     * Text
+     * @description The user's question in their own words.
+     */
+    readonly text: string;
+    /**
+     * Outcome
+     * @description The construct whose course answers the question.
+     */
+    readonly outcome: OutcomeT;
+    /**
+     * Queries
+     * @description Named contrasts against the recorded course, each with at least one intervention.
+     */
+    readonly queries: Readonly<Partial<Record<QueryName, SimulationSpec>>>;
 };
 export type Removed<PayloadT> = {
     /**

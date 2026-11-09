@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import Field, model_validator
 
 from grassmoth.public import (
+    ConstructId,
     DataProfileReport,
     DynamicalModelSpec,
     FitCheckReport,
@@ -24,7 +25,7 @@ from grassmoth_server.study.state import StudyState
 class ModelSnapshot(Value):
     """Scientific values selected from recorded action dependencies."""
 
-    question: QuestionSpec | None = None
+    question: QuestionSpec[ConstructId] | None = None
     dynamical_model_spec: DynamicalModelSpec | None = None
     workspace_id: str = Field(min_length=1)
     commit_id: GitOid

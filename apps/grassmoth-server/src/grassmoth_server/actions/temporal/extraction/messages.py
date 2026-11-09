@@ -134,7 +134,7 @@ class MeasurementsFinalizeInput(BaseModel):
 class MeasurementChunkContext(BaseModel):
     """Stored input of one foreign extraction subroutine, composing its measurement owner."""
 
-    question: str
+    context: str
     window_text: str
     window_starts: list[str]
     measurement_structure: MeasurementContext

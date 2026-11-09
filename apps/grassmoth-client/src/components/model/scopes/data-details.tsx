@@ -1,11 +1,8 @@
-import type { FileSourceRef, PrepareDataOutput } from "@grassmoth/api-types";
-import type { TimelineRevision } from "@grassmoth/api-types";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { ObservationPlots } from "./recorded-history";
 import { humanize, type EntitySelection } from "@/lib/model-asset/selection";
-import { timelineTickLabel } from "@/lib/model-asset/timeline-presentation";
 import { formatModelDate } from "@/lib/utils/format";
-import { Hint, KeyValue, OwnerLink, Section, StatusIcon } from "../scope-primitives";
+import { Hint, Section, StatusIcon } from "../scope-primitives";
 import type { DataComparisonView, DataVariableView } from "@/lib/model-asset/data-comparison";
 import { PPCWarningsTable } from "@/components/analysis-widgets/posterior/ppc-warnings-table";
 import { ChartFigure } from "@/components/charts/chart-figure";
@@ -17,85 +14,6 @@ import { dataComparisonChart } from "@/components/charts/series-adapters";
 
 function comparisonEvaluation(variable: DataVariableView) {
   return variable.predictive?.evaluation ?? null;
-}
-
-export function DataComparisonOutcome({
-  context,
-  report,
-}: {
-  context: ScopeContext;
-  report: DataComparisonView;
-}) {
-  return (
-    <Section title="Data comparison">
-      {(["left", "right"] as const).map((side) => (
-        <p key={side}>
-          {side === "left" ? "Left" : "Right"}: {dataSelectionLabel(report, side, context.ticks)}
-        </p>
-      ))}
-      {report.variables.map((variable) => {
-        const evaluation = comparisonEvaluation(variable);
-        const checks = evaluation && !("kind" in evaluation) ? evaluation : null;
-        const definition = [...variable.left, ...variable.right]
-          .flatMap((history) => history?.variable ?? [])
-          .at(0);
-        const reasons = [
-          ...variable.findings
-            .filter((finding) => finding.kind === "not_evaluated" || finding.outcome === "failed")
-            .map((finding) => (finding.kind === "evaluated" ? finding.evidence : finding.detail)),
-          ...(checks?.findings
-            .filter((finding) => finding.kind !== "evaluated" || finding.outcome !== "passed")
-            .map((finding) =>
-              finding.kind === "evaluated" ? finding.evidence.note : finding.detail,
-            ) ?? []),
-          ...(evaluation && "kind" in evaluation ? [evaluation.detail] : []),
-        ];
-        return reasons.map((reason) => (
-          <p key={`${variable.indicator_id}-${reason}`}>
-            <OwnerLink
-              onClick={() => context.select({ kind: "indicator", id: variable.indicator_id })}
-            >
-              {humanize(definition?.name ?? variable.indicator_id)}
-            </OwnerLink>
-            : {reason}
-          </p>
-        ));
-      })}
-    </Section>
-  );
-}
-
-function dataSelectionLabel(
-  report: DataComparisonView,
-  side: "left" | "right",
-  ticks: readonly TimelineRevision[],
-) {
-  const sources = report[side];
-  return [...new Map(sources.map((source) => [source.revision, source])).values()]
-    .map((source) => {
-      if (
-        ticks.some(
-          (tick) => tick.commit_id === source.revision && tick.record.attempt.action === "simulate",
-        )
-      ) {
-        const count = sources.filter((item) => item.revision === source.revision).length;
-        return `${count} replicates from simulate ${source.revision.slice(0, 7)}`;
-      }
-      const tick = ticks.find(
-        (tick) =>
-          tick.record.attempt.outcome.status === "applied" &&
-          tick.record.attempt.outcome.effects.produced.some(
-            (artifact) => artifact.artifact_id === "panel" && artifact.revision === source.revision,
-          ),
-      );
-      const variables = report.variables.filter((variable) =>
-        variable[side].some(
-          (history, index) => history !== null && sources[index]?.revision === source.revision,
-        ),
-      ).length;
-      return `Panel from ${tick ? timelineTickLabel(tick) : source.revision.slice(0, 7)} (${variables} variables)`;
-    })
-    .join("; ");
 }
 
 export function DataComparisonEvidence({
@@ -296,29 +214,5 @@ export function PreparedObservations({ context }: { context: ScopeContext }) {
         </Section>
       )}
     </>
-  );
-}
-
-export function DataDetails({
-  applied,
-  source,
-}: {
-  applied: PrepareDataOutput;
-  source: FileSourceRef;
-}) {
-  const { variables } = applied.metadata;
-  return (
-    <Section title="Prepared data">
-      <KeyValue
-        rows={[
-          ...([
-            ["Files", source.files.join(", ")],
-            ["Start (inclusive)", source.start ?? "Unbounded"],
-            ["End (exclusive)", source.end ?? "Unbounded"],
-          ] as Array<[string, string]>),
-          ["Variables", String(variables.length)],
-        ]}
-      />
-    </Section>
   );
 }

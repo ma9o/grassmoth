@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.preparation import SemanticExtractionSpec
@@ -56,6 +56,7 @@ from grassmoth_server.storage import paths as data
 from grassmoth_server.study import calls as study_api
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import Applied, Rejected
+from grassmoth_server_test_support.question import authored_question
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id
 from grassmoth_test_support.values import revise_fixture
@@ -79,9 +80,11 @@ async def _execute_action(
     [
         EditQuestionRequest(
             input=EditQuestionInput(
-                question=QuestionSpec(
-                    text="Does exercise improve sleep?",
-                    outcome=fixture_entity_id("construct", "sleep"),
+                question=authored_question(
+                    QuestionSpec[ConstructId](
+                        text="Does exercise improve sleep?",
+                        outcome=fixture_entity_id("construct", "sleep"),
+                    )
                 )
             )
         ),
@@ -149,8 +152,11 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     request = EditQuestionRequest(
         reasoning="Define the outcome to guide model construction.",
         input=EditQuestionInput(
-            question=QuestionSpec(
-                text="Does exercise improve sleep?", outcome=fixture_entity_id("construct", "sleep")
+            question=authored_question(
+                QuestionSpec[ConstructId](
+                    text="Does exercise improve sleep?",
+                    outcome=fixture_entity_id("construct", "sleep"),
+                )
             )
         ),
     )
@@ -170,6 +176,12 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
                 entered.set()
                 await release.wait()
                 return await edit_question_activity(payload)
+            if name == "evaluate_model_checks_activity":
+                from grassmoth_server.actions.temporal.study.activities import (
+                    evaluate_model_checks_activity,
+                )
+
+                return await evaluate_model_checks_activity(payload)
             if name == "journal_activity":
                 return await journal_activity(payload)
             if name == "collect_completed_runs_activity":
@@ -217,8 +229,10 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
         failure = EditQuestionRequest(
             reasoning="Reframe the study goal.",
             input=EditQuestionInput(
-                question=QuestionSpec(
-                    text="A different question", outcome=fixture_entity_id("construct", "sleep")
+                question=authored_question(
+                    QuestionSpec[ConstructId](
+                        text="A different question", outcome=fixture_entity_id("construct", "sleep")
+                    )
                 )
             ),
         )
@@ -252,8 +266,12 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert set(result) == {"call_id", "action", "status", "commit_id", "body", "messages"}
     assert result["status"] == "success"
     assert result["call_id"] == call_identity(request)
-    assert result["body"]["question"] == request.input.question.model_dump(mode="json")
-    assert set(result["body"]) == {"question"}
+    assert result["body"]["question"] == {
+        "text": request.input.question.text,
+        "outcome": request.input.question.outcome.id,
+        "queries": {},
+    }
+    assert set(result["body"]) == {"question", "dynamical_model_spec", "checks", "identification"}
     assert (
         client.get(f"/api/studies/CALLS/edit_question/{result['call_id']}").content == first.content
     )
@@ -282,7 +300,12 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
             "/api/studies/CALLS/edit_question",
             json={
                 "action": "edit_question",
-                "input": {"question": {"text": "Unsaved", "outcome": "construct:sleep"}},
+                "input": {
+                    "question": {
+                        "text": "Unsaved",
+                        "outcome": request.input.question.outcome.model_dump(mode="json"),
+                    }
+                },
             },
         ).status_code
         == 403
@@ -294,8 +317,10 @@ def test_get_reads_running_call_without_starting_workflow_or_work(tmp_path, monk
     monkeypatch.delenv("READ_ONLY_FACADE", raising=False)
     request = EditQuestionRequest(
         input=EditQuestionInput(
-            question=QuestionSpec(
-                text="A question", outcome=fixture_entity_id("construct", "sleep")
+            question=authored_question(
+                QuestionSpec[ConstructId](
+                    text="A question", outcome=fixture_entity_id("construct", "sleep")
+                )
             )
         )
     )
@@ -361,7 +386,9 @@ def test_running_timeline_discovers_calls_without_collecting_execution_logs(monk
 
     request = EditQuestionRequest(
         input=EditQuestionInput(
-            question=QuestionSpec(text="Timeline?", outcome="construct:outcome")
+            question=authored_question(
+                QuestionSpec[ConstructId](text="Timeline?", outcome="construct:outcome")
+            )
         )
     )
     running = RunningCall(attempt_id=UUID(int=11), seq=1, request=request)

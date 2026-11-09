@@ -8,8 +8,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from grassmoth.actions.contracts.io import EditQuestionOutput
 from grassmoth.artifacts.arrays import NumericalArray
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import EditQuestionInput
@@ -20,6 +20,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_question
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied, AttemptRecord, EditQuestionAttempt
+from grassmoth_server_test_support.question import authored_question, question_output
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
@@ -38,11 +39,11 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     workspace = "RESULTS"
     store = ArtifactStore(workspace)
     repository = StudyRepository(workspace)
-    question = QuestionSpec(
+    question = QuestionSpec[ConstructId](
         text="What changes the outcome?", outcome=fixture_entity_id("construct", "outcome")
     )
-    request = EditQuestionRequest(input=EditQuestionInput(question=question))
-    result = EditQuestionOutput(question=question)
+    request = EditQuestionRequest(input=EditQuestionInput(question=authored_question(question)))
+    result = question_output(question)
     ref = store.write_result(result, call_id=call_identity(request))
     artifact = store.result_record("question", ref, derived_from={}, produced_by="edit_question")
     revision = repository.append(
@@ -222,13 +223,16 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "MODEL_REFS"
     question_root(
-        workspace, QuestionSpec(text="What changes Y?", outcome=fixture_entity_id("construct", "Y"))
+        workspace,
+        QuestionSpec[ConstructId](
+            text="What changes Y?", outcome=fixture_entity_id("construct", "Y")
+        ),
     )
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     dynamical_model_spec = make_model(["X", "Y"], [("X", "Y")])
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
-            parent_ref=repository.question().revision,
+            parent_ref=repository.state().current["model"].revision,
             dynamical_model_spec=dynamical_model_spec,
         )
     )

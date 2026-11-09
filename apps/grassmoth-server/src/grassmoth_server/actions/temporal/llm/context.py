@@ -23,7 +23,7 @@ def subroutine_context_messages(
 
     spec = read_subroutine_json(context_ref, MeasurementChunkContext)
     messages = WorkerMessages(
-        question=spec.question,
+        context=spec.context,
         measurement_structure=spec.measurement_structure,
         window_text=spec.window_text,
         n_windows=len(spec.window_starts),

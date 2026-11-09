@@ -151,7 +151,13 @@ def run_study(
                 {
                     "question": {
                         "text": "How persistent is daily volatility?",
-                        "outcome": "construct:h",
+                        "outcome": {
+                            "id": "construct:h",
+                            "name": "Daily volatility",
+                            "reasoning": {"text": "The modeled course of daily volatility."},
+                            "role": "endogenous",
+                            "temporal_status": "time_varying",
+                        },
                         "queries": {},
                     }
                 },
@@ -159,7 +165,7 @@ def run_study(
             truth = run(
                 "edit_model",
                 {
-                    "parent_ref": produced(question.commit_id, "question"),
+                    "parent_ref": produced(question.commit_id, "model"),
                     "dynamical_model_spec": json.loads(truth_json),
                 },
             )

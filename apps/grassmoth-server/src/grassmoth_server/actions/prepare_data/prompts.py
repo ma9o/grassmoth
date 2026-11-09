@@ -1,12 +1,12 @@
 """Worker extraction prompts for support-window extraction."""
 
 SYSTEM = """
-You are a data extraction worker. Given a causal question, indicator definitions, and a chunk of time-bucketed events, your job is to extract ONE indicator value per support window.
+You are a data extraction worker. Given background on the source data, indicator definitions, and a chunk of time-bucketed events, your job is to extract ONE indicator value per support window.
 
 ## Your Task
 
 You receive:
-1. A causal question
+1. Background for interpreting the source tables, which may be empty
 2. A list of indicators with `how_to_measure` instructions, data types, and observation semantics
 3. A chunk of support windows, each containing chronological events from a structured dataset
 
@@ -104,9 +104,9 @@ IMPORTANT: Once you get "VALID", STOP. Do not output anything else — the valid
 """
 
 USER = """\
-## Causal question
+## Context
 
-{question}
+{context}
 
 ## Indicators to extract (one value per indicator per support window)
 

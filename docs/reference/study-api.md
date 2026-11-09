@@ -2,7 +2,7 @@
 
 > Auto-generated from `packages/api-types/schemas/openapi.json` (the FastAPI OpenAPI spec) by `apps/grassmoth-server/scripts/codegen/export_api.py`. Edit Python type/field descriptions, the API description or route docstrings, not this file.
 
-Seven actions carry out a study. Set the question with `edit_question` and build
+Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend
 the model with `edit_model`. Upload tables with `/api/upload`, extract
 observations with `prepare_data`, and condition the model on them with `fit`.
 `simulate` samples an authored or fitted model; `data_diff` and `model_diff`
@@ -94,7 +94,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/edit_model`
 
-Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
 
 **Parameters**
 
@@ -102,12 +102,12 @@ Merge input.dynamical_model_spec into input.parent_ref: start empty for a questi
 
 **Input: [`EditModelInput<RevisionSelector>`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py)**
 
-Create or revise a model from a question or model parent.
+Revise a saved model, starting with the model produced by edit_question.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. |
-| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
+| `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model. |
+| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
 
 **Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
@@ -206,7 +206,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/edit_question`
 
-Set the study question from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.
+Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.
 
 **Parameters**
 
@@ -218,15 +218,18 @@ The study question, its required outcome, and any named intervention queries.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `question` | [`QuestionSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The replacement study question, including the required outcome and any intervention queries to assess against candidate models. |
+| `question` | [`QuestionSpec<ConstructSpec>`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome. |
 
 **Success body: [`EditQuestionOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
-The question saved by this action.
+The saved question, its initial outcome-only model and readiness findings.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `question` | [`QuestionSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The saved question, including its outcome and intervention queries. |
+| `question` | [`QuestionSpec<ConstructId>`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The saved question, including its outcome and intervention queries. |
+| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Initial outcome-only model. |
+| `checks` | [`ModelCheckReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/model_checks.py) | required | Initial specification and question findings. |
+| `identification` | [`IdentificationReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/identification.py) | required | Initial causal identification findings. |
 
 ```bash
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_question" -H 'Accept: application/json' -o /tmp/action.json \
@@ -238,7 +241,21 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
   "input": {
     "question": {
       "text": "Synthetic example: how does treatment affect the outcome?",
-      "outcome": "construct:00000000000000000003",
+      "outcome": {
+        "id": "construct:00000000000000000003",
+        "name": "outcome",
+        "reasoning": {
+          "text": "Synthetic outcome for interface examples.",
+          "reference_urls": []
+        },
+        "indicators": [],
+        "dynamics": [],
+        "coefficients": [],
+        "innovation_family": "gaussian",
+        "distribution": null,
+        "role": "endogenous",
+        "temporal_status": "time_varying"
+      },
       "queries": {}
     }
   }
@@ -318,15 +335,15 @@ Compare input.before_ref and input.after_ref as saved DynamicalModelSpec documen
 
 **Input: [`ModelDiffInput<RevisionSelector>`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py)**
 
-Base and target specs for a directional patch, selected by question or model revisions.
+Base and target specs for a directional patch, selected by model revisions.
 
 The selections need not be chronologically ordered or share an editing parent.
 Before/after determine patch direction; ModelDiffOutput defines its contract.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `before_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision used as the base; a question denotes an empty spec. |
-| `after_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision reconstructed by applying the patch to the base. |
+| `before_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Model revision used as the base, including the initial outcome-only model. |
+| `after_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Model revision reconstructed by applying the patch to the base. |
 
 **Success body: [`ModelDiffOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
@@ -340,7 +357,7 @@ are computed here; those remain owned by their producing actions.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `changes` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec. |
+| `changes` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. Both revisions select saved models. |
 
 ```bash
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/model_diff" -H 'Accept: application/json' -o /tmp/action.json \

@@ -10,7 +10,7 @@ export function QuestionDetails({
   question: output,
 }: {
   context: ScopeContext;
-  question: QuestionSpec;
+  question: QuestionSpec<ConstructId>;
 }) {
   const question = output;
   const name = (id: ConstructId) => {

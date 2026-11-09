@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import GitOid, GitRef
+from grassmoth.artifacts.identity import ConstructId, GitOid, GitRef
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
@@ -50,6 +50,7 @@ from grassmoth_server_test_support.action import (
     empty_simulation_summary,
     fixture_request,
 )
+from grassmoth_server_test_support.question import authored_question
 from grassmoth_server_test_support.storage import seed_record, stage_result
 from grassmoth_test_support.values import revise_fixture
 
@@ -133,7 +134,7 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
                     record.attempt,
                     request=EditModelRequest[GitOid](
                         input=EditModelInput[GitOid](
-                            parent_ref=repository.question().revision,
+                            parent_ref=repository.state().current["model"].revision,
                             dynamical_model_spec=DynamicalModelSpec(measurement_clock=clock),
                         )
                     ),
@@ -197,9 +198,15 @@ def test_question_publication_admits_one_call_and_reuses_its_result(study):
     from grassmoth_server_test_support.action import question_root
 
     repository, _ = study
-    first = question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome"))
+    first = question_root(
+        "STUDY", QuestionSpec[ConstructId](text="First?", outcome="construct:outcome")
+    )
     request = EditQuestionRequest(
-        input=EditQuestionInput(question=QuestionSpec(text="Second?", outcome="construct:outcome"))
+        input=EditQuestionInput(
+            question=authored_question(
+                QuestionSpec[ConstructId](text="Second?", outcome="construct:outcome")
+            )
+        )
     )
     at = datetime(2026, 1, 1, tzinfo=UTC)
     started = ActionMessage(
@@ -233,7 +240,12 @@ def test_question_publication_admits_one_call_and_reuses_its_result(study):
     assert (
         repository.state().current["question"] == first.record.attempt.outcome.effects.produced[0]
     )
-    assert question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome")) == first
+    assert (
+        question_root(
+            "STUDY", QuestionSpec[ConstructId](text="First?", outcome="construct:outcome")
+        )
+        == first
+    )
 
 
 @pytest.mark.parametrize("fails", [False, True])

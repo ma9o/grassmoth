@@ -39,11 +39,11 @@ export interface CausalModelAssetViewProps {
 
 /**
  * The viewer answers two questions about the action selected on the timeline. The action record
- * on the right says what that action did and what came of it. The graph, with the details pane
+ * on the right shows its recorded input and execution log. The graph, with the details pane
  * below it, shows the state the action left: the graph one part at a glance, the details pane in
  * depth. The agent harness makes every change, so no pane offers writes.
  * A data_diff leaf records a comparison without changing that state: the graph and details
- * overlay its saved evidence on the parent version, and the record states what was compared.
+ * overlay its saved evidence on the parent version, and the record shows its input references.
  */
 export function CausalModelAssetView(props: CausalModelAssetViewProps) {
   const { navigation } = props;
@@ -62,8 +62,8 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
     const tick =
       props.attempts.find((entry) => entry.record.seq === focusSeq) ?? props.attempts.at(-1);
     return (
-      <div className="flex min-h-screen flex-col gap-4 bg-muted/20">
-        <header className="border-b bg-card p-4">
+      <div className="flex h-dvh flex-col gap-4 bg-muted/20">
+        <header className="flex-none border-b bg-card p-4">
           <Link href="/" className="text-sm font-semibold">
             Grassmoth
           </Link>
@@ -82,12 +82,15 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
           onRetainPreview={() => {}}
           onKeepComparison={() => {}}
         />
-        <section className="mx-4 flex min-h-64 flex-col rounded-2xl border bg-card">
+        <section className="mx-4 mb-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card">
           <ActionRecord
-            context={null}
             tick={tick}
+            attempts={props.attempts}
+            dependencies={props.dependencies}
             running={navigation.seq === null ? props.running : []}
             useActionPoll={props.useActionPoll}
+            hrefAt={navigation.hrefAt}
+            onSelectVersion={navigation.viewAt}
           />
         </section>
       </div>
@@ -335,21 +338,18 @@ function ModelRevision({
           aria-label="Action record"
           className="relative flex h-[480px] min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card md:h-auto"
         >
-          {loadingRevision ? (
-            <p role="status" className="p-3 text-xs">
-              Loading action record…
-            </p>
-          ) : (
-            <ActionRecord
-              context={context}
-              tick={tick}
-              running={
-                // Work still running has no completed timeline node yet.
-                navigation.seq === null ? running : []
-              }
-              useActionPoll={useActionPoll}
-            />
-          )}
+          <ActionRecord
+            tick={tick}
+            attempts={attempts}
+            dependencies={dependencies}
+            running={
+              // Work still running has no completed timeline node yet.
+              navigation.seq === null ? running : []
+            }
+            useActionPoll={useActionPoll}
+            hrefAt={navigation.hrefAt}
+            onSelectVersion={selectVersion}
+          />
         </aside>
       </main>
     </div>

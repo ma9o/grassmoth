@@ -3,7 +3,7 @@
   "info": {
     "title": "grassmoth study API",
     "version": "0.1.0",
-    "description": "Seven actions carry out a study. Set the question with `edit_question` and build\nthe model with `edit_model`. Upload tables with `/api/upload`, extract\nobservations with `prepare_data`, and condition the model on them with `fit`.\n`simulate` samples an authored or fitted model; `data_diff` and `model_diff`\ncompare saved revisions. `/api/docs` has complete input/output schemas, defaults\nand alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
+    "description": "Seven actions carry out a study. Set the question and its initial outcome model with `edit_question`, then extend\nthe model with `edit_model`. Upload tables with `/api/upload`, extract\nobservations with `prepare_data`, and condition the model on them with `fit`.\n`simulate` samples an authored or fitted model; `data_diff` and `model_diff`\ncompare saved revisions. `/api/docs` has complete input/output schemas, defaults\nand alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
   },
   "paths": {
     "/api/studies/{workspace_id}/{action}/{call_id}": {
@@ -82,7 +82,7 @@
     "/api/studies/{workspace_id}/edit_question": {
       "post": {
         "summary": "Edit Question",
-        "description": "Set the study question from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.",
+        "description": "Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures.",
         "operationId": "edit_question",
         "parameters": [
           {
@@ -148,7 +148,7 @@
     "/api/studies/{workspace_id}/edit_model": {
       "post": {
         "summary": "Edit Model",
-        "description": "Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.",
+        "description": "Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.",
         "operationId": "edit_model",
         "parameters": [
           {
@@ -13974,17 +13974,17 @@
       },
       "EditModelInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
-        "description": "Create or revise a model from a question or model parent.",
+        "description": "Revise a saved model, starting with the model produced by edit_question.",
         "properties": {
           "parent_ref": {
-            "description": "Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head.",
+            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model.",
             "title": "Parent Ref",
             "tsType": "RevisionT",
             "type": "string"
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
@@ -14003,15 +14003,15 @@
       },
       "EditModelInput_GitOid_": {
         "additionalProperties": false,
-        "description": "Create or revise a model from a question or model parent.",
+        "description": "Revise a saved model, starting with the model produced by edit_question.",
         "properties": {
           "parent_ref": {
             "$ref": "#/components/schemas/GitOid-Input",
-            "description": "Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head."
+            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model."
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
@@ -14028,15 +14028,15 @@
       },
       "EditModelInput_RevisionSelector_": {
         "additionalProperties": false,
-        "description": "Create or revise a model from a question or model parent.",
+        "description": "Revise a saved model, starting with the model produced by edit_question.",
         "properties": {
           "parent_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
-            "description": "Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head."
+            "description": "Model revision to start from, supplying its pinned question. 'latest' selects the current model. An exact artifact hash can select any saved model."
           },
           "dynamical_model_spec": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
+            "description": "Scientific definitions merged by identity into the selected model. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
           }
         },
         "required": [
@@ -14215,8 +14215,8 @@
         "description": "The study question, its required outcome, and any named intervention queries.",
         "properties": {
           "question": {
-            "$ref": "#/components/schemas/QuestionSpec-Input",
-            "description": "The replacement study question, including the required outcome and any intervention queries to assess against candidate models."
+            "$ref": "#/components/schemas/QuestionSpec_ConstructSpec_-Input",
+            "description": "The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome."
           }
         },
         "required": [
@@ -14233,8 +14233,8 @@
         "description": "The study question, its required outcome, and any named intervention queries.",
         "properties": {
           "question": {
-            "$ref": "#/components/schemas/QuestionSpec-Output",
-            "description": "The replacement study question, including the required outcome and any intervention queries to assess against candidate models."
+            "$ref": "#/components/schemas/QuestionSpec_ConstructSpec_-Output",
+            "description": "The study question with its outcome construct definition and named intervention queries. Publishes the question and an initial model containing that outcome."
           }
         },
         "required": [
@@ -14248,15 +14248,30 @@
       },
       "EditQuestionOutput": {
         "additionalProperties": false,
-        "description": "The question saved by this action.",
+        "description": "The saved question, its initial outcome-only model and readiness findings.",
         "properties": {
           "question": {
-            "$ref": "#/components/schemas/QuestionSpec-Output",
+            "$ref": "#/components/schemas/QuestionSpec_ConstructId_",
             "description": "The saved question, including its outcome and intervention queries."
+          },
+          "dynamical_model_spec": {
+            "$ref": "#/components/schemas/DynamicalModelSpec-Output",
+            "description": "Initial outcome-only model."
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ModelCheckReport",
+            "description": "Initial specification and question findings."
+          },
+          "identification": {
+            "$ref": "#/components/schemas/IdentificationReport",
+            "description": "Initial causal identification findings."
           }
         },
         "required": [
-          "question"
+          "question",
+          "dynamical_model_spec",
+          "checks",
+          "identification"
         ],
         "title": "EditQuestionOutput",
         "type": "object",
@@ -14266,7 +14281,7 @@
       },
       "EditQuestionRequest-Input": {
         "additionalProperties": false,
-        "description": "Save the supplied question; the successful body is ``EditQuestionOutput``.",
+        "description": "Save the question and initial model; the successful body is ``EditQuestionOutput``.",
         "properties": {
           "action": {
             "const": "edit_question",
@@ -14304,7 +14319,7 @@
       },
       "EditQuestionRequest-Output": {
         "additionalProperties": false,
-        "description": "Save the supplied question; the successful body is ``EditQuestionOutput``.",
+        "description": "Save the question and initial model; the successful body is ``EditQuestionOutput``.",
         "properties": {
           "action": {
             "const": "edit_question",
@@ -18928,16 +18943,16 @@
       },
       "ModelDiffInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
-        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
+        "description": "Base and target specs for a directional patch, selected by model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
-            "description": "Question or model revision used as the base; a question denotes an empty spec.",
+            "description": "Model revision used as the base, including the initial outcome-only model.",
             "title": "Before Ref",
             "tsType": "RevisionT",
             "type": "string"
           },
           "after_ref": {
-            "description": "Question or model revision reconstructed by applying the patch to the base.",
+            "description": "Model revision reconstructed by applying the patch to the base.",
             "title": "After Ref",
             "tsType": "RevisionT",
             "type": "string"
@@ -18959,15 +18974,15 @@
       },
       "ModelDiffInput_GitOid_": {
         "additionalProperties": false,
-        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
+        "description": "Base and target specs for a directional patch, selected by model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
             "$ref": "#/components/schemas/GitOid-Output",
-            "description": "Question or model revision used as the base; a question denotes an empty spec."
+            "description": "Model revision used as the base, including the initial outcome-only model."
           },
           "after_ref": {
             "$ref": "#/components/schemas/GitOid-Output",
-            "description": "Question or model revision reconstructed by applying the patch to the base."
+            "description": "Model revision reconstructed by applying the patch to the base."
           }
         },
         "required": [
@@ -18984,15 +18999,15 @@
       },
       "ModelDiffInput_RevisionSelector_": {
         "additionalProperties": false,
-        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
+        "description": "Base and target specs for a directional patch, selected by model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
-            "description": "Question or model revision used as the base; a question denotes an empty spec."
+            "description": "Model revision used as the base, including the initial outcome-only model."
           },
           "after_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
-            "description": "Question or model revision reconstructed by applying the patch to the base."
+            "description": "Model revision reconstructed by applying the patch to the base."
           }
         },
         "required": [
@@ -19013,7 +19028,7 @@
         "properties": {
           "changes": {
             "$ref": "#/components/schemas/DynamicalModelSpec-Input",
-            "description": "Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec."
+            "description": "Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. Both revisions select saved models."
           }
         },
         "required": [
@@ -19207,7 +19222,7 @@
           "question": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/QuestionSpec-Output"
+                "$ref": "#/components/schemas/QuestionSpec_ConstructId_"
               },
               {
                 "type": "null"
@@ -23371,9 +23386,8 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "QuestionSpec-Input": {
+      "QuestionSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
-        "description": "What the study asks: the user's words, the outcome, and named contrasts.\n\nEach query is a contrast of its interventions against the recorded course.\nConstructs are named by identity before a model defines them.",
         "properties": {
           "text": {
             "description": "The user's question in their own words.",
@@ -23382,12 +23396,14 @@
             "type": "string"
           },
           "outcome": {
-            "$ref": "#/components/schemas/ConstructId-Input",
-            "description": "The construct whose course answers the question."
+            "description": "The construct whose course answers the question.",
+            "title": "Outcome",
+            "tsType": "OutcomeT",
+            "type": "string"
           },
           "queries": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/SimulationSpec-Input"
+              "$ref": "#/components/schemas/SimulationSpec-Output"
             },
             "description": "Named contrasts against the recorded course, each with at least one intervention.",
             "propertyNames": {
@@ -23399,17 +23415,21 @@
         },
         "required": [
           "text",
-          "outcome"
+          "outcome",
+          "queries"
         ],
-        "title": "QuestionSpec",
+        "title": "QuestionSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
+        "x-typescript-mode": "serialization",
         "x-python-module": "grassmoth.artifacts.model.question",
+        "x-typescript-parameters": [
+          "OutcomeT"
+        ],
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "QuestionSpec-Output": {
+      "QuestionSpec_ConstructId_": {
         "additionalProperties": false,
-        "description": "What the study asks: the user's words, the outcome, and named contrasts.\n\nEach query is a contrast of its interventions against the recorded course.\nConstructs are named by identity before a model defines them.",
         "properties": {
           "text": {
             "description": "The user's question in their own words.",
@@ -23438,8 +23458,85 @@
           "outcome",
           "queries"
         ],
-        "title": "QuestionSpec",
+        "title": "QuestionSpec[ConstructId]",
         "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "QuestionSpec<ConstructId>",
+        "x-python-module": "grassmoth.artifacts.model.question",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "QuestionSpec_ConstructSpec_-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "description": "The user's question in their own words.",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConstructSpec-Input",
+            "description": "The construct whose course answers the question."
+          },
+          "queries": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SimulationSpec-Input"
+            },
+            "description": "Named contrasts against the recorded course, each with at least one intervention.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/QueryName"
+            },
+            "title": "Queries",
+            "type": "object"
+          }
+        },
+        "required": [
+          "text",
+          "outcome"
+        ],
+        "title": "QuestionSpec[ConstructSpec]",
+        "type": "object",
+        "x-typescript-mode": "validation",
+        "x-typescript-type": "QuestionSpec<ConstructSpec>",
+        "x-python-module": "grassmoth.artifacts.model.question",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "QuestionSpec_ConstructSpec_-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "description": "The user's question in their own words.",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ConstructSpec-Output",
+            "description": "The construct whose course answers the question."
+          },
+          "queries": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SimulationSpec-Output"
+            },
+            "description": "Named contrasts against the recorded course, each with at least one intervention.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/QueryName"
+            },
+            "title": "Queries",
+            "type": "object"
+          }
+        },
+        "required": [
+          "text",
+          "outcome",
+          "queries"
+        ],
+        "title": "QuestionSpec[ConstructSpec]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "QuestionSpec<ConstructSpec>",
         "x-python-module": "grassmoth.artifacts.model.question",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -26589,7 +26686,7 @@
           "mapping": {
             "data_diff": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__data_diff___DataDiffOutput_",
             "edit_model": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_",
-            "edit_question": "#/components/schemas/SuccessfulPoll_Literal__edit_question___EditQuestionOutput_",
+            "edit_question": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_",
             "fit": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__fit___FitOutput_",
             "model_diff": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__model_diff___ModelDiffOutput_",
             "prepare_data": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__prepare_data___PrepareDataOutput_",
@@ -26599,7 +26696,7 @@
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/SuccessfulPoll_Literal__edit_question___EditQuestionOutput_"
+            "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_"
           },
           {
             "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_"
@@ -35904,6 +36001,39 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
+      "JsonResponse_EditQuestionOutput": {
+        "additionalProperties": false,
+        "description": "The saved question, its initial outcome-only model and readiness findings.",
+        "properties": {
+          "question": {
+            "$ref": "#/components/schemas/QuestionSpec_ConstructId_",
+            "description": "The saved question, including its outcome and intervention queries."
+          },
+          "dynamical_model_spec": {
+            "$ref": "#/components/schemas/JsonResponse_DynamicalModelSpec-Output",
+            "description": "Initial outcome-only model."
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ModelCheckReport",
+            "description": "Initial specification and question findings."
+          },
+          "identification": {
+            "$ref": "#/components/schemas/IdentificationReport",
+            "description": "Initial causal identification findings."
+          }
+        },
+        "required": [
+          "question",
+          "dynamical_model_spec",
+          "checks",
+          "identification"
+        ],
+        "title": "EditQuestionOutput",
+        "type": "object",
+        "x-python-module": "grassmoth.actions.contracts.io",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
       "JsonResponse_EmpiricalDistribution": {
         "additionalProperties": false,
         "description": "Aligned binary coordinates of an empirical cumulative distribution.",
@@ -36354,7 +36484,7 @@
         "properties": {
           "changes": {
             "$ref": "#/components/schemas/JsonResponse_DynamicalModelSpec-Input",
-            "description": "Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec."
+            "description": "Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. Both revisions select saved models."
           }
         },
         "required": [
@@ -37264,6 +37394,54 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
+      "JsonResponse_SuccessfulPoll_Literal__edit_question___EditQuestionOutput_": {
+        "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
+        "properties": {
+          "call_id": {
+            "$ref": "#/components/schemas/CallId-Output"
+          },
+          "action": {
+            "const": "edit_question",
+            "title": "Action",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "commit_id": {
+            "$ref": "#/components/schemas/GitOid-Output"
+          },
+          "body": {
+            "$ref": "#/components/schemas/JsonResponse_EditQuestionOutput"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "call_id",
+          "action",
+          "status",
+          "commit_id",
+          "body",
+          "messages"
+        ],
+        "title": "SuccessfulPoll[Literal['edit_question'], EditQuestionOutput]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "SuccessfulPoll<\"edit_question\", EditQuestionOutput>",
+        "x-python-module": "grassmoth_server.actions.contracts.polling",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
       "JsonResponse_SuccessfulPoll_Literal__fit___FitOutput_": {
         "additionalProperties": false,
         "description": "A published scientific result and the complete execution log of its call.",
@@ -37484,8 +37662,8 @@
     }
   },
   "x-contract-roots": {
-    "QuestionSpec": {
-      "$ref": "#/components/schemas/QuestionSpec-Output"
+    "QuestionSpec[ConstructId]": {
+      "$ref": "#/components/schemas/QuestionSpec_ConstructId_"
     },
     "PreparedDataMetadata": {
       "$ref": "#/components/schemas/PreparedDataMetadata"
@@ -37647,6 +37825,9 @@
     },
     "PrepareDataRequest": {
       "$ref": "#/components/schemas/PrepareDataRequest_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__"
+    },
+    "QuestionSpec": {
+      "$ref": "#/components/schemas/QuestionSpec_Annotated_Any__WithJsonSchema__"
     },
     "Removed": {
       "$ref": "#/components/schemas/Removed_Annotated_Any__WithJsonSchema__"

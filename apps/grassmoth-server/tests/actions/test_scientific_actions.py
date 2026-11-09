@@ -11,7 +11,7 @@ import pytest
 
 from grassmoth.actions.contracts.io import SimulateOutput, SimulationInputs
 from grassmoth.actions.fit.conditioning import condition_model
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.simulation import SimulationSpec
@@ -127,7 +127,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
 
     question = write_question(
         store,
-        QuestionSpec(
+        QuestionSpec[ConstructId](
             text="How does sleep change?", outcome=construct_named(dynamical_model_spec, "Sleep").id
         ),
     )
@@ -795,7 +795,7 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
         horizon="2d",
         interventions=(InterventionSpec(target=nodes["X"].id, value=1.0),),
     )
-    question = QuestionSpec(
+    question = QuestionSpec[ConstructId](
         text="Effect of X on Y", outcome=nodes["Y"].id, queries={"raise": design}
     )
     edited = edit_model(question, DynamicalModelSpec(), source)

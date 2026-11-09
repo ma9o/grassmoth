@@ -34,7 +34,7 @@ def _edit(workspace, clock, seq):
     repository = StudyRepository(workspace)
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
-            parent_ref=repository.question().revision,
+            parent_ref=repository.state().current["model"].revision,
             dynamical_model_spec=revise_fixture(
                 make_model(["unmeasured_outcome"]), measurement_clock=clock
             ),

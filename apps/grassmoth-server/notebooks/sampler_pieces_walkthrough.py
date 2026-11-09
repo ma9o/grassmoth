@@ -86,9 +86,9 @@ def model_md(mo):
 @app.cell
 def study_setup(lab):
     study = lab.Study()
-    _question = study.question()
-    truth_model = study.model(_question, lab.model_spec(reading_sd=lab.NOISY, free=False))
-    free_model = study.model(_question, lab.model_spec(reading_sd=lab.NOISY, free=True))
+    _initial_model = study.initial_model()
+    truth_model = study.model(_initial_model, lab.model_spec(reading_sd=lab.NOISY, free=False))
+    free_model = study.model(_initial_model, lab.model_spec(reading_sd=lab.NOISY, free=True))
     data, _body = study.simulate(truth_model)
     history = lab.history(_body, reading_sd=lab.NOISY)
     return data, free_model, history, study, truth_model

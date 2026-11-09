@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field
 
 from grassmoth.public import (
+    ConstructSpec,
     DataRef,
     DynamicalModelSpec,
     ExtractionSpec,
@@ -27,10 +28,10 @@ from grassmoth_server.actions.contracts.settings import FitSettingsSpec
 class EditQuestionInput(Value):
     """The study question, its required outcome, and any named intervention queries."""
 
-    question: QuestionSpec = Field(
+    question: QuestionSpec[ConstructSpec] = Field(
         description=(
-            "The replacement study question, including the required outcome and any "
-            "intervention queries to assess against candidate models."
+            "The study question with its outcome construct definition and named intervention "
+            "queries. Publishes the question and an initial model containing that outcome."
         )
     )
 
@@ -40,21 +41,20 @@ class EditQuestionInput(Value):
 
 
 class EditModelInput[RevisionT](Value):
-    """Create or revise a model from a question or model parent."""
+    """Revise a saved model, starting with the model produced by edit_question."""
 
     model_config = ConfigDict(json_schema_mode_override="validation")
 
     parent_ref: RevisionT = Field(
         description=(
-            "Question or model revision to start from. A model parent supplies its pinned "
-            "question. 'latest' selects the current model, otherwise the current question. "
-            "An exact Git hash can select either parent without being the current head."
+            "Model revision to start from, supplying its pinned question. 'latest' selects "
+            "the current model. An exact artifact hash can select any saved model."
         )
     )
     dynamical_model_spec: DynamicalModelSpec = Field(
         description=(
-            "Scientific definitions merged by identity into a model parent, or into an empty "
-            "model for a question parent. Omitted fields are retained; null entity entries "
+            "Scientific definitions merged by identity into the selected model. "
+            "Omitted fields are retained; null entity entries "
             "delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
         )
     )
@@ -185,17 +185,17 @@ class DataDiffInput[RevisionT](Value):
 
 
 class ModelDiffInput[RevisionT](Value):
-    """Base and target specs for a directional patch, selected by question or model revisions.
+    """Base and target specs for a directional patch, selected by model revisions.
 
     The selections need not be chronologically ordered or share an editing parent.
     Before/after determine patch direction; ModelDiffOutput defines its contract.
     """
 
     before_ref: RevisionT = Field(
-        description="Question or model revision used as the base; a question denotes an empty spec."
+        description="Model revision used as the base, including the initial outcome-only model."
     )
     after_ref: RevisionT = Field(
-        description="Question or model revision reconstructed by applying the patch to the base."
+        description="Model revision reconstructed by applying the patch to the base."
     )
 
     def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:

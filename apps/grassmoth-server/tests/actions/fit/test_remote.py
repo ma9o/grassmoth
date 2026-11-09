@@ -7,6 +7,7 @@ import modal
 import pytest
 
 from grassmoth.actions.contracts.io import FitInputs
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import (
     GuidedMethodSpec,
@@ -69,7 +70,9 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     )
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
-        question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+        question=QuestionSpec[ConstructId](
+            text="Test", outcome=fixture_entity_id("construct", "outcome")
+        ),
         observations=b"pinned-history",
         sampler=SamplerSpec(
             num_chains=4,
@@ -119,7 +122,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
 def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_attempt):
     payload = FitComputeInput(
         b"model",
-        QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+        QuestionSpec[ConstructId](text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
         SamplerSpec(),
         False,
@@ -209,7 +212,7 @@ def test_interrupted_result_stream_does_not_decode_partial_output(monkeypatch):
     monkeypatch.setattr(remote, "decode_fit_result", decode)
     payload = FitComputeInput(
         b"model",
-        QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+        QuestionSpec[ConstructId](text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
         SamplerSpec(),
         False,

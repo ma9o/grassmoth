@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.actions.contracts.io import EditModelOutput
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth_server.actions.contracts.effects import ActionEffects
@@ -34,7 +34,7 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
     dynamical_model_spec = stress_sleep_causal_model()
     question_root(
         "checks",
-        QuestionSpec(
+        QuestionSpec[ConstructId](
             text="How does sleep change?", outcome=construct_named(dynamical_model_spec, "Sleep").id
         ),
     )
@@ -52,9 +52,7 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
             "checks",
             EditModelRequest[GitOid](
                 input=EditModelInput[GitOid](
-                    parent_ref=state.current["model"].revision
-                    if state.has("model")
-                    else root.current["question"].revision,
+                    parent_ref=state.current["model"].revision,
                     dynamical_model_spec=dynamical_model_spec,
                 )
             ),

@@ -10,7 +10,7 @@ from uuid import UUID
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.public import SamplerSpec
 from grassmoth_server.actions.call_logs import collect_call_log
@@ -119,7 +119,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
 
     question = write_question(
         artifact_store,
-        QuestionSpec(
+        QuestionSpec[ConstructId](
             text="What does the model imply about sleep?",
             outcome=construct_named(authored, "Sleep").id,
         ),

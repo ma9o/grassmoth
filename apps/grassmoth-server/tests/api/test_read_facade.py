@@ -66,7 +66,8 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
         dynamical_model_spec = DynamicalModelSpec(measurement_clock=clock)
         request = EditModelRequest[GitOid](
             input=EditModelInput[GitOid](
-                parent_ref=repository.question().revision, dynamical_model_spec=dynamical_model_spec
+                parent_ref=repository.state().current["model"].revision,
+                dynamical_model_spec=dynamical_model_spec,
             )
         )
         artifact = seed_record(
@@ -117,7 +118,7 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
     question_root("WS-TRACE")
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
-            parent_ref=StudyRepository("WS-TRACE").question().revision,
+            parent_ref=StudyRepository("WS-TRACE").state().current["model"].revision,
             dynamical_model_spec=DynamicalModelSpec(),
         )
     )
@@ -169,7 +170,8 @@ def test_workspaces_endpoint_lists_study_questions(monkeypatch, tmp_path):
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
 
     question_root(
-        "WS-LIST", QuestionSpec(text="does X cause Y?", outcome=ConstructId("construct:y"))
+        "WS-LIST",
+        QuestionSpec[ConstructId](text="does X cause Y?", outcome=ConstructId("construct:y")),
     )
 
     client = TestClient(create_read_facade_app())

@@ -1,8 +1,13 @@
 import type { ActionSuccess, RecordDependency, TimelineRevision } from "@grassmoth/api-types";
 import { describe, expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { simulatedResult, authoredResult, fittedResult } from "@/lib/__fixtures__/action-results";
-import { outcome } from "@/lib/__fixtures__/model";
+import {
+  simulatedResult,
+  authoredResult,
+  fittedResult,
+  questionResult,
+} from "@/lib/__fixtures__/action-results";
+import { initialOutcome, outcome } from "@/lib/__fixtures__/model";
 import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
 import {
   callDependencies,
@@ -54,7 +59,11 @@ const dependencies: RecordDependency[] = [
 const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq) => {
   const request: NonNullable<TimelineRevision["record"]["attempt"]["request"]> =
     seq === 1
-      ? { action: "edit_question", reasoning: null, input: { question: question } }
+      ? {
+          action: "edit_question",
+          reasoning: null,
+          input: { question: { ...question, outcome: initialOutcome } },
+        }
       : seq === 5
         ? {
             action: "prepare_data",
@@ -145,6 +154,18 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
                         created_at: "2026-01-01T00:00:00Z",
                         source: { kind: "files" },
                       },
+                      ...(request.action === "edit_question"
+                        ? [
+                            {
+                              artifact_id: "model" as const,
+                              revision: oid(101),
+                              derived_from: { question: oid(1) },
+                              produced_by: request.action,
+                              created_at: "2026-01-01T00:00:00Z",
+                              source: { kind: "files" as const },
+                            },
+                          ]
+                        : []),
                     ]
                   : [],
             retracted: [],
@@ -166,7 +187,7 @@ function savedResult(seq: number): ActionSuccess {
   };
   switch (call.record.attempt.action) {
     case "edit_question":
-      return { ...envelope, action: "edit_question", body: { question } };
+      return { ...envelope, action: "edit_question", body: { ...questionResult, question } };
     case "edit_model":
       return { ...envelope, action: "edit_model", body: model() };
     case "prepare_data":
@@ -241,6 +262,16 @@ function compose(
 }
 
 describe("views composed from recorded call dependencies", () => {
+  it("shows the initial outcome model and its saved findings", () => {
+    const { view } = compose(entry(1));
+    expect(view.dynamical_model_spec).toEqual(questionResult.dynamical_model_spec);
+    expect(view.state.current.model?.revision).toBe(oid(101));
+    expect(view.specification).toEqual(questionResult.checks.specification);
+    expect(view.identification).toEqual(questionResult.identification);
+    expect(Object.keys(fixtureValue(view.dynamical_model_spec).constructs)).toEqual([
+      question.outcome,
+    ]);
+  });
   it("keeps a simulation's fitted model despite another model owning its data and newer edits", () => {
     const fitted = savedResult(8);
     const simulated = savedResult(9);
@@ -348,7 +379,7 @@ describe("views composed from recorded call dependencies", () => {
 });
 
 it("addresses models by their outputs or recorded inputs, including failed calls", () => {
-  expect(modelReference(entry(1), journal)).toBe(oid(1));
+  expect(modelReference(entry(1), journal)).toBe(oid(101));
   expect(modelReference(entry(4), journal)).toBe(oid(104));
   expect(modelReference(entry(5), journal)).toBe(oid(4));
   expect(modelReference(entry(9), journal)).toBe(oid(8));

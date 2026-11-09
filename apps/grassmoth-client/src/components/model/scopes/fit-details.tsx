@@ -3,55 +3,9 @@ import { useInferenceReport } from "@/lib/hooks/use-inference-report";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
 import { formatSignificant } from "@/lib/utils/format";
-import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
+import { Hint, KeyValue, Section } from "../scope-primitives";
 import { FitCalibration } from "./fit-calibration";
 import { PosteriorPairs } from "./law-sections";
-
-const smootherLabels = {
-  joint: "Joint NUTS-DA",
-  particle_mgrad: "Particle-mGRAD",
-  twisted_particle_agrad: "Twisted Particle-aGRAD",
-  auxiliary_kalman: "Auxiliary Kalman",
-};
-
-export function FitOutcome({ context }: { context: ScopeContext }) {
-  const fit = context.modelSnapshot.fit;
-  if (!fit) return <Hint>No inference report recorded.</Hint>;
-  const report = fit;
-  const { convergence } = report;
-  const mcmc = report.inference_diagnostics;
-  const settings = report.inference_metadata.segments.at(-1)?.settings;
-  return (
-    <Section title="Chain convergence">
-      <Hint>
-        {settings
-          ? settings.algorithm.method === "nuts_da"
-            ? settings.algorithm.smoother.method === "joint"
-              ? smootherLabels.joint
-              : `NUTS-DA + ${smootherLabels[settings.algorithm.smoother.method.kind]}`
-            : smootherLabels[settings.algorithm.path_update.method.kind]
-          : "Unavailable"}{" "}
-        · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
-        {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
-        {report.inference_metadata.duration_seconds.toLocaleString()} s
-      </Hint>
-      <div className="flex items-center gap-2">
-        <StatusIcon status={convergence.status} />
-        <span>Chain convergence: {humanize(convergence.status)}.</span>
-      </div>
-      {convergence.findings
-        .filter((finding) => finding.kind === "not_evaluated" || finding.outcome === "failed")
-        .map((finding) => (
-          <p key={JSON.stringify(finding)} className="text-amber-700">
-            {finding.code === "fit_mixing" && "Mixing advisory: "}
-            {finding.kind === "not_evaluated"
-              ? finding.detail
-              : `${finding.evidence.note} · ${humanize(finding.evidence.criterion)}: ${formatSignificant(finding.evidence.value)}`}
-          </p>
-        ))}
-    </Section>
-  );
-}
 
 /** Model-wide fitted evidence; individual laws own their chains. */
 export function FitDetails({ context }: { context: ScopeContext }) {

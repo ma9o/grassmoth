@@ -1,3 +1,4 @@
+import { initialOutcome } from "@/lib/__fixtures__/model";
 import { Buffer } from "node:buffer";
 import { ExtData, encode } from "@msgpack/msgpack";
 import {
@@ -230,7 +231,7 @@ it("keeps JSON requests, timeline responses and HTTP errors alongside binary act
   fetcher.mockResolvedValueOnce(messagePack({ status: "running", body: null, messages: [] }));
   const request = {
     action: "edit_question" as const,
-    input: { question: { text: "Why?", outcome: "construct:outcome" as const } },
+    input: { question: { text: "Why?", outcome: initialOutcome } },
   };
   const running = await client.POST("/api/studies/{workspace_id}/edit_question", {
     params: { path: { workspace_id: "user-1" } },

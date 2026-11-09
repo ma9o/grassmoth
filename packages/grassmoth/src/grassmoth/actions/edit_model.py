@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from grassmoth.actions.checks import model_check_report
 from grassmoth.actions.contracts.io import EditModelOutput
 from grassmoth.artifacts.base import Value
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
     apply_model_edit,
@@ -21,7 +22,7 @@ class ModelEditFailure(Value):
 
 
 def edit_model(
-    question: QuestionSpec, parent: DynamicalModelSpec, edit: DynamicalModelSpec
+    question: QuestionSpec[ConstructId], parent: DynamicalModelSpec, edit: DynamicalModelSpec
 ) -> EditModelOutput | ModelEditFailure:
     """Merge, prune, validate and evaluate an edit without reading or writing study state."""
     try:

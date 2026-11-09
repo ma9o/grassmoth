@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     import modal
 
     from grassmoth.public import (
+        ConstructId,
         InferenceHardware,
         QuestionSpec,
         SamplerSpec,
@@ -58,7 +59,7 @@ class FitComputeInput:
     """Pinned, self-contained inputs; no remote workspace or storage credentials."""
 
     dynamical_model_spec_bytes: bytes
-    question: QuestionSpec
+    question: QuestionSpec[ConstructId]
     observations: bytes
     sampler: SamplerSpec
     compute_loo_diagnostics: bool

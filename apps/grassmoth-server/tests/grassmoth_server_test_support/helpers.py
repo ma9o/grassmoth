@@ -2,6 +2,7 @@
 
 import asyncio
 
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
@@ -18,7 +19,7 @@ def write_question(store, question=None):
     value = (
         question
         if question is not None
-        else QuestionSpec(
+        else QuestionSpec[ConstructId](
             text="What does the model answer?",
             outcome=fixture_entity_id("construct", "unmeasured_outcome"),
         )
@@ -29,4 +30,14 @@ def write_question(store, question=None):
         derived_from={},
         produced_by="edit_question",
         json_files={"question.json": value.model_dump(mode="json")},
+    )
+
+
+def initial_model_record(store, question):
+    """Select the initial model field from the same result as its question."""
+    return store.result_record(
+        "model",
+        question.source.result,
+        derived_from={"question": question.revision},
+        produced_by="edit_question",
     )

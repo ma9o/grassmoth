@@ -3,8 +3,11 @@
 from pathlib import Path
 from uuid import uuid4
 
+from grassmoth.artifacts.identity import ConstructId
+from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.storage import paths
 from grassmoth_server.study.persistence.call import SavedResult
+from grassmoth_server_test_support.question import question_output
 from grassmoth_test_support.helpers import observation_dataset
 
 
@@ -44,7 +47,7 @@ def stage_result(store, revision, request):
 def seed_record(
     store, artifact_id, *, derived_from, produced_by, json_files=None, parquet_files=None
 ):
-    from grassmoth.actions.contracts.io import EditModelOutput, EditQuestionOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
     from grassmoth.actions.prepare_data.action import prepared_output
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.observations.preparation import (
@@ -63,7 +66,9 @@ def seed_record(
             pruning={},
         )
     elif artifact_id == "question":
-        output = EditQuestionOutput(question=documents["question.json"])
+        output = question_output(
+            QuestionSpec[ConstructId].model_validate(documents["question.json"])
+        )
     else:
         assert parquet_files is not None
         metadata = PreparedDataMetadata.model_validate(documents["metadata.json"])

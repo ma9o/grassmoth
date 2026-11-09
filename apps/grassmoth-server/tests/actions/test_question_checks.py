@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 import polars as pl
 import pytest
 
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
@@ -40,7 +40,7 @@ def _model():
 
 def _question(model, *, start="2024-01-05", value=0.0, outcome=None):
     dose, mood = model.constructs
-    return QuestionSpec(
+    return QuestionSpec[ConstructId](
         text="Does lowering my dose change my mood?",
         outcome=outcome or mood.id,
         queries={
@@ -131,7 +131,7 @@ def test_queries_are_checked_against_the_model_and_the_record():
     dose = dynamical_model_spec.constructs[0]
     with pytest.raises(ValueError, match="intervenes on the outcome"):
         _question(dynamical_model_spec, outcome=dose.id)
-    exogenous_outcome = QuestionSpec(text="Does the dose change?", outcome=dose.id)
+    exogenous_outcome = QuestionSpec[ConstructId](text="Does the dose change?", outcome=dose.id)
     assert _findings(exogenous_outcome, dynamical_model_spec, None) == {
         ("outcome", "evaluated", "failed")
     }
@@ -144,7 +144,7 @@ def test_an_edit_defines_the_question_and_models_its_outcome():
     missing = question_edit_reason(make_model(["Mood"]), _question(dynamical_model_spec))
     assert missing is not None
     assert dose.id in missing
-    given = QuestionSpec(text="Does my dose change?", outcome=dose.id)
+    given = QuestionSpec[ConstructId](text="Does my dose change?", outcome=dose.id)
     assert (
         question_edit_reason(dynamical_model_spec, given)
         == "The question's outcome must reference an endogenous construct"
@@ -205,11 +205,12 @@ def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypat
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.state import StudyState
-    from grassmoth_server_test_support.helpers import write_question
+    from grassmoth_server_test_support.helpers import initial_model_record, write_question
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("question-path")
-    state = StudyState().with_artifacts([write_question(store, _question(_model()))])
+    question = write_question(store, _question(_model()))
+    state = StudyState().with_artifacts([question, initial_model_record(store, question)])
     dynamical_model_spec = make_model(
         ["Dose", "Mood", "Side"], [("Dose", "Mood"), ("Dose", "Side")]
     )
@@ -217,7 +218,7 @@ def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypat
         store.workspace_id,
         EditModelRequest[GitOid](
             input=EditModelInput[GitOid](
-                parent_ref=state.current["question"].revision,
+                parent_ref=state.current["model"].revision,
                 dynamical_model_spec=dynamical_model_spec,
             )
         ),

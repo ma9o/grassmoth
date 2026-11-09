@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.scenarios import InterventionSpec
 from grassmoth.artifacts.simulation import SimulationReport, SimulationSpec
@@ -224,7 +224,9 @@ def test_runner_uses_model_time_binding_without_reading_panels(
         [
             write_question(
                 store,
-                QuestionSpec(text="Effect on sleep", outcome=dynamical_model_spec.constructs[1].id),
+                QuestionSpec[ConstructId](
+                    text="Effect on sleep", outcome=dynamical_model_spec.constructs[1].id
+                ),
             ),
             record,
             *([panel] if current_panel else []),

@@ -122,6 +122,10 @@ def check_identifiability(
         treatment_var = Variable(treatment_node)
         outcome_var = Variable(outcome_node)
 
+        # y0 0.2.12.dev0 (cc6644d3b470) correctly identifies the napkin graph,
+        # but returns the incorrect estimand P(Y | X). A positive ID verdict
+        # therefore does not certify the returned formula.
+        # See https://arxiv.org/html/2610.03519#A6.SS4 (Appendix F.4).
         estimand = identify_outcomes(
             admg,
             treatments={treatment_var},

@@ -1,3 +1,4 @@
+import { initialOutcome } from "@/lib/__fixtures__/model";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { apiClient } from "@/lib/api/client";
@@ -24,7 +25,7 @@ describe("generated facade client", () => {
     );
     const body = {
       action: "edit_question",
-      input: { question: { text: "Why?", outcome: "construct:y" } },
+      input: { question: { text: "Why?", outcome: initialOutcome } },
     } as const;
     const result = await apiClient.POST("/api/studies/{workspace_id}/edit_question", {
       baseUrl: "http://viewer",

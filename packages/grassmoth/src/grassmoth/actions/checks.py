@@ -11,6 +11,7 @@ from grassmoth.artifacts.reports.checks import (
 )
 
 if TYPE_CHECKING:
+    from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.inference import FitCheckReport
@@ -96,7 +97,9 @@ def check_specification(
     return tuple(findings)
 
 
-def model_check_report(selection: StructuralSelection, question: QuestionSpec) -> ModelCheckReport:
+def model_check_report(
+    selection: StructuralSelection, question: QuestionSpec[ConstructId]
+) -> ModelCheckReport:
     """Evaluate specification and question findings on the supplied model."""
     from grassmoth.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
     from grassmoth.models.causal.question_checks import question_findings
@@ -112,7 +115,7 @@ def model_check_report(selection: StructuralSelection, question: QuestionSpec) -
 
 def fit_check_report(
     selection: StructuralSelection,
-    question: QuestionSpec,
+    question: QuestionSpec[ConstructId],
     observations: ObservationDataset,
 ) -> FitCheckReport:
     """Retain input findings after a successful fit has admitted and used these values."""

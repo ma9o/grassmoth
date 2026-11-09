@@ -14,7 +14,7 @@ import numpyro.distributions as dist
 import polars as pl
 import pytest
 
-from grassmoth.artifacts.identity import DistributionId, IndicatorId, ParameterId
+from grassmoth.artifacts.identity import ConstructId, DistributionId, IndicatorId, ParameterId
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import (
@@ -781,7 +781,9 @@ def test_fit_resolves_incomplete_model_before_panel_preparation(monkeypatch):
     result = fitting.fit_model(
         FitInputs(
             selection=StructuralSelection(DynamicalModelSpec(), None),
-            question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+            question=QuestionSpec[ConstructId](
+                text="Test", outcome=fixture_entity_id("construct", "outcome")
+            ),
             data_for_model=ObservationDataset(
                 series={}, time_origin=datetime(2024, 1, 1, tzinfo=UTC)
             ),

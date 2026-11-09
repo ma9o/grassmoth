@@ -210,7 +210,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         Applied(result=ModelEditResult(), effects=ActionEffects(produced=(authored,))),
         request=EditModelRequest[GitOid](
             input=EditModelInput[GitOid](
-                parent_ref=repository.question().revision,
+                parent_ref=repository.state().current["model"].revision,
                 dynamical_model_spec=dynamical_model_spec,
             )
         ),

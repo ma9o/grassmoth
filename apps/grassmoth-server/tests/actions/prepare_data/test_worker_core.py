@@ -125,20 +125,20 @@ class TestWorkerMessages:
 
     def test_user_message_contains_context(self):
         wm = WorkerMessages(
-            question="Does stress affect sleep?",
+            context="Daily wearable export; pss is the stress score.",
             measurement_structure=_measurement_structure(),
             window_text=self._sample_window_text(),
             n_windows=1,
         )
         msgs = wm.extraction_messages()
         user_msg = msgs[1]["content"]
-        assert "stress" in user_msg.lower() or "sleep" in user_msg.lower()
+        assert "## Context\n\nDaily wearable export; pss is the stress score." in user_msg
         assert "25" in user_msg
         assert "6.5" in user_msg
 
     def test_indicators_in_prompt(self):
         wm = WorkerMessages(
-            question="test",
+            context="test",
             measurement_structure=_measurement_structure(),
             window_text=self._sample_window_text(),
             n_windows=1,

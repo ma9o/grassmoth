@@ -1,6 +1,7 @@
 import type {
   ActionSuccess,
   EditModelOutput,
+  EditQuestionOutput,
   FitOutput,
   ModelSnapshot,
   PrepareDataOutput,
@@ -9,14 +10,10 @@ import type {
 } from "@grassmoth/api-types";
 import { questionCall } from "./call-dependencies";
 
-export function callModelOutput(result: ActionSuccess | undefined): EditModelOutput | null {
-  return result?.action === "edit_model" ? result.body : null;
-}
-
 interface ViewParts {
   artifacts: ModelSnapshot["state"]["current"];
   question: ModelSnapshot["question"];
-  modelOutput: EditModelOutput | null;
+  modelOutput: EditModelOutput | EditQuestionOutput | null;
   dynamicalModelSpec: ModelSnapshot["dynamical_model_spec"];
   fitOutput: FitOutput | null;
   prepared: PrepareDataOutput | null;
@@ -78,7 +75,13 @@ export function composeCallView(
     let view: ViewParts;
     switch (result.action) {
       case "edit_question":
-        view = { ...empty, question: result.body.question, artifacts: produced };
+        view = {
+          ...empty,
+          question: result.body.question,
+          artifacts: produced,
+          modelOutput: result.body,
+          dynamicalModelSpec: result.body.dynamical_model_spec,
+        };
         break;
       case "edit_model": {
         const question = parts(questionCall(entry, attempts, dependencies));

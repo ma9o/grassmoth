@@ -6,7 +6,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from grassmoth.artifacts.identity import GitOid, scientific_id
+from grassmoth.artifacts.identity import ConstructId, GitOid, scientific_id
 from grassmoth.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
     apply_model_edit,
@@ -20,7 +20,7 @@ from grassmoth_server.actions.edit_model import edit_model
 from grassmoth_server.actions.messages import edit_messages
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, Rejected
-from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.helpers import initial_model_record, write_question
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.input_trajectories import deterministic_input_model
 from grassmoth_test_support.values import revise_fixture
@@ -203,7 +203,7 @@ def test_action_uses_selected_parent_and_rejects_without_writing(tmp_path, monke
     source, outcome = dynamical_model_spec.constructs
     question = write_question(
         store,
-        QuestionSpec(
+        QuestionSpec[ConstructId](
             text="What affects Y?",
             outcome=outcome.id,
             queries={
@@ -227,7 +227,8 @@ def test_action_uses_selected_parent_and_rejects_without_writing(tmp_path, monke
             ),
         )
 
-    created = run(question.revision, dynamical_model_spec.model_dump(mode="json"))
+    initial = initial_model_record(store, question)
+    created = run(initial.revision, dynamical_model_spec.model_dump(mode="json"))
     assert isinstance(created, Applied)
     parent = created.effects.produced[0]
     changed = run(parent.revision, {"constructs": {source.id: {"name": "renamed"}}})
@@ -236,7 +237,7 @@ def test_action_uses_selected_parent_and_rejects_without_writing(tmp_path, monke
     assert saved.derived_from == {"question": question.revision, "model": parent.revision}
     assert read_model(store, saved.revision).get_construct(source.id).name == "renamed"
     assert read_model(store, parent.revision).get_construct(source.id).name == "X"
-    standalone = run(question.revision, {"constructs": {source.id: {"name": "renamed"}}})
+    standalone = run(initial.revision, {"constructs": {source.id: {"name": "renamed"}}})
     assert isinstance(standalone, Rejected)
     before = tuple(store.repo.references)
     rejected = run(parent.revision, {"edges": {dynamical_model_spec.edges[0].id: None}})

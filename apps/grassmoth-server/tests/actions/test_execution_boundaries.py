@@ -8,14 +8,13 @@ import polars as pl
 import pytest
 
 from grassmoth.actions.contracts.io import EditModelOutput
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import InferenceHardware
 from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
 from grassmoth_server.actions.contracts.requests import EditModelRequest, FitRequest
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
-from grassmoth_server.actions.errors import ModelFitError
 from grassmoth_server.actions.runners import run_action
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
@@ -56,7 +55,9 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
     journal = StudyRepository(workspace)
     from grassmoth.artifacts.model.question import QuestionSpec
 
-    question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
+    question = QuestionSpec[ConstructId](
+        text="Does X change Y?", outcome=fixture_entity_id("construct", "Y")
+    )
     state = journal.state(question_root(workspace, question).commit_id)
     store = ArtifactStore(workspace)
     saved_results = []
@@ -70,9 +71,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
             EditModelRequest[GitOid].model_validate(
                 {
                     "input": {
-                        "parent_ref": state.current["model"].revision
-                        if state.has("model")
-                        else state.current["question"].revision,
+                        "parent_ref": state.current["model"].revision,
                         "dynamical_model_spec": model.model_dump(mode="json"),
                     }
                 }
@@ -132,21 +131,24 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
         parquet_files={"panel.parquet": panel_frame(n_days=2)},
     )
     state = StudyState().with_artifacts([write_question(store), model, panel])
-    with pytest.raises(ModelFitError):
-        run_async(
-            run_action(
-                workspace,
-                FitRequest[GitOid](
-                    input=FitInput[GitOid](
-                        target=NewFitTarget(
-                            dynamical_model_spec_ref=model.revision,
-                            data_ref=DataRef(revision=panel.revision, replicate_index=0),
-                        ),
-                    )
-                ),
-                state,
-            )
+    result = run_async(
+        run_action(
+            workspace,
+            FitRequest[GitOid](
+                input=FitInput[GitOid](
+                    target=NewFitTarget(
+                        dynamical_model_spec_ref=model.revision,
+                        data_ref=DataRef(revision=panel.revision, replicate_index=0),
+                    ),
+                )
+            ),
+            state,
         )
+    )
+    from grassmoth_server.study.records import Rejected
+
+    assert isinstance(result, Rejected)
+    assert result.code == "FIT_CAPACITY_UNAVAILABLE"
     local.assert_not_called()
     assert artifact_revisions(store, "model") == [model.revision]
 
@@ -175,6 +177,26 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     monkeypatch.setattr(data, "read_data_history", read_history_off_loop)
 
     prior = x_y_model()
+    from grassmoth.artifacts.model.construct import replace_constructs
+
+    prior = prior.with_entities(
+        edges=replace_constructs(
+            prior.edges,
+            tuple(
+                revise_fixture(
+                    construct,
+                    indicators=tuple(
+                        revise_fixture(
+                            indicator,
+                            observation=revise_fixture(indicator.observation, aggregation="last"),
+                        )
+                        for indicator in construct.indicators
+                    ),
+                )
+                for construct in prior.constructs
+            ),
+        )
+    )
     fitted = prior
     edited = fitted.with_entities(
         edges=(revise_fixture(fitted.edges[0], reasoning={"text": "X changes Y within a day"}),)
@@ -316,6 +338,9 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             CallId("call:" + "a" * 64),
         )
     )
+    from grassmoth_server.study.records import Applied
+
+    assert isinstance(effects, Applied), effects
     assert effects.effects.produced[0].derived_from == pins
     if hardware is InferenceHardware.LOCAL:
         local_fit.assert_called_once()

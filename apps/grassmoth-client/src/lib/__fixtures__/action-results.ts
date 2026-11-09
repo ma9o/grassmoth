@@ -2,14 +2,34 @@
 import type {
   ActionSuccess,
   EditModelOutput,
+  EditQuestionOutput,
   FailedPoll,
   FitOutput,
   RunningPoll,
   SimulateOutput,
 } from "@grassmoth/api-types";
 import { dump } from "npyjs";
-import { modelFixture, outcome } from "./model";
+import { initialOutcome, modelFixture, outcome } from "./model";
 import { fittedSnapshot } from "./snapshot";
+
+const { id: initialOutcomeId, ...initialDefinition } = initialOutcome;
+export const questionResult: EditQuestionOutput = {
+  question: {
+    text: "How does treatment affect the outcome?",
+    outcome: initialOutcomeId,
+    queries: {},
+  },
+  dynamical_model_spec: {
+    constructs: { [initialOutcomeId]: { ...initialDefinition, indicators: {}, dynamics: {} } },
+    edges: {},
+    parameters: {},
+    distributions: {},
+    law_layouts: {},
+    measurement_clock: null,
+  },
+  checks: { specification: [], question: { findings: [] } },
+  identification: { outcome: initialOutcomeId, treatments: {} },
+};
 
 export const authoredResult: EditModelOutput = {
   dynamical_model_spec: modelFixture,

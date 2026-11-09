@@ -22,7 +22,7 @@ from grassmoth_server.actions.contracts.reasoning import ACTION_REASONING_DESCRI
 
 
 class EditQuestionRequest(Value):
-    """Save the supplied question; the successful body is ``EditQuestionOutput``."""
+    """Save the question and initial model; the successful body is ``EditQuestionOutput``."""
 
     action: Literal["edit_question"] = Field(
         default="edit_question", description="Scientific action that owns this request or result."

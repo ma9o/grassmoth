@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from grassmoth.actions.contracts.io import EditModelOutput, PrepareDataOutput
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.reference import DataRef
@@ -49,6 +49,7 @@ from grassmoth_server.study import calls as study_calls
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import ActionMessage, Rejected
+from grassmoth_server_test_support.question import authored_question
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.values import revise_fixture
 
@@ -214,23 +215,34 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert rejected.record.attempt.outcome.code == "INPUT_UNAVAILABLE"
                 assert "0" * 40 in rejected.record.attempt.outcome.detail
 
-                question = QuestionSpec(text=_QUESTION, outcome="construct:unmeasured_outcome")
+                question = QuestionSpec[ConstructId](
+                    text=_QUESTION, outcome="construct:unmeasured_outcome"
+                )
                 root = await execute(
-                    EditQuestionRequest(input=EditQuestionInput(question=question))
+                    EditQuestionRequest(
+                        input=EditQuestionInput(question=authored_question(question))
+                    )
                 )
                 assert root.record.attempt.outcome.status == "applied"
                 assert state(root).has("question")
                 again = await execute(
-                    EditQuestionRequest(input=EditQuestionInput(question=question))
+                    EditQuestionRequest(
+                        input=EditQuestionInput(question=authored_question(question))
+                    )
                 )
                 assert again == root
 
-                # Every edit defines the question's nodes; without them it is an invalid request.
+                # An edit cannot delete the outcome established by the question.
                 invalid = await execute(
                     EditModelRequest[GitOid](
                         input=EditModelInput[GitOid](
-                            parent_ref=StudyRepository(workspace_id).question().revision,
-                            dynamical_model_spec=DynamicalModelSpec(),
+                            parent_ref=StudyRepository(workspace_id)
+                            .state()
+                            .current["model"]
+                            .revision,
+                            dynamical_model_spec=DynamicalModelSpec.model_validate(
+                                {"constructs": {question.outcome: None}}
+                            ),
                         )
                     )
                 )
@@ -239,7 +251,10 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 edited = await execute(
                     EditModelRequest[GitOid](
                         input=EditModelInput[GitOid](
-                            parent_ref=StudyRepository(workspace_id).question().revision,
+                            parent_ref=StudyRepository(workspace_id)
+                            .state()
+                            .current["model"]
+                            .revision,
                             dynamical_model_spec=DynamicalModelSpec.model_validate(
                                 _measured_model()
                             ).materialized(),
@@ -483,8 +498,10 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     workspace_id,
                     EditQuestionRequest(
                         input=EditQuestionInput(
-                            question=QuestionSpec(
-                                text=_QUESTION, outcome="construct:unmeasured_outcome"
+                            question=authored_question(
+                                QuestionSpec[ConstructId](
+                                    text=_QUESTION, outcome="construct:unmeasured_outcome"
+                                )
                             )
                         )
                     ),
@@ -502,7 +519,10 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     workspace_id,
                     EditModelRequest[RevisionSelector](
                         input=EditModelInput[RevisionSelector](
-                            parent_ref=StudyRepository(workspace_id).question().revision,
+                            parent_ref=StudyRepository(workspace_id)
+                            .state()
+                            .current["model"]
+                            .revision,
                             dynamical_model_spec=DynamicalModelSpec.model_validate(
                                 _measured_model()
                             ).materialized(),

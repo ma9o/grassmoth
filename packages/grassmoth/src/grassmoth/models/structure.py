@@ -58,7 +58,7 @@ class StructuralSelection:
 
     @classmethod
     def for_question(
-        cls, dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec
+        cls, dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec[ConstructId]
     ) -> StructuralSelection:
         """The question's outcome scopes the model once the model defines it."""
         defined = question.outcome in dynamical_model_spec._constructs

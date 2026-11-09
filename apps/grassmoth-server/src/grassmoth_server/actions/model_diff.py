@@ -12,17 +12,11 @@ if TYPE_CHECKING:
 
 
 def _model_revision(workspace_id: str, revision: GitOid) -> DynamicalModelSpec:
-    """Use the edit-parent contract: a question supplies an empty spec, a model its saved spec."""
-    from grassmoth_server.actions.input_resolution import model_edit_state
+    """Read the selected model's saved scientific value."""
     from grassmoth_server.study.persistence.store import ArtifactStore, model_values, read_model
 
     store = ArtifactStore(workspace_id)
-    model_record = model_edit_state(store, revision).get("model")
-    return (
-        DynamicalModelSpec.from_entities()
-        if model_record is None
-        else model_values(store, read_model(store, model_record.revision))
-    )
+    return model_values(store, read_model(store, revision))
 
 
 def model_diff(workspace_id: str, before_id: GitOid, after_id: GitOid) -> ModelDiffOutput:

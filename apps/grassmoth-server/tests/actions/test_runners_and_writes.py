@@ -56,7 +56,8 @@ def _outcome():
 def _rooted(workspace):
     """The study state after edit_question, asking about Perf."""
     root = question_root(
-        workspace, QuestionSpec(text="does stress hurt performance?", outcome=_outcome())
+        workspace,
+        QuestionSpec[ConstructId](text="does stress hurt performance?", outcome=_outcome()),
     )
     return StudyRepository(workspace).state(root.commit_id)
 
@@ -99,7 +100,7 @@ def test_identification_records_positive_and_absent_queries():
     report = identify_model(StructuralSelection(_model(), _outcome()))
     assert report.estimable_treatments == (_model().constructs[0].id,)
     assert report.outcome == _outcome()
-    question = QuestionSpec(
+    question = QuestionSpec[ConstructId](
         text="Does stress affect performance?", outcome=ConstructId("construct:not_defined_yet")
     )
     absent = identify_model(StructuralSelection.for_question(_model(), question))
@@ -231,7 +232,7 @@ def test_model_write_cascades_without_parallel_scientific_catalogs(workspace):
         EditModelRequest[GitOid].model_validate(
             {
                 "input": {
-                    "parent_ref": root.current["question"].revision,
+                    "parent_ref": root.current["model"].revision,
                     "dynamical_model_spec": _model().model_dump(mode="json"),
                 }
             }
@@ -253,7 +254,10 @@ def test_model_write_cascades_without_parallel_scientific_catalogs(workspace):
     )
     assert next(
         info for info in effects.effects.produced if info.artifact_id == "model"
-    ).derived_from == {"question": root.current["question"].revision}
+    ).derived_from == {
+        "question": root.current["question"].revision,
+        "model": root.current["model"].revision,
+    }
 
 
 def test_exact_measurement_preserves_execution_layout(workspace):
@@ -264,7 +268,7 @@ def test_exact_measurement_preserves_execution_layout(workspace):
         EditModelRequest[GitOid].model_validate(
             {
                 "input": {
-                    "parent_ref": root.current["question"].revision,
+                    "parent_ref": root.current["model"].revision,
                     "dynamical_model_spec": dynamical_model_spec.model_dump(mode="json"),
                 }
             }
@@ -278,9 +282,14 @@ def test_exact_measurement_preserves_execution_layout(workspace):
     assert [
         plan.get_construct(identity).name
         for identity in selected_state_ids(StructuralSelection(plan, None))
-    ] == ["Stress", "Perf"]
-    assert plan.indicators[0].likelihood is not None
-    assert plan.indicators[0].likelihood.law.family == "delta"
+    ] == ["Perf", "Stress"]
+    exact = next(
+        item
+        for item in plan.indicators
+        if item.observation.id == dynamical_model_spec.indicators[0].observation.id
+    )
+    assert exact.likelihood is not None
+    assert exact.likelihood.law.family == "delta"
 
 
 def test_model_edit_is_independent_of_stale_extraction(workspace):
@@ -292,7 +301,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         EditModelRequest[GitOid].model_validate(
             {
                 "input": {
-                    "parent_ref": root.current["question"].revision,
+                    "parent_ref": root.current["model"].revision,
                     "dynamical_model_spec": dynamical_model_spec.model_dump(mode="json"),
                 }
             }
@@ -367,15 +376,15 @@ def test_failed_check_publishes_no_state(workspace, monkeypatch):
     def fail(*_args, **_kwargs):
         raise RuntimeError("identification failed")
 
-    monkeypatch.setattr(identification, "check_identifiability", fail)
     root = _rooted(workspace)
+    monkeypatch.setattr(identification, "check_identifiability", fail)
     with pytest.raises(RuntimeError, match="identification failed"):
         edit_and_check(
             workspace,
             EditModelRequest[GitOid].model_validate(
                 {
                     "input": {
-                        "parent_ref": root.current["question"].revision,
+                        "parent_ref": root.current["model"].revision,
                         "dynamical_model_spec": _model().model_dump(mode="json"),
                     }
                 }

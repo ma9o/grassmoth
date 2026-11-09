@@ -8,11 +8,11 @@ from typing import TypeAliasType
 
 from pydantic import BaseModel
 
-from grassmoth.public import DynamicalModelSpec, PreparedDataMetadata, QuestionSpec
+from grassmoth.public import ConstructId, DynamicalModelSpec, PreparedDataMetadata, QuestionSpec
 from grassmoth_server.actions.contracts.identity import ArtifactId
 
 ARTIFACT_CONTRACTS: dict[ArtifactId, type[BaseModel] | TypeAliasType] = {
-    "question": QuestionSpec,
+    "question": QuestionSpec[ConstructId],
     "panel": PreparedDataMetadata,
     "model": DynamicalModelSpec,
 }

@@ -325,7 +325,8 @@ def test_partial_model_can_be_read_before_any_compilation(workspace):
     repository = StudyRepository(workspace)
     assert not repository.state().current
     question_root(
-        workspace, QuestionSpec(text="Does X change Y?", outcome=ConstructId("construct:y"))
+        workspace,
+        QuestionSpec[ConstructId](text="Does X change Y?", outcome=ConstructId("construct:y")),
     )
     info = _commit(workspace, "model", {"measurement_clock": "1d"})
     state = repository.state()

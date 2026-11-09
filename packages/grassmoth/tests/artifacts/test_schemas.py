@@ -20,6 +20,7 @@ from grassmoth.artifacts.identity import (
 )
 from grassmoth.artifacts.model.construct import (
     CausalEdgeSpec,
+    ConstructSpec,
     Role,
     TemporalStatus,
     replace_constructs,
@@ -136,8 +137,27 @@ class TestModel:
     )
     def test_question_names_an_outcome_and_contrasts_interventions(self, question, message):
         with pytest.raises(ValidationError, match=message):
-            QuestionSpec.model_validate(question)
-        assert QuestionSpec(text="  Why?  ", outcome=ConstructId("construct:y")).text == "Why?"
+            QuestionSpec[ConstructId].model_validate(question)
+        assert (
+            QuestionSpec[ConstructId](text="  Why?  ", outcome=ConstructId("construct:y")).text
+            == "Why?"
+        )
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"role": "exogenous"}, "must be endogenous"),
+            ({"distribution": "distribution:trajectory"}, "add measurements, dynamics and laws"),
+        ],
+    )
+    def test_authored_question_admits_only_an_initial_outcome(
+        self, construct_factory, change, message
+    ):
+        outcome = revise_fixture(construct_factory("outcome"), indicators=())
+        question = QuestionSpec[ConstructSpec](text="Why?", outcome=outcome)
+        assert question.outcome_id == outcome.id
+        with pytest.raises(ValidationError, match=message):
+            QuestionSpec[ConstructSpec](text="Why?", outcome=revise_fixture(outcome, **change))
 
 
 class TestDataVariable:

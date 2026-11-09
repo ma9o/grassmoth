@@ -109,8 +109,8 @@ async def edit_question_activity(
 @activity.defn
 async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the action's complete checks and produce its completion messages."""
-    from grassmoth.public import EditModelOutput, FitOutput
-    from grassmoth_server.actions.contracts.requests import FitRequest
+    from grassmoth.public import EditModelOutput, EditQuestionOutput, FitOutput, ModelEditResult
+    from grassmoth_server.actions.contracts.requests import EditQuestionRequest, FitRequest
 
     store = ArtifactStore(activity_input.workspace_id)
     if isinstance(activity_input.request, FitRequest):
@@ -124,14 +124,19 @@ async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) ->
         )
     if isinstance(activity_input.request, PrepareDataRequest):
         raise TypeError("Model checks require an edit or fit request")
-    result = await asyncio.to_thread(
-        lambda: store.read_result(activity_input.applied.result, EditModelOutput)
-    )
+    if isinstance(activity_input.request, EditQuestionRequest):
+        result = await asyncio.to_thread(
+            lambda: store.read_result(activity_input.applied.result, EditQuestionOutput)
+        )
+        pruning = ModelEditResult()
+    else:
+        result = await asyncio.to_thread(
+            lambda: store.read_result(activity_input.applied.result, EditModelOutput)
+        )
+        pruning = result.pruning
     return ChecksResult(
         reports={},
-        messages=edit_messages(
-            result.checks, result.identification, result.pruning, datetime.now(UTC)
-        ),
+        messages=edit_messages(result.checks, result.identification, pruning, datetime.now(UTC)),
     )
 
 

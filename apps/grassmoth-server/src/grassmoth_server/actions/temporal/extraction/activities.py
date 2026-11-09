@@ -92,7 +92,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
     from grassmoth_server.actions.prepare_data.resolve import resolve_preparation
 
     resolved = resolve_preparation(store, activity_input.preparation)
-    question = resolved.definition.context
+    context = resolved.definition.context
     measurement_structure = extraction_context(resolved)
 
     config = get_config()
@@ -127,7 +127,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
                 spec_ref,
                 {
                     "worker_id": worker_id,
-                    "question": question,
+                    "context": context,
                     "window_text": chunk_text,
                     "window_starts": window_starts,
                     "measurement_structure": chunk_context.model_dump(mode="json"),
@@ -166,7 +166,6 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
             "workspace_id": activity_input.workspace_id,
             "run_id": run_id,
             "pins": pins,
-            "question": question,
             "preparation": resolved.model_dump(mode="json"),
             "empty_output": empty_output.model_dump(mode="json"),
             "chunks": [chunk.model_dump(mode="json") for chunk in chunks],

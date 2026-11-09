@@ -1,69 +1,16 @@
-import type { ModelDiffOutput, DynamicalModelSpec, TimelineRevision } from "@grassmoth/api-types";
+import type { ModelDiffOutput, DynamicalModelSpec } from "@grassmoth/api-types";
 import {
   modelConstructs,
   modelEdges,
   modelParameters,
   presentEntries,
 } from "@/lib/model-accessors";
-import { useModelDiff } from "@/lib/hooks/use-model-diff";
 import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import { producingCall } from "@/lib/model-asset/call-dependencies";
 import { parameterOwner } from "@/lib/model-asset/entities";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { type EntitySelection, humanize } from "@/lib/model-asset/selection";
 import { Hint, OwnerLink, Section } from "../scope-primitives";
-
-export function EditDetails({ context, tick }: { context: ScopeContext; tick: TimelineRevision }) {
-  const workspaceId = context.modelSnapshot.workspace_id;
-  const outcome = tick.record.attempt.outcome;
-  const modelRecord =
-    outcome.status === "applied"
-      ? outcome.effects.produced.find((artifact) => artifact.artifact_id === "model")
-      : undefined;
-  const base = modelRecord?.derived_from.model ?? null;
-  const hasModel = base !== null;
-  const diff = useModelDiff(
-    workspaceId,
-    base,
-    hasModel ? (modelRecord?.revision ?? null) : null,
-    context.ticks,
-  );
-  const before = useModelSnapshot(workspaceId, base ?? undefined, hasModel && Boolean(diff.data));
-  const error = diff.error ?? before.error;
-  const pruning = context.result?.action === "edit_model" ? context.result.body.pruning : null;
-  const removed = pruning ? Object.entries(pruning).filter(([, ids]) => ids.length > 0) : [];
-  return (
-    <Section title="Model changes" wide>
-      {error ? (
-        <p role="alert" className="text-destructive">
-          Unable to read model changes: {error.message}
-        </p>
-      ) : !hasModel ? (
-        <p className="font-medium">Model created</p>
-      ) : diff.isLoading || (diff.data && !before.data) ? (
-        <p role="status">Reading model changes…</p>
-      ) : diff.data ? (
-        <ModelChanges
-          context={context}
-          report={diff.data}
-          before={before.data?.dynamical_model_spec ?? null}
-        />
-      ) : (
-        <Hint>No saved comparison for these model versions.</Hint>
-      )}
-      {removed.length > 0 && (
-        <details className="mt-3 text-sm">
-          <summary>Removed outside the question’s outcome ancestry</summary>
-          {removed.map(([kind, ids]) => (
-            <p key={kind} className="mt-1 break-all text-muted-foreground">
-              {humanize(kind)}: {ids.join(", ")}
-            </p>
-          ))}
-        </details>
-      )}
-    </Section>
-  );
-}
 
 function DefinitionChange({
   context,

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
 from grassmoth.artifacts.arrays import NumericalArray
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
@@ -532,7 +532,7 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
 @pytest.mark.parametrize(
     ("action", "kind", "arguments"),
     [
-        ("edit_model", "question", {"parent_ref": "latest", "dynamical_model_spec": {}}),
+        ("edit_model", "model", {"parent_ref": "latest", "dynamical_model_spec": {}}),
         (
             "fit",
             "model",
@@ -626,7 +626,7 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
     )
 
 
-@pytest.mark.parametrize("parent_kind", ["question", "model"])
+@pytest.mark.parametrize("parent_kind", ["initial", "edited"])
 def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     study, client, parent_kind
 ):
@@ -634,7 +634,7 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.study.records import record_dependencies
-    from grassmoth_server_test_support.helpers import write_question
+    from grassmoth_server_test_support.helpers import initial_model_record, write_question
     from grassmoth_test_support.helpers import make_model
 
     repository, store, models, _, _ = study
@@ -642,7 +642,11 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     path = "/api/studies/LATEST/edit_model"
     dynamical_model_spec = make_model(["X"])
     original_question = repository.question()
-    parent = original_question if parent_kind == "question" else models[-1]
+    parent = (
+        repository.state(repository.attempts()[0].commit_id).current["model"]
+        if parent_kind == "initial"
+        else models[-1]
+    )
     parent_call = next(
         revision
         for revision in repository.attempts()
@@ -661,9 +665,12 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     original = dispatched[0]
     question = write_question(
         store,
-        QuestionSpec(text="A different question", outcome=dynamical_model_spec.edges[0].effect.id),
+        QuestionSpec[ConstructId](
+            text="A different question", outcome=dynamical_model_spec.edges[0].effect.id
+        ),
     )
-    _publish(repository, question)
+    replacement = initial_model_record(store, question)
+    _publish(repository, question, replacement)
     assert (
         msgpack.unpackb(http.post(path, json=original.model_dump(mode="json")).content)["call_id"]
         == msgpack.unpackb(response.content)["call_id"]
@@ -672,7 +679,7 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
         path,
         json={
             **arguments,
-            "input": {**arguments["input"], "parent_ref": question.revision},
+            "input": {**arguments["input"], "parent_ref": replacement.revision},
         },
     )
     assert changed.status_code == 200, changed.text
@@ -680,16 +687,16 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
         msgpack.unpackb(changed.content)["call_id"] != msgpack.unpackb(response.content)["call_id"]
     )
     selected = dispatched[1]
-    assert selected.input.parent_ref == question.revision
-    assert input_state(repository, selected).current == {"question": question}
+    assert selected.input.parent_ref == replacement.revision
+    assert input_state(repository, selected).current == {"question": question, "model": replacement}
     state = input_state(repository, original)
     assert state.current["question"] == original_question
-    assert state.get("model") == (parent if parent_kind == "model" else None)
+    assert state.current["model"] == parent
     outcome = edit_model(store.workspace_id, original)
     assert isinstance(outcome, Applied)
     assert outcome.effects.produced[0].derived_from == {
         "question": original_question.revision,
-        **({"model": parent.revision} if parent_kind == "model" else {}),
+        "model": parent.revision,
     }
     checks = store.read_result(outcome.result, EditModelOutput).checks
     assert checks.question is not None
@@ -721,7 +728,9 @@ def test_edit_model_requires_a_parent_selector(client, parent):
 
 
 @pytest.mark.parametrize("selection", ["initial", "retracted"])
-def test_latest_model_parent_selects_question_when_no_current_model(study, client, selection):
+def test_latest_model_parent_selects_initial_model_or_rejects_missing_model(
+    study, client, selection
+):
     repository, _, _, _, _ = study
     if selection == "initial":
         question_root("INITIAL")
@@ -739,8 +748,13 @@ def test_latest_model_parent_selects_question_when_no_current_model(study, clien
             "input": {"parent_ref": "latest", "dynamical_model_spec": {}},
         },
     )
-    assert response.status_code == 200, response.text
-    assert dispatched[0].input.parent_ref == repository.question().revision
+    if selection == "retracted":
+        assert response.status_code == 422
+        assert "No valid model revision" in response.json()["detail"]
+        assert not dispatched
+    else:
+        assert response.status_code == 200, response.text
+        assert dispatched[0].input.parent_ref == repository.state().current["model"].revision
 
 
 def test_edit_model_parent_rejects_an_unrelated_artifact(study):
@@ -754,7 +768,7 @@ def test_edit_model_parent_rejects_an_unrelated_artifact(study):
             parent_ref=panel.revision, dynamical_model_spec=DynamicalModelSpec()
         )
     )
-    with pytest.raises(StudyLookupError, match="question or model parent"):
+    with pytest.raises(StudyLookupError, match="not model"):
         input_state(repository, request)
 
 

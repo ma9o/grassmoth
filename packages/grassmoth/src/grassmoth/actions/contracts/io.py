@@ -21,7 +21,7 @@ from pydantic import (
 )
 
 from grassmoth.artifacts.base import Value
-from grassmoth.artifacts.identity import IndicatorId
+from grassmoth.artifacts.identity import ConstructId, IndicatorId
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec, ModelEditResult
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.history import ObservationData
@@ -59,10 +59,15 @@ if TYPE_CHECKING:
 
 
 class EditQuestionOutput(Value):
-    """The question saved by this action."""
+    """The saved question, its initial outcome-only model and readiness findings."""
 
-    question: QuestionSpec = Field(
+    question: QuestionSpec[ConstructId] = Field(
         description="The saved question, including its outcome and intervention queries."
+    )
+    dynamical_model_spec: DynamicalModelSpec = Field(description="Initial outcome-only model.")
+    checks: ModelCheckReport = Field(description="Initial specification and question findings.")
+    identification: IdentificationReport = Field(
+        description="Initial causal identification findings."
     )
 
 
@@ -154,7 +159,7 @@ class FitInputs:
     """
 
     selection: StructuralSelection
-    question: QuestionSpec
+    question: QuestionSpec[ConstructId]
     data_for_model: ObservationDataset
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
@@ -284,6 +289,6 @@ class ModelDiffOutput(Value):
         description=(
             "Merge this document into the before spec to obtain the after spec. Omitted fields "
             "are unchanged, supplied fields are added or updated, and null map entries delete "
-            "their identities. A question revision denotes the empty spec."
+            "their identities. Both revisions select saved models."
         )
     )

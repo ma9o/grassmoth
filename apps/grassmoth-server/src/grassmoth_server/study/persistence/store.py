@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 import pygit2
 
-from grassmoth.public import GitOid, GitRef
+from grassmoth.public import ConstructId, GitOid, GitRef
 from grassmoth_server.actions.errors import execution_failure_handler
 from grassmoth_server.storage import paths
 from grassmoth_server.study.errors import StudyLookupError
@@ -71,11 +71,11 @@ def model_values(store: ArtifactStore, model: DynamicalModelSpec) -> DynamicalMo
     )
 
 
-def read_question(store: ArtifactStore, revision: GitOid) -> QuestionSpec:
+def read_question(store: ArtifactStore, revision: GitOid) -> QuestionSpec[ConstructId]:
     """Decode the study question pinned at one revision."""
     from grassmoth.public import QuestionSpec
 
-    return QuestionSpec.model_validate(store.read_document("question", revision))
+    return QuestionSpec[ConstructId].model_validate(store.read_document("question", revision))
 
 
 class ArtifactStore:

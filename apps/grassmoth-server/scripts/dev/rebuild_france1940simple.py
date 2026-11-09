@@ -133,13 +133,13 @@ def rebuild(study: Study, recipe: Recipe) -> None:
                 files={"file": ("historical_inputs.csv", source, "text/csv")},
             )
         )
-    question = study.produced(study.run(recipe.question), "question")
+    initial_model = study.produced(study.run(recipe.question), "model")
     model = study.produced(
         study.run(
             EditModelRequest[RevisionSelector](
                 action="edit_model",
                 input=EditModelInput[RevisionSelector](
-                    parent_ref=question,
+                    parent_ref=initial_model,
                     dynamical_model_spec=recipe.model.input.dynamical_model_spec,
                 ),
                 reasoning=recipe.model.reasoning,
@@ -195,8 +195,8 @@ def rebuild(study: Study, recipe: Recipe) -> None:
     study.run(
         ModelDiffRequest[RevisionSelector](
             action="model_diff",
-            input=ModelDiffInput[RevisionSelector](before_ref=question, after_ref=model),
-            reasoning="Inspect the model added to the question, including all authored definitions.",
+            input=ModelDiffInput[RevisionSelector](before_ref=initial_model, after_ref=model),
+            reasoning="Inspect the definitions added to the initial outcome model.",
         )
     )
     timeline = study.timeline()

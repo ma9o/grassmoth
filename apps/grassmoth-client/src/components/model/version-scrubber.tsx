@@ -2,21 +2,8 @@
 
 import { attemptError } from "@/lib/model-asset/journal";
 
-import type { ActionId, RecordDependency } from "@grassmoth/api-types";
-import {
-  ChartNoAxesCombined,
-  ChevronDown,
-  ChevronUp,
-  FileInput,
-  GitCompareArrows,
-  type LucideIcon,
-  MessageCircleQuestionMark,
-  Network,
-  Pin,
-  Play,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import type { RecordDependency } from "@grassmoth/api-types";
+import { ChevronDown, ChevronUp, Pin } from "lucide-react";
 import Link from "next/link";
 import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -33,46 +20,13 @@ import {
   timelineTickLabel,
 } from "@/lib/model-asset/timeline-presentation";
 import { cn } from "@/lib/utils";
+import { ACTION_STYLE, ActionMark } from "./action-mark";
 
 const HOVER_INTENT_MS = 300;
 /** Sweeping across nodes must not move the contextual Compare control. */
 const COMPARE_INTENT_MS = 120;
 const COLLAPSED_TRACK = NODE_HEIGHT / 2 + 6;
 const COLLAPSED_HEIGHT = COLLAPSED_TRACK + NODE_HEIGHT / 2 + 20;
-
-const ACTION_STYLE: Record<ActionId, { color: string; icon: LucideIcon }> = {
-  edit_question: { color: "#b45309", icon: MessageCircleQuestionMark },
-  edit_model: { color: "#475569", icon: Network },
-  prepare_data: { color: "#0f766e", icon: FileInput },
-  fit: { color: "#2563eb", icon: SlidersHorizontal },
-  simulate: { color: "#7c3aed", icon: Play },
-  data_diff: { color: "#0369a1", icon: ChartNoAxesCombined },
-  model_diff: { color: "#b45309", icon: GitCompareArrows },
-};
-
-/** Keep the action identifiable when a failure adds a status badge. */
-function ActionMark({
-  icon: Icon,
-  color,
-  failed,
-}: {
-  icon: LucideIcon;
-  color: string;
-  failed?: boolean;
-}) {
-  return (
-    <span aria-hidden="true" className="relative flex-none">
-      <Icon size={16} color={color} />
-      {failed && (
-        <X
-          size={10}
-          strokeWidth={3}
-          className="absolute -right-1.5 -bottom-1 rounded-full bg-red-50 text-red-600"
-        />
-      )}
-    </span>
-  );
-}
 
 /**
  * The study's named actions in execution order, in lanes by what they produce.
@@ -125,7 +79,6 @@ export function VersionScrubber({
     hoverSeq === playhead
       ? undefined
       : timeline.nodes.find((node) => node.tick.record.seq === hoverSeq);
-  const latestNode = timeline.nodes.find((node) => node.tick.record.seq === latest);
   const tabStop = selectedNode ?? timeline.nodes.at(-1);
   const comparisons = useMemo(
     () =>
@@ -429,27 +382,6 @@ export function VersionScrubber({
                     width: NODE_WIDTH,
                   }}
                 >
-                  {(current || node === latestNode || node.failed || compared) && (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        node.failed
-                          ? "text-red-700"
-                          : compared
-                            ? "text-amber-800"
-                            : "text-muted-foreground",
-                      )}
-                    >
-                      {node.failed
-                        ? "Failed"
-                        : compared
-                          ? "Comparing"
-                          : current
-                            ? "Viewing"
-                            : "Latest"}
-                      {node === latestNode && current && " · latest"}
-                    </span>
-                  )}
                   {node === focusNode && selectedNode && comparison && (
                     <button
                       type="button"

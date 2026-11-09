@@ -192,7 +192,7 @@ def test_execute_llm_tool_calls_activity_dispatches_by_tool_name(tmp_path):
         context_ref,
         json.dumps(
             {
-                "question": "does exercise improve sleep?",
+                "context": "Step counts exported from a phone.",
                 "window_text": "2026-01-01T00:00:00: steps were 1000",
                 "window_starts": ["2026-01-01T00:00:00"],
                 "measurement_structure": {
@@ -547,7 +547,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
             {
                 "worker_id": 0,
                 "cache_ref": str(tmp_path / "extraction-cache.json"),
-                "question": "does exercise improve sleep?",
+                "context": "Step counts exported from a phone.",
                 "window_text": "2026-01-01T00:00:00: steps were 1000",
                 "window_starts": ["2026-01-01T00:00:00"],
                 "measurement_structure": {

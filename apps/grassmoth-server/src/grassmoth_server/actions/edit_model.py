@@ -1,6 +1,6 @@
 """Resolve an edit's pinned values, execute it, and stage its complete result."""
 
-from grassmoth.public import DynamicalModelSpec, GitOid, ModelEditFailure
+from grassmoth.public import GitOid, ModelEditFailure
 from grassmoth.public import edit_model as edit_model_values
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.requests import EditModelRequest, call_identity
@@ -22,8 +22,7 @@ def edit_model(workspace_id: str, request: EditModelRequest[GitOid]) -> Applied[
     store = ArtifactStore(workspace_id)
     state = model_edit_state(store, request.input.parent_ref)
     question = read_question(store, state.current["question"].revision)
-    parent = state.get("model")
-    base = read_model(store, parent.revision) if parent is not None else DynamicalModelSpec()
+    base = read_model(store, state.current["model"].revision)
     result = edit_model_values(
         question, model_values(store, base), model_values(store, request.input.dynamical_model_spec)
     )

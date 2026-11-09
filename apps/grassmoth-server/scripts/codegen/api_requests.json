@@ -101,7 +101,16 @@
     "input": {
       "question": {
         "text": "Synthetic example: how does treatment affect the outcome?",
-        "outcome": "construct:00000000000000000003",
+        "outcome": {
+          "id": "construct:00000000000000000003",
+          "name": "outcome",
+          "reasoning": {
+            "text": "Synthetic outcome for interface examples.",
+            "reference_urls": []
+          },
+          "role": "endogenous",
+          "temporal_status": "time_varying"
+        },
         "queries": {}
       }
     }

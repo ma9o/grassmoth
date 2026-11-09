@@ -98,7 +98,10 @@ class EvaluateChecksInput(Value):
     state: StudyState
     applied: Applied[GitOid]
     request: (
-        EditModelRequest[GitOid] | FitRequest[GitOid] | PrepareDataRequest[GitOid, FileSourceRef]
+        EditQuestionRequest
+        | EditModelRequest[GitOid]
+        | FitRequest[GitOid]
+        | PrepareDataRequest[GitOid, FileSourceRef]
     )
 
 

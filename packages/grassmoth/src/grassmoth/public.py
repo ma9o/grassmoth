@@ -91,6 +91,9 @@ from grassmoth.artifacts.continuation import (
     SamplerCheckpoint as SamplerCheckpoint,
 )
 from grassmoth.artifacts.identity import (
+    ConstructId as ConstructId,
+)
+from grassmoth.artifacts.identity import (
     ConstructRef as ConstructRef,
 )
 from grassmoth.artifacts.identity import (

@@ -4,15 +4,16 @@ import type {
   ActionId,
   CallId,
   ExecutionMessage,
+  FindingSubject,
   LLMTrace,
   ProgressEvent,
 } from "@grassmoth/api-types";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { ChatMessages } from "@/components/ui/custom/chat-messages";
-import { applyProgressEvents, EMPTY_ATTEMPT_PROGRESS } from "@/lib/attempt-progress";
 import type { UseActionPoll } from "@/lib/hooks/use-action-poll";
 import { cn } from "@/lib/utils";
 import { traceToUIMessages } from "@/lib/utils/trace-to-ui-messages";
+import { Hint, RecordSection } from "./scope-primitives";
 
 function Conversation({ trace }: { trace: LLMTrace }) {
   const messages = useMemo(() => traceToUIMessages(trace), [trace]);
@@ -67,74 +68,145 @@ function ProgressDetails({ event }: { event: ProgressEvent }) {
   }
 }
 
+/** A message's local clock time, to the second. */
+export function clockTime(timestamp: string): string {
+  return new Date(timestamp).toLocaleTimeString(undefined, { hourCycle: "h23" });
+}
+
+/** A finding subject as the identifiers or labels the API gives it. */
+function subjectText(subject: FindingSubject): string {
+  if (typeof subject === "string") return subject;
+  if ("kind" in subject) return subject.id;
+  if ("construct_id" in subject)
+    return [
+      subject.construct_id,
+      typeof subject.target === "string" ? subject.target : subject.target.id,
+    ]
+      .filter((part) => part !== null)
+      .join(" · ");
+  if ("parameter" in subject || "state" in subject) return subject.label;
+  if ("outcome" in subject) return subject.outcome.id;
+  if ("query" in subject)
+    return "target" in subject ? `${subject.query} · ${subject.target.id}` : subject.query;
+  return subject.target.id;
+}
+
+/**
+ * One message as `[time] [level] [id] subject` above its text. Only the level carries color, so
+ * a run of warnings stays readable. Messages without a severity use their kind or failure status.
+ */
+function LogEntry({
+  timestamp,
+  level,
+  tone,
+  id,
+  subject,
+  children,
+}: {
+  timestamp: string;
+  level: string;
+  tone: "plain" | "warning" | "error";
+  id: string;
+  subject: string | null;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      <p className="-indent-[2ch] pl-[2ch] [overflow-wrap:anywhere]">
+        <time className="text-muted-foreground" dateTime={timestamp} title={timestamp}>
+          {`[${clockTime(timestamp)}]`}
+        </time>{" "}
+        <span
+          className={cn(
+            tone === "warning" && "text-amber-700",
+            tone === "error" && "text-destructive",
+            tone === "plain" && "text-muted-foreground",
+          )}
+        >
+          {`[${level}]`}
+        </span>{" "}
+        <span className="font-medium">{`[${id}]`}</span>
+        {subject !== null && ` ${subject}`}
+      </p>
+      <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</div>
+    </>
+  );
+}
+
 function ExecutionEntry({ message }: { message: ExecutionMessage }) {
   switch (message.kind) {
     case "log":
       return (
-        <div
-          className={cn(
-            "space-y-0.5",
-            message.severity === "warning" && "text-amber-700",
-            message.severity === "error" && "text-destructive",
-          )}
+        <LogEntry
+          timestamp={message.timestamp}
+          level={message.severity}
+          tone={
+            message.severity === "warning"
+              ? "warning"
+              : message.severity === "error"
+                ? "error"
+                : "plain"
+          }
+          id={message.code}
+          subject={subjectText(message.subject)}
         >
-          <p className="break-all">
-            <span>{message.severity}</span> · {message.code} ·{" "}
-            {typeof message.subject === "string"
-              ? message.subject
-              : JSON.stringify(message.subject)}
-          </p>
-          <p className="whitespace-pre-wrap break-words">{message.detail}</p>
-        </div>
+          {message.detail}
+        </LogEntry>
       );
     case "progress":
       return (
-        <div className="space-y-0.5">
-          <p
-            className="break-all"
-            title={`Attempt ${message.progress.attempt_id} · ${message.progress.cursor}`}
-          >
-            {message.progress.event}
-          </p>
+        <LogEntry
+          timestamp={message.timestamp}
+          level="progress"
+          tone="plain"
+          id={message.progress.event}
+          subject={null}
+        >
           <ProgressDetails event={message.progress} />
-        </div>
+        </LogEntry>
       );
     case "trace":
       return (
-        <details>
-          <summary className="cursor-pointer break-all">
-            Agent conversation · {message.trace_id}
-          </summary>
-          <Conversation trace={message.trace} />
-        </details>
+        <LogEntry
+          timestamp={message.timestamp}
+          level="trace"
+          tone="plain"
+          id={message.trace_id}
+          subject={null}
+        >
+          <details>
+            <summary className="cursor-pointer">Agent conversation</summary>
+            <Conversation trace={message.trace} />
+          </details>
+        </LogEntry>
       );
     case "failure": {
       const failure = message.failure;
-      return (
-        <div className="space-y-1 text-destructive">
-          {failure.status === "rejected" ? (
-            <>
-              <p className="break-all">
-                {failure.code} ·{" "}
-                {typeof failure.subject === "string"
-                  ? failure.subject
-                  : JSON.stringify(failure.subject)}
-              </p>
-              <p className="whitespace-pre-wrap break-words">{failure.detail}</p>
-            </>
-          ) : (
-            <>
-              <p className="whitespace-pre-wrap break-words">
-                {failure.error_type}: {failure.error_message}
-              </p>
-              {failure.details.map((detail, index) => (
-                <pre key={index} className="whitespace-pre-wrap break-words">
-                  {detail}
-                </pre>
-              ))}
-            </>
-          )}
-        </div>
+      return failure.status === "rejected" ? (
+        <LogEntry
+          timestamp={message.timestamp}
+          level={failure.status}
+          tone="error"
+          id={failure.code}
+          subject={subjectText(failure.subject)}
+        >
+          {failure.detail}
+        </LogEntry>
+      ) : (
+        <LogEntry
+          timestamp={message.timestamp}
+          level={failure.status}
+          tone="error"
+          id={failure.error_type}
+          subject={null}
+        >
+          {failure.error_message}
+          {failure.details.map((detail, index) => (
+            <pre key={index} className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {detail}
+            </pre>
+          ))}
+        </LogEntry>
       );
     }
     default:
@@ -145,7 +217,7 @@ function ExecutionEntry({ message }: { message: ExecutionMessage }) {
 /** Render the server's ordered accumulator intact for both active and completed calls. */
 export function ActionLog({ messages }: { messages: readonly ExecutionMessage[] }) {
   return (
-    <ol aria-label="Action messages" className="space-y-3 px-4 py-1 font-mono text-[10px]">
+    <ol aria-label="Action messages" className="space-y-3 font-mono text-[10px]">
       {messages.map((message, index) => (
         <li
           key={
@@ -156,13 +228,6 @@ export function ActionLog({ messages }: { messages: readonly ExecutionMessage[] 
                 : `${message.kind}:${message.timestamp}:${index}`
           }
         >
-          <time
-            className="text-muted-foreground"
-            dateTime={message.timestamp}
-            title={message.timestamp}
-          >
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </time>
           <ExecutionEntry message={message} />
         </li>
       ))}
@@ -181,92 +246,30 @@ export function ActionExecution({
 }) {
   const query = useActionPoll(action, callId);
   return (
-    <section
+    <RecordSection
+      title="Log"
       role="log"
       aria-live="polite"
       aria-relevant="additions text"
       aria-label={action === "simulate" ? "Simulator log" : "Action log"}
     >
-      {callId === null ? (
-        <p className="px-4 text-xs text-muted-foreground">
-          This attempt has no retained call identity.
-        </p>
-      ) : null}
+      {callId === null ? <Hint>This attempt has no retained call identity.</Hint> : null}
       {query.error && (
-        <p role="alert" className="px-4 text-xs text-destructive">
+        <p role="alert" className="text-[11px] leading-relaxed text-destructive">
           Cannot load action log: {query.error.message}
         </p>
       )}
       {callId !== null && !query.data && !query.error && (
-        <p role="status" className="px-4 text-xs text-muted-foreground">
+        <p role="status" className="text-[11px] leading-relaxed text-muted-foreground">
           Loading action log…
         </p>
       )}
-      {query.data && (
-        <>
-          {action === "prepare_data" && <AttemptProgress messages={query.data.messages} />}
-          {query.data.messages.length === 0 ? (
-            <p className="px-4 text-xs text-muted-foreground">No execution messages recorded.</p>
-          ) : (
-            <ActionLog messages={query.data.messages} />
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-/**
- * What a running data preparation has reported: each step's latest status and the extraction
- * workers' counts. No other action reports progress, so their running entries show messages alone.
- */
-function AttemptProgress({ messages }: { messages: readonly ExecutionMessage[] }) {
-  const view = applyProgressEvents(
-    EMPTY_ATTEMPT_PROGRESS,
-    messages.flatMap((message) => (message.kind === "progress" ? [message.progress] : [])),
-  );
-  // Nothing retained for this attempt: progress is unknown, not zero.
-  if (view.cursor === null)
-    return <p className="px-4 text-[10px] text-muted-foreground">Progress unavailable.</p>;
-  const finished = Object.values(view.workers).filter(
-    (worker) => worker.state === "completed" || worker.state === "failed",
-  );
-  return (
-    <dl
-      aria-label="Progress"
-      className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 px-4 py-1 font-mono text-[10px] text-muted-foreground"
-    >
-      {view.extraction && (
-        <>
-          <dt>extraction</dt>
-          <dd
-            className={cn("break-all", view.extraction.status === "failed" && "text-destructive")}
-          >
-            {view.extraction.status}
-            {view.extraction.error &&
-              ` · ${view.extraction.error.type}: ${view.extraction.error.message}`}
-          </dd>
-        </>
-      )}
-      {view.snapshot && (
-        <>
-          <dt>workers</dt>
-          <dd>
-            {view.snapshot.completed_workers}/{view.snapshot.total_workers} completed ·{" "}
-            {view.snapshot.running_workers} running · {view.snapshot.pending_workers} pending ·{" "}
-            {view.snapshot.failed_workers} failed
-          </dd>
-        </>
-      )}
-      {finished.length > 0 && (
-        <>
-          <dt>LLM calls</dt>
-          <dd>
-            {finished.reduce((calls, worker) => calls + (worker.n_llm_calls ?? 0), 0)} reported by{" "}
-            {finished.length} finished {finished.length === 1 ? "worker" : "workers"}
-          </dd>
-        </>
-      )}
-    </dl>
+      {query.data &&
+        (query.data.messages.length === 0 ? (
+          <Hint>No execution messages recorded.</Hint>
+        ) : (
+          <ActionLog messages={query.data.messages} />
+        ))}
+    </RecordSection>
   );
 }

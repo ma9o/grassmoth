@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from grassmoth.artifacts.identity import GitOid
+from grassmoth.artifacts.identity import ConstructId, GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.models.inputs import input_fingerprints
@@ -12,7 +12,7 @@ from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.state import ArtifactRecord, StudyState, is_stale
 from grassmoth_server_test_support.action import edit_and_check, question_root
-from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_server_test_support.git import artifact_revisions
 from grassmoth_server_test_support.storage import routing_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
@@ -31,14 +31,47 @@ def workspace(monkeypatch, tmp_path):
 
 
 def test_full_model_write_keeps_the_named_base_without_a_head_gate(workspace):
-    question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
-    root = StudyRepository(workspace).state(question_root(workspace, question).commit_id)
+    from grassmoth.actions.contracts.io import EditQuestionOutput
+    from grassmoth_server.study.persistence.store import ArtifactStore, read_model
+    from grassmoth_server.study.records import Applied
+
+    question = QuestionSpec[ConstructId](
+        text="Does X change Y?",
+        outcome=fixture_entity_id("construct", "Y"),
+        queries={
+            "raise X": {
+                "start": "2026-01-01",
+                "horizon": "2d",
+                "interventions": [{"target": fixture_entity_id("construct", "X"), "value": 1}],
+            }
+        },
+    )
+    published = question_root(workspace, question)
+    root = StudyRepository(workspace).state(published.commit_id)
+    attempt = published.record.attempt.outcome
+    assert isinstance(attempt, Applied)
+    store = ArtifactStore(workspace)
+    result = store.read_result(attempt.result, EditQuestionOutput)
+    assert result.question == question
+    initial = read_model(store, root.current["model"].revision)
+    assert tuple(item.id for item in initial.constructs) == (question.outcome,)
+    assert initial.edges == ()
+    assert initial.indicators == ()
+    assert initial.parameters == ()
+    assert initial.distributions == {}
+    assert root.current["model"].derived_from == {"question": root.current["question"].revision}
+    assert result.checks.specification[0].kind == "not_evaluated"
+    assert {
+        finding.code
+        for finding in result.checks.question.findings
+        if finding.kind == "not_evaluated"
+    } == {"target", "identification"}
     effects = edit_and_check(
         workspace,
         EditModelRequest[GitOid].model_validate(
             {
                 "input": {
-                    "parent_ref": root.current["question"].revision,
+                    "parent_ref": root.current["model"].revision,
                     "dynamical_model_spec": make_model(["X", "Y"], [("X", "Y")]).model_dump(
                         mode="json"
                     ),
@@ -50,17 +83,16 @@ def test_full_model_write_keeps_the_named_base_without_a_head_gate(workspace):
     state = root.with_artifacts(effects.effects.produced)
     assert state.current["model"].revision == effects.effects.produced[0].revision
     assert set(state.current) == {"question", "model"}
-    from grassmoth_server.study.persistence.store import ArtifactStore
-
     assert artifact_revisions(ArtifactStore(workspace), "model") == [
-        state.current["model"].revision
+        root.current["model"].revision,
+        state.current["model"].revision,
     ]
     second = edit_and_check(
         workspace,
         EditModelRequest[GitOid].model_validate(
             {
                 "input": {
-                    "parent_ref": artifact_revision(workspace, "model", 1),
+                    "parent_ref": state.current["model"].revision,
                     "dynamical_model_spec": make_model(["X", "Y"], [("X", "Y")]).model_dump(
                         mode="json"
                     ),
@@ -132,14 +164,16 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
     assert reasoned["belief"] != after["belief"]
 
 
-def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(workspace):
+def test_model_diff_addresses_initial_and_edited_models_without_checkpoint_traversal(workspace):
     from grassmoth_server.actions.model_diff import model_diff
     from grassmoth_server.study.errors import StudyLookupError
-    from grassmoth_server.study.persistence.store import ArtifactStore
+    from grassmoth_server.study.persistence.store import ArtifactStore, read_model
     from grassmoth_server.study.records import AttemptRecord, EditAttempt, Raised
     from grassmoth_server_test_support.action import applied_record
 
-    question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
+    question = QuestionSpec[ConstructId](
+        text="Does X change Y?", outcome=fixture_entity_id("construct", "Y")
+    )
     root = question_root(workspace, question)
     repository = StudyRepository(workspace)
     state = repository.state(root.commit_id)
@@ -147,7 +181,7 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
     request = EditModelRequest[GitOid].model_validate(
         {
             "input": {
-                "parent_ref": state.current["question"].revision,
+                "parent_ref": state.current["model"].revision,
                 "dynamical_model_spec": definition.model_dump(mode="json"),
             }
         }
@@ -155,13 +189,13 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
     applied = edit_and_check(workspace, request, state)
     edited = repository.append(applied_record(workspace, applied, request=request, seq=2))
     model = applied.effects.produced[0].revision
-    empty = DynamicalModelSpec.from_entities()
+    initial = read_model(ArtifactStore(workspace), state.current["model"].revision)
     assert model_diff(
-        workspace, state.current["question"].revision, model
-    ).changes == definition.changes_from(empty)
+        workspace, state.current["model"].revision, model
+    ).changes == definition.changes_from(initial)
     assert model_diff(
-        workspace, model, state.current["question"].revision
-    ).changes == empty.changes_from(definition)
+        workspace, model, state.current["model"].revision
+    ).changes == initial.changes_from(definition)
     failed = repository.append(
         AttemptRecord(
             seq=3,
@@ -177,6 +211,6 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
     )
     assert failed.parent_ids == (edited.commit_id,)
     panel = routing_record(ArtifactStore(workspace), "panel", derived_from={})
-    for invalid in (failed.commit_id, panel.revision):
+    for invalid in (failed.commit_id, panel.revision, state.current["question"].revision):
         with pytest.raises(StudyLookupError):
             model_diff(workspace, model, invalid)

@@ -69,7 +69,7 @@ async def edit_question(
     body: Annotated[EditQuestionRequest, Body(discriminator="action")],
     temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Set the study question from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures."""
+    """Set the study question and publish its outcome-only model from input.question. POST returns a call_id; GET polls it. Identical resolved calls reuse both successes and failures."""
     return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
 
 
@@ -80,7 +80,7 @@ async def edit_model(
     body: Annotated[EditModelRequest[RevisionSelector], Body(discriminator="action")],
     temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id."""
+    """Merge input.dynamical_model_spec into input.parent_ref: retain omitted fields from the selected model revision and its pinned question, including the initial model from edit_question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id."""
     return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
 
 

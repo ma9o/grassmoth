@@ -1,7 +1,9 @@
 """Execute model staging and action-owned checks in local contract tests."""
 
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth_server.actions.contracts.inputs import EditQuestionInput
 from grassmoth_server.actions.edit_model import edit_model
+from grassmoth_server_test_support.question import authored_question, question_output
 from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.helpers import fixture_entity_id
 from grassmoth_test_support.values import revise_fixture
@@ -20,11 +22,13 @@ def question_root(workspace_id, question=None):
 
     request = EditQuestionRequest(
         input=EditQuestionInput(
-            question=question
-            if question is not None
-            else QuestionSpec(
-                text="What does it answer?",
-                outcome=fixture_entity_id("construct", "unmeasured_outcome"),
+            question=authored_question(
+                question
+                if question is not None
+                else QuestionSpec[ConstructId](
+                    text="What does it answer?",
+                    outcome=fixture_entity_id("construct", "unmeasured_outcome"),
+                )
             )
         )
     )
@@ -48,7 +52,6 @@ def applied_record(
     from grassmoth.actions.checks import model_check_report
     from grassmoth.actions.contracts.io import (
         EditModelOutput,
-        EditQuestionOutput,
         FitOutput,
         SimulateOutput,
     )
@@ -152,7 +155,7 @@ def applied_record(
                     )
                     action = "edit_model"
                 else:
-                    output = EditQuestionOutput(question=question)
+                    output = question_output(question)
                     action = "edit_question"
         identity = result_blob(store, output)
     if request is None:
@@ -189,12 +192,14 @@ def fixture_request(store, state, action, seq):
     model_ref = model.revision if model else git_oid(seq)
     inputs = {
         "edit_question": {
-            "question": read_question(store, question.revision)
-            if question
-            else QuestionSpec(text=f"Question {seq}?", outcome="construct:outcome")
+            "question": authored_question(
+                read_question(store, question.revision)
+                if question
+                else QuestionSpec[ConstructId](text=f"Question {seq}?", outcome="construct:outcome")
+            )
         },
         "edit_model": {
-            "parent_ref": question.revision if question else git_oid(seq),
+            "parent_ref": model_ref,
             "dynamical_model_spec": read_model(store, model_ref) if model else DynamicalModelSpec(),
         },
         "prepare_data": {

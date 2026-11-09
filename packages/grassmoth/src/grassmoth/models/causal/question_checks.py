@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 def question_findings(
-    question: QuestionSpec,
+    question: QuestionSpec[ConstructId],
     selection: StructuralSelection,
     *,
     history: ObservationDataset | None,
@@ -74,7 +74,7 @@ def question_findings(
 
 
 def _outcome_finding(
-    question: QuestionSpec, constructs: dict[ConstructId, ConstructSpec]
+    question: QuestionSpec[ConstructId], constructs: dict[ConstructId, ConstructSpec]
 ) -> QuestionAssessment:
     subject = OutcomeSubject(outcome=ConstructRef(id=question.outcome))
     construct = constructs.get(question.outcome)
@@ -309,7 +309,7 @@ def _recorded_levels(construct: ConstructSpec, history: ObservationDataset) -> I
 
 
 def question_edit_reason(
-    dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec
+    dynamical_model_spec: DynamicalModelSpec, question: QuestionSpec[ConstructId]
 ) -> str | None:
     """Reject edits that cannot answer the question or violate scoped parameter anchors."""
     from grassmoth.artifacts.model.construct import Role

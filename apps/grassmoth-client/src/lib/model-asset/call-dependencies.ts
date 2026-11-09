@@ -21,6 +21,25 @@ export function viewDependencies(
   );
 }
 
+/**
+ * The calls that published each of an entry's input references, keyed by the reference's field
+ * name: a dependency's argument is that name without its `_ref` suffix.
+ */
+export function inputSources(
+  entry: TimelineRevision,
+  attempts: readonly TimelineRevision[],
+  dependencies: readonly RecordDependency[],
+): ReadonlyMap<string, readonly TimelineRevision[]> {
+  const sources = new Map<string, readonly TimelineRevision[]>();
+  for (const item of dependencies.filter((dependency) => dependency.seq === entry.record.seq)) {
+    const source = attempts.find((attempt) => attempt.record.seq === item.source_seq);
+    if (!source) throw new Error(`Missing ${item.argument} source for call ${item.seq}`);
+    const field = `${item.argument}_ref`;
+    sources.set(field, [...(sources.get(field) ?? []), source]);
+  }
+  return sources;
+}
+
 /** Resolve a recorded commit or artifact to its first successful producing call. */
 export function producingCall(
   attempts: readonly TimelineRevision[],
@@ -96,9 +115,7 @@ export function modelReference(
   if (!entry) return undefined;
   const { outcome, request } = entry.record.attempt;
   if (outcome.status === "applied") {
-    const own = outcome.effects.produced.find(
-      (artifact) => artifact.artifact_id === "model" || artifact.artifact_id === "question",
-    );
+    const own = outcome.effects.produced.find((artifact) => artifact.artifact_id === "model");
     if (own) return own.revision;
   }
   if (!request) return undefined;

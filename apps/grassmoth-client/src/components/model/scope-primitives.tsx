@@ -1,5 +1,5 @@
 import { Check, CircleDashed, TriangleAlert, X } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +55,28 @@ export function Section({
         <span className="text-xs font-semibold">{title}</span>
       </div>
       <div className="flex min-h-0 flex-col gap-2 text-[11.5px]">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * A titled section of the action record. The title and any pinned content stay put while the
+ * body scrolls on its own; the record draws the separators between sections.
+ */
+export function RecordSection({
+  title,
+  pinned,
+  children,
+  ...props
+}: Omit<ComponentProps<"section">, "className" | "title"> & {
+  title: string;
+  pinned?: ReactNode;
+}) {
+  return (
+    <section {...props} className="flex min-h-0 min-w-0 flex-col gap-2 pt-2">
+      <h3 className="px-3 text-xs font-semibold">{title}</h3>
+      {pinned !== undefined && <div className="px-3">{pinned}</div>}
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">{children}</div>
     </section>
   );
 }
