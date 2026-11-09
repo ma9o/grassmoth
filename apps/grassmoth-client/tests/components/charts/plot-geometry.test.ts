@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finiteRuns, linePath, linearScale } from "@/components/charts/plot-geometry";
+import { finiteRuns, linePath, linearScale, traceLine } from "@/components/charts/plot-geometry";
 
 describe("recorded history geometry", () => {
   it("places observations by elapsed time rather than row order", () => {
@@ -18,5 +18,26 @@ describe("recorded history geometry", () => {
     expect(path.match(/M/g)).toHaveLength(2);
     expect(path.match(/L/g)).toHaveLength(2);
     expect(path).not.toMatch(/[CQ]/);
+  });
+
+  it("traces canvas coordinates at their actual times and leaves missing values as gaps", () => {
+    const commands: Array<readonly [string, number, number]> = [];
+    traceLine(
+      {
+        moveTo: (x, y) => commands.push(["move", x, y]),
+        lineTo: (x, y) => commands.push(["line", x, y]),
+      },
+      [0, 1, 2, 10, 11, 12, 20, 21],
+      [1, 2, null, 4, 3, Number.POSITIVE_INFINITY, 5],
+      (time) => time * 5,
+      linearScale([0, 5], [50, 0]),
+    );
+    expect(commands).toEqual([
+      ["move", 0, 40],
+      ["line", 5, 30],
+      ["move", 50, 10],
+      ["line", 55, 20],
+      ["move", 100, 0],
+    ]);
   });
 });

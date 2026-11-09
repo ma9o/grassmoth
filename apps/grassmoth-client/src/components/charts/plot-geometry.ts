@@ -83,7 +83,28 @@ export function finiteRuns(
   return runs;
 }
 
-/** SVG path data for a series; canvas strokes the same data through Path2D. */
+/** Trace every finite coordinate directly, breaking the line at each missing value. */
+export function traceLine(
+  path: Pick<CanvasPath, "moveTo" | "lineTo">,
+  times: readonly number[],
+  values: readonly (number | null)[],
+  x: (time: number) => number,
+  y: (value: number) => number,
+): void {
+  let connected = false;
+  times.forEach((time, index) => {
+    const value = values[index];
+    if (value == null || !Number.isFinite(value)) {
+      connected = false;
+      return;
+    }
+    if (connected) path.lineTo(x(time), y(value));
+    else path.moveTo(x(time), y(value));
+    connected = true;
+  });
+}
+
+/** SVG path data for a series, including the highlighted draw above the canvas. */
 export function linePath(
   times: readonly number[],
   values: readonly (number | null)[],

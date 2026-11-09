@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 
 export interface ChartSize {
   readonly width: number;
@@ -27,6 +27,22 @@ export function useChartSize<T extends HTMLElement>() {
     return () => observer.disconnect();
   }, []);
   return [ref, size] as const;
+}
+
+/** Include scroll-container clipping so offscreen histories paint when they become visible. */
+export function useChartVisibility(ref: RefObject<Element | null>): boolean {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries.at(-1);
+      if (entry) setVisible(entry.isIntersecting);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return visible;
 }
 
 /** Size a canvas backing store for the screen and any zoom, then paint in CSS pixels. */

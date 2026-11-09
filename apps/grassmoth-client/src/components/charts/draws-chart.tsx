@@ -13,9 +13,10 @@ import {
   marginBox,
   padDomain,
   timeTicks,
+  traceLine,
   valueTicks,
 } from "./plot-geometry";
-import { paintCanvas, useChartSize } from "./use-chart-size";
+import { paintCanvas, useChartSize, useChartVisibility } from "./use-chart-size";
 
 export interface DrawRow {
   readonly key: string;
@@ -78,6 +79,8 @@ export interface DrawsChartProps {
 
 const MARGIN = { left: 46, right: 12, top: 16, bottom: 22 } as const;
 const COMPACT_MARGIN = { left: 1, right: 1, top: 2, bottom: 2 } as const;
+const NO_MARKERS: readonly TimeMarker[] = [];
+const NO_THRESHOLDS: readonly Threshold[] = [];
 
 /** Many draws are faint so their density shows; a few rows are drawn plainly. */
 function rowAlpha(layer: DrawLayer): number {
@@ -128,7 +131,7 @@ interface Hover {
 }
 
 /**
- * Draws over time: every draw is painted on a canvas so hundreds cost about what a few do.
+ * Draws over time: every draw is painted on a canvas without a DOM node per trajectory.
  * Axes, observations, markers and the hovered draw sit on an SVG layer above.
  */
 export function DrawsChart({
@@ -137,8 +140,8 @@ export function DrawsChart({
   timeOrigin,
   layers,
   observed,
-  markers = [],
-  thresholds = [],
+  markers = NO_MARKERS,
+  thresholds = NO_THRESHOLDS,
   frame = null,
   levels = null,
   timeWindow = null,
@@ -148,12 +151,13 @@ export function DrawsChart({
   xLabel,
 }: DrawsChartProps) {
   const [container, size] = useChartSize<HTMLDivElement>();
+  const visible = useChartVisibility(container);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [hover, setHover] = useState<Hover | null>(null);
   const categorical = levels !== null && levels.length > 0;
 
   const geometry = useMemo(() => {
-    if (!size) return null;
+    if (!size || !visible) return null;
     const box = marginBox(size.width, size.height, compact ? COMPACT_MARGIN : MARGIN);
     const span =
       timeWindow ??
@@ -170,7 +174,19 @@ export function DrawsChart({
       x: linearScale(timeDomain, [box.left, box.left + box.width]),
       y: linearScale(valueDomain, [box.top + box.height, box.top]),
     };
-  }, [size, compact, timeWindow, times, observed, categorical, levels, frame, layers, thresholds]);
+  }, [
+    size,
+    visible,
+    compact,
+    timeWindow,
+    times,
+    observed,
+    categorical,
+    levels,
+    frame,
+    layers,
+    thresholds,
+  ]);
 
   useEffect(() => {
     const target = canvas.current;
@@ -197,15 +213,19 @@ export function DrawsChart({
         context.strokeStyle = color;
         context.lineWidth = layer.strong ? 1.5 : 1;
         context.setLineDash(layer.dashed ? [4, 3] : []);
-        for (const row of layer.rows) context.stroke(new Path2D(linePath(times, row.values, x, y)));
+        for (const row of layer.rows) {
+          context.beginPath();
+          traceLine(context, times, row.values, x, y);
+          context.stroke();
+        }
       }
       context.restore();
     });
   }, [size, geometry, layers, times, resolution]);
 
   const outside = useMemo(
-    () => (frame && !categorical ? rowsOutside(layers, frame) : 0),
-    [layers, frame, categorical],
+    () => (visible && frame && !categorical ? rowsOutside(layers, frame) : 0),
+    [visible, layers, frame, categorical],
   );
   const total = layers.reduce((count, layer) => count + layer.rows.length, 0);
   const dateLabel = (time: number) =>
