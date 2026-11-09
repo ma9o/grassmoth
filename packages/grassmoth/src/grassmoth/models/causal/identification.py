@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING
 import networkx as nx
 from y0.algorithm.identify import CompiledADMG, identify_outcomes
 from y0.dsl import Variable
-from y0.graph import NxMixedGraph
 
 from grassmoth.artifacts.reports.identification import (
     IdentificationReport,
@@ -36,6 +35,8 @@ from grassmoth.models.causal.graphs import build_digraph, get_all_treatments, ge
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from y0.graph import NxMixedGraph
 
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.model.construct import CausalEdgeSpec, ConstructSpec

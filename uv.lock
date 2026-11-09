@@ -1250,7 +1250,7 @@ requires-dist = [
     { name = "pytimeparse2", specifier = ">=1.7.1" },
     { name = "scipy", specifier = ">=1.18.1" },
     { name = "sympy", specifier = ">=1.14.0" },
-    { name = "y0", git = "https://github.com/y0-causal-inference/y0.git" },
+    { name = "y0", git = "https://github.com/ma9o/y0.git?rev=80aed174a3afcb727694c099f7ed321302cf41bb" },
 ]
 
 [[package]]
@@ -5103,7 +5103,7 @@ wheels = [
 [[package]]
 name = "y0"
 version = "0.2.12.dev0"
-source = { git = "https://github.com/y0-causal-inference/y0.git#cc6644d3b470a1ab2a1eb9da4f0fdb0c843f5d3a" }
+source = { git = "https://github.com/ma9o/y0.git?rev=80aed174a3afcb727694c099f7ed321302cf41bb#80aed174a3afcb727694c099f7ed321302cf41bb" }
 dependencies = [
     { name = "click" },
     { name = "more-click" },

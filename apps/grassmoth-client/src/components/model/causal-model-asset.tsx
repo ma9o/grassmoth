@@ -26,7 +26,7 @@ import {
 import { ActionRecord } from "./action-record";
 import { DetailsPane } from "./details-pane";
 import { VersionScrubber } from "./version-scrubber";
-import { WorkbenchPanes } from "./workbench-panes";
+import { PaneToggle, WorkbenchPanes } from "./workbench-panes";
 
 export interface CausalModelAssetViewProps {
   workspaceId: string;
@@ -230,8 +230,8 @@ function ModelRevision({
               aria-label="Causal graph"
               className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card"
             >
-              <div className="flex min-h-11 flex-none flex-wrap items-center justify-between gap-2 border-b px-4 py-1.5">
-                <h1 className="text-sm font-semibold">Causal model</h1>
+              <div className="flex min-h-11 flex-none flex-wrap items-center gap-2 border-b px-4 py-1.5">
+                <h1 className="mr-auto text-sm font-semibold">Causal model</h1>
                 {activeComparison ? (
                   <div
                     ref={comparisonPane}
@@ -280,9 +280,10 @@ function ModelRevision({
                     </Button>
                   </div>
                 ) : null}
+                <PaneToggle title="causal model" />
               </div>
               <div
-                className="relative min-h-0 flex-1"
+                className="relative min-h-0 flex-1 overflow-hidden"
                 onPointerEnter={retainPreview}
                 onPointerLeave={endPreview}
               >

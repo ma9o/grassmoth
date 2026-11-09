@@ -1,5 +1,6 @@
 import { DefinitionContext } from "./definition-context";
 import { Button } from "@/components/ui/button";
+import { PaneToggle } from "./workbench-panes";
 import { constructEquation, observationEquation } from "@/lib/model-asset/equations";
 import { resolveEntity } from "@/lib/model-asset/entities";
 import type { EntitySelection } from "@/lib/model-asset/selection";
@@ -158,9 +159,9 @@ export function DetailsPane({
   return (
     <section
       aria-label="Model details"
-      className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-2xl border bg-card px-3 py-3"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card"
     >
-      <div className="flex flex-none items-center gap-2 text-xs">
+      <div className="flex min-h-11 flex-none items-center gap-2 border-b px-3 py-1.5 text-xs">
         <h2 className="min-w-0 flex-1 font-semibold">
           {selection ? (entity?.label ?? "Absent entity") : "Model state"}
         </h2>
@@ -175,33 +176,36 @@ export function DetailsPane({
             ×
           </Button>
         )}
+        <PaneToggle title="model state" />
       </div>
-      {entity && <DefinitionContext entity={entity} onSelect={context.select} />}
-      <div
-        key={selection?.id ?? tick?.record.seq}
-        className="flex min-h-0 flex-1 flex-col flex-wrap content-start items-start gap-x-[18px] gap-y-3 overflow-x-auto pb-2 [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto"
-      >
-        {loading ? (
-          <p role="status" className="text-xs">
-            Loading version…
-          </p>
-        ) : context.dataDiff ? (
-          <DataComparisonEvidence
-            context={context}
-            report={context.dataDiff}
-            selection={selection}
-          />
-        ) : !selection ? (
-          <ModelScope context={context} tick={tick} />
-        ) : !entity ? (
-          <Hint>This {selection.kind} is absent from this revision.</Hint>
-        ) : selection.kind === "construct" ? (
-          <ConstructScope context={context} id={selection.id} />
-        ) : selection.kind === "edge" ? (
-          <EdgeScope context={context} id={selection.id} />
-        ) : (
-          <IndicatorScope context={context} id={selection.id} />
-        )}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+        {entity && <DefinitionContext entity={entity} onSelect={context.select} />}
+        <div
+          key={selection?.id ?? tick?.record.seq}
+          className="flex min-h-0 flex-1 flex-col flex-wrap content-start items-start gap-x-[18px] gap-y-3 overflow-x-auto pb-2 [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto"
+        >
+          {loading ? (
+            <p role="status" className="text-xs">
+              Loading version…
+            </p>
+          ) : context.dataDiff ? (
+            <DataComparisonEvidence
+              context={context}
+              report={context.dataDiff}
+              selection={selection}
+            />
+          ) : !selection ? (
+            <ModelScope context={context} tick={tick} />
+          ) : !entity ? (
+            <Hint>This {selection.kind} is absent from this revision.</Hint>
+          ) : selection.kind === "construct" ? (
+            <ConstructScope context={context} id={selection.id} />
+          ) : selection.kind === "edge" ? (
+            <EdgeScope context={context} id={selection.id} />
+          ) : (
+            <IndicatorScope context={context} id={selection.id} />
+          )}
+        </div>
       </div>
     </section>
   );

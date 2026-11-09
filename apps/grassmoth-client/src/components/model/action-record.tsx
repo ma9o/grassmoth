@@ -10,6 +10,7 @@ import { ActionInput } from "./action-input";
 import { ActionExecution, clockTime } from "./action-log";
 import { ACTION_STYLE, ActionMark } from "./action-mark";
 import { Hint } from "./scope-primitives";
+import { PaneToggle, usePane } from "./workbench-panes";
 
 /**
  * One call's input above its log. Each scrolls on its own, and the rows share the height: a
@@ -27,7 +28,7 @@ function RecordHeading({ tick }: { tick: TimelineRevision }) {
   const { action, outcome } = tick.record.attempt;
   const style = ACTION_STYLE[action];
   return (
-    <span className="ml-auto flex min-w-0 items-center gap-1.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground">
+    <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10px] whitespace-nowrap text-muted-foreground">
       <ActionMark icon={style.icon} color={style.color} failed={outcome.status !== "applied"} />
       <span className="truncate">{timelineTickLabel(tick)}</span>
       {outcome.status !== "applied" && (
@@ -65,11 +66,21 @@ export function ActionRecord({
   hrefAt: (seq: number) => string;
   onSelectVersion: (seq: number) => void;
 }) {
+  if (usePane()?.collapsed)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-2">
+        <PaneToggle title="action record" />
+        <h2 className="text-xs font-semibold whitespace-nowrap [writing-mode:vertical-rl]">
+          Action record
+        </h2>
+      </div>
+    );
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex min-h-11 flex-none items-center gap-2 border-b px-3 py-1.5">
-        <h2 className="text-xs font-semibold">Action record</h2>
+        <h2 className="mr-auto text-xs font-semibold">Action record</h2>
         {tick && <RecordHeading tick={tick} />}
+        <PaneToggle title="action record" />
       </div>
       {/* Calls share the pane equally and scroll together only when they no longer fit. */}
       <div key={tick?.record.seq} className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto">

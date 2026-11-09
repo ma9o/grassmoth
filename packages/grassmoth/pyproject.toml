@@ -26,7 +26,7 @@ dependencies = [
     "sympy>=1.14.0",
     "pytimeparse2>=1.7.1",
     "python-dateutil>=2.9.0.post0",
-    "y0 @ git+https://github.com/y0-causal-inference/y0.git",
+    "y0 @ git+https://github.com/ma9o/y0.git@80aed174a3afcb727694c099f7ed321302cf41bb",
 ]
 
 [build-system]
