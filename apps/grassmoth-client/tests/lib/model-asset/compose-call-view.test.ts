@@ -116,8 +116,6 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
     record: {
       seq,
       ts: "2026-01-01T00:00:00Z",
-      messages: [],
-      trace_ids: [],
       attempt: {
         action: request.action,
         request,

@@ -147,7 +147,7 @@ async def model_diff(
 async def get_timeline(
     workspace_id: str, temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)]
 ) -> TimelineResponse:
-    """Slim call log: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id."""
+    """Timeline metadata: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id."""
     result = await calls.get_timeline(workspace_id, temporal_client)
     if isinstance(result, StudyError):
         raise_study_error(result)

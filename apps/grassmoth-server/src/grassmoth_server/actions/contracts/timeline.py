@@ -8,16 +8,14 @@ from grassmoth_server.actions.contracts.requests import (
     ModelDiffRequest,
     ScientificActionRequest,
 )
-from grassmoth_server.study.records import ActionMessage, Attempt, RecordDependency
+from grassmoth_server.study.records import Attempt, RecordDependency
 
 
 class TimelineRecord(Value):
-    """A replayable call log, excluding every scientific result and check payload."""
+    """Call arguments and publication metadata; execution messages belong to ActionPoll."""
 
     seq: int
     ts: str
-    messages: tuple[ActionMessage, ...]
-    trace_ids: tuple[str, ...]
     attempt: Attempt[
         ActionId, ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid], None
     ]

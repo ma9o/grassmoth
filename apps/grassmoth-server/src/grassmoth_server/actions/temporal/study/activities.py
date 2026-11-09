@@ -18,7 +18,6 @@ from grassmoth_server.actions.input_resolution import input_state
 from grassmoth_server.actions.messages import (
     comparison_messages,
     edit_messages,
-    extraction_failure_messages,
     fit_check_messages,
     inference_messages,
     preparation_messages,
@@ -180,7 +179,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
     if existing is not None:
         return existing
     record = activity_input.record
-    messages = record.messages
+    messages = activity_input.messages
     if isinstance(record.attempt.outcome, Applied) and record.attempt.action in {
         "simulate",
         "data_diff",
@@ -190,21 +189,17 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
 
         store = ArtifactStore(activity_input.workspace_id)
         result = read_result(store, record.attempt.action, record.attempt.outcome.result)
-        if messages:
-            announcements = (
-                simulation_messages(result.report, messages[-1].timestamp)
-                if isinstance(result, SimulateOutput)
-                else comparison_messages(result.report, messages[-1].timestamp)
-                if isinstance(result, DataDiffOutput)
-                else ()
-            )
-            messages = messages[:-1] + announcements + messages[-1:]
+        at = datetime.fromisoformat(record.ts)
+        announcements = (
+            simulation_messages(result.report, at)
+            if isinstance(result, SimulateOutput)
+            else comparison_messages(result.report, at)
+            if isinstance(result, DataDiffOutput)
+            else ()
+        )
+        messages = (*messages, *announcements)
     snapshot = collect_call_snapshot(activity_input.workspace_id, identity)
-    if record.attempt_id is not None:
-        failures = extraction_failure_messages(snapshot.events, datetime.now(UTC))
-        messages = (*messages[:-1], *failures, *messages[-1:])
-    record = record.with_logs(messages=messages, trace_ids=snapshot.trace_ids)
-    return journal.append(record, logs=dict(snapshot.logs))
+    return journal.append(record, messages=messages, snapshot=snapshot)
 
 
 @activity.defn

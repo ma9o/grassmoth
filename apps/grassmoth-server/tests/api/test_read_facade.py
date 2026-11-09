@@ -105,6 +105,7 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
 
 
 def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
+    from grassmoth_server.actions.contracts.logs import CallLogSnapshot
     from grassmoth_server.llm.traces import LLMTrace, TraceMessage
     from grassmoth_server.storage import backend as storage
     from grassmoth_server.storage.traces import collect_run_traces
@@ -143,14 +144,13 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
             seq=2,
             request=request,
             ts="2026-07-09T00:00:00+00:00",
-            trace_ids=["raw-data"],
         ),
-        logs=logs,
+        snapshot=CallLogSnapshot(traces=logs),
     )
     client = TestClient(create_read_facade_app())
 
     timeline = client.get("/api/studies/WS-TRACE/timeline")
-    assert timeline.json()["attempts"][-1]["record"]["trace_ids"] == ["raw-data"]
+    assert set(timeline.json()["attempts"][-1]["record"]) == {"seq", "ts", "attempt"}
     result = client.post("/api/studies/WS-TRACE/edit_model", json=request.model_dump(mode="json"))
     assert result.status_code == 200, result.text
     assert (

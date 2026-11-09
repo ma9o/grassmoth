@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
+from typing import TYPE_CHECKING, Annotated, Literal, cast
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field
@@ -122,29 +122,19 @@ type ActionAttempt = Annotated[
 
 
 class AttemptMetadata(Value):
-    """Sequence, timing, and log references attached to a published attempt."""
+    """Sequence and timing attached to a published attempt."""
 
     seq: int = Field(description="Attempt's position in the study journal.")
     attempt_id: UUID | None = Field(
         default=None, description="Execution identity used for progress tracking, when retained."
     )
     ts: str = Field(description="Recorded attempt timestamp.")
-    messages: tuple[ActionMessage, ...] = Field(
-        default=(), description="Structured action messages emitted during execution."
-    )
-    trace_ids: tuple[str, ...] = Field(
-        default=(), description="References identifying the retained execution traces."
-    )
 
 
 class AttemptRecord(AttemptMetadata):
     """Stored inside the Git object, with no self-referential publication ID."""
 
     attempt: ActionAttempt
-
-    def with_logs(self, *, messages: tuple[ActionMessage, ...], trace_ids: tuple[str, ...]) -> Self:
-        """Return a record with replacement messages and trace references, preserving the attempt."""
-        return self.revised(messages=messages, trace_ids=trace_ids)
 
 
 class StudyRevision(Value):

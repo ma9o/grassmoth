@@ -142,25 +142,13 @@ async def _running_actions(
     running = await description.memo_value(
         RUNNING_ACTION_MEMO, (), type_hint=tuple[RunningCall, ...]
     )
-    logs = await asyncio.gather(
-        *(
-            asyncio.to_thread(
-                collect_call_log,
-                workspace_id,
-                call,
-                at=datetime.now(UTC),
-            )
-            for call in running
-        )
-    )
     return tuple(
         RunningAction(
             call_id=call_identity(call.request),
             action=call.request.action,
             request=call.request,
-            messages=log.messages,
         )
-        for call, log in zip(running, logs, strict=True)
+        for call in running
     )
 
 
@@ -329,7 +317,7 @@ async def poll_action(
 async def get_timeline(
     workspace_id: str, temporal_client: TemporalClientProvider
 ) -> TimelineResponse | StudyError:
-    """Slim call log: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id."""
+    """Timeline metadata: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id."""
     parsed = parse_workspace_id(workspace_id)
     if isinstance(parsed, StudyError):
         return parsed
@@ -359,8 +347,6 @@ async def get_timeline(
                 record=TimelineRecord(
                     seq=record.seq,
                     ts=record.ts,
-                    messages=record.messages,
-                    trace_ids=record.trace_ids,
                     attempt=Attempt[
                         ActionId,
                         ScientificActionRequest

@@ -206,7 +206,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
     from grassmoth_server.study.persistence.history import StudyRepository
 
     journal = StudyRepository(workspace)
-    record = applied_record(workspace, effects, seq=1, ts="2026-01-01T00:00:00Z", trace_ids=[])
+    record = applied_record(workspace, effects, seq=1, ts="2026-01-01T00:00:00Z")
     journal.append(record)
     outcome = journal.attempts()[0].record.attempt.outcome
     assert outcome.status == "applied"

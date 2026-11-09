@@ -47,7 +47,7 @@ def _edit(workspace, clock, seq):
 def test_format_and_single_publication_root(workspace):
     store = ArtifactStore(workspace)
     assert Path(store.repo.path) == Path(paths.history_dir(workspace))
-    assert store.repo.config.get_int("grassmoth.format") == 32
+    assert store.repo.config.get_int("grassmoth.format") == 33
     root = question_root(workspace)
     published = StudyRepository(workspace).append(_edit(workspace, "2d", 2))
     repo = store.repo
@@ -70,7 +70,7 @@ def test_format_and_single_publication_root(workspace):
     assert {entry.name for entry in model} == {"meta.json", "result.msgpack"}
     assert model["result.msgpack"].id == commit.tree["result.msgpack"].id
     repo.config["grassmoth.format"] = 31
-    with pytest.raises(ValueError, match="format 32"):
+    with pytest.raises(ValueError, match="format 33"):
         ArtifactStore(workspace)
 
 

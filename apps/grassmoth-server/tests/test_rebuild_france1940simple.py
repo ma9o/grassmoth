@@ -40,8 +40,6 @@ def test_rebuild_pins_http_outputs_and_skips_fit(monkeypatch: pytest.MonkeyPatch
                     "record": {
                         "seq": entry.revision.record.seq,
                         "ts": entry.revision.record.ts,
-                        "messages": entry.revision.record.messages,
-                        "trace_ids": entry.revision.record.trace_ids,
                         "attempt": {
                             "action": entry.request.action,
                             "request": entry.request,

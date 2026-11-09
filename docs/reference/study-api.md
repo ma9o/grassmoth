@@ -472,7 +472,7 @@ JSON
 
 ### GET `/api/studies/{workspace_id}/timeline`
 
-Slim call log: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.
+Timeline metadata: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.
 
 **Parameters**
 

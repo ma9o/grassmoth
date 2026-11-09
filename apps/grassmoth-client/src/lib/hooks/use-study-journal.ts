@@ -13,7 +13,7 @@ export function journalPollIntervalMs(active: boolean): number {
   return active ? 500 : 10_000;
 }
 
-/** The slim call log and all executing calls; scientific results are read by replay. */
+/** Timeline metadata and active call identities; action GETs own results and execution logs. */
 export interface StudyJournal {
   seq: number;
   running: readonly RunningAction[];

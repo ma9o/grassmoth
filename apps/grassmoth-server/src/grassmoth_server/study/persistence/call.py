@@ -15,7 +15,7 @@ from grassmoth_server.actions.contracts.requests import (
     ScientificActionRequest,
 )
 from grassmoth_server.compute.analysis_cache import RetainedFit
-from grassmoth_server.study.records import ActionMessage, Raised, Rejected
+from grassmoth_server.study.records import Raised, Rejected
 from grassmoth_server.study.state import RetractedArtifact
 
 
@@ -44,6 +44,4 @@ class SavedCall(Value):
     attempt_id: UUID | None
     ts: str
     request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
-    messages: tuple[ActionMessage, ...]
-    trace_ids: tuple[str, ...]
     outcome: Annotated[SavedApplied | Rejected | Raised, Field(discriminator="status")]

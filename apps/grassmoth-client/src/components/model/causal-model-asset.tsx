@@ -11,7 +11,7 @@ import { graphEntities } from "@/lib/dag/layered-model";
 import { useEffect, useMemo, useRef } from "react";
 import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
 import { Button } from "@/components/ui/button";
-import { useLLMTraceForAction } from "@/lib/hooks/use-llm-trace";
+import { useActionPoll, type UseActionPoll } from "@/lib/hooks/use-action-poll";
 import { useDataComparison } from "@/lib/hooks/use-data-comparison";
 import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import type { StudyJournal } from "@/lib/hooks/use-study-journal";
@@ -23,7 +23,7 @@ import {
   useWorkbenchSnapshots,
   type SnapshotReader,
 } from "@/lib/model-asset/use-workbench";
-import { ActionRecord, type ActionTraceState, type UseActionTrace } from "./action-record";
+import { ActionRecord } from "./action-record";
 import { DetailsPane } from "./details-pane";
 import { VersionScrubber } from "./version-scrubber";
 
@@ -32,7 +32,7 @@ export interface CausalModelAssetViewProps {
   useSnapshot: SnapshotReader;
   attempts: readonly TimelineRevision[];
   dependencies: StudyJournal["dependencies"];
-  useActionTrace: UseActionTrace;
+  useActionPoll: UseActionPoll;
   running: readonly RunningAction[];
   navigation: TimelineNavigation;
 }
@@ -84,11 +84,10 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
         />
         <section className="mx-4 flex min-h-64 flex-col rounded-2xl border bg-card">
           <ActionRecord
-            workspaceId={props.workspaceId}
             context={null}
             tick={tick}
             running={navigation.seq === null ? props.running : []}
-            useActionTrace={props.useActionTrace}
+            useActionPoll={props.useActionPoll}
           />
         </section>
       </div>
@@ -116,7 +115,7 @@ function ModelRevision({
   workspaceId,
   attempts,
   dependencies,
-  useActionTrace,
+  useActionPoll,
   modelSnapshot,
   result,
   loadingRevision,
@@ -342,14 +341,13 @@ function ModelRevision({
             </p>
           ) : (
             <ActionRecord
-              workspaceId={workspaceId}
               context={context}
               tick={tick}
               running={
                 // Work still running has no completed timeline node yet.
                 navigation.seq === null ? running : []
               }
-              useActionTrace={useActionTrace}
+              useActionPoll={useActionPoll}
             />
           )}
         </aside>
@@ -374,24 +372,12 @@ export function CausalModelAsset({
       },
     [workspaceId],
   );
-  const useActionTrace = useMemo<UseActionTrace>(
+  const useWorkspaceActionPoll = useMemo<UseActionPoll>(
     () =>
-      function useWorkspaceActionTrace(seq, enabled): ActionTraceState {
-        const record = journal.attempts.find((attempt) => attempt.record.seq === seq);
-        const traceIds = record?.record.trace_ids ?? [];
-        const query = useLLMTraceForAction(workspaceId, record, traceIds, enabled);
-        if (
-          !enabled ||
-          record?.record.attempt.outcome.status !== "applied" ||
-          record.record.attempt.request === null ||
-          traceIds.length === 0 ||
-          query.isError
-        )
-          return { status: "absent" };
-        if (query.data) return { status: "ready", trace: query.data };
-        return { status: "loading" };
+      function useWorkspacePoll(action, callId) {
+        return useActionPoll(workspaceId, action, callId);
       },
-    [workspaceId, journal.attempts],
+    [workspaceId],
   );
   if (selection.status === "invalid") {
     return (
@@ -419,7 +405,7 @@ export function CausalModelAsset({
       useSnapshot={useSnapshot}
       attempts={journal.attempts}
       dependencies={journal.dependencies}
-      useActionTrace={useActionTrace}
+      useActionPoll={useWorkspaceActionPoll}
       running={journal.running}
       navigation={{ seq: selection.seq, hrefAt, viewAt }}
     />

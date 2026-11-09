@@ -20,6 +20,7 @@ from grassmoth.artifacts.simulation import (
     SimulationEvidence,
     SingleArmSimulation,
 )
+from grassmoth_server.actions.call_logs import read_call_log
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import (
     DataDiffInput,
@@ -186,15 +187,45 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
 
 def test_question_publication_admits_one_call_and_reuses_its_result(study):
     from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth_server.actions.contracts.inputs import EditQuestionInput
+    from grassmoth_server.actions.contracts.requests import EditQuestionRequest
+    from grassmoth_server.actions.edit_question import edit_question
+    from grassmoth_server.study.records import ActionMessage, action_attempt
     from grassmoth_server_test_support.action import question_root
 
     repository, _ = study
     first = question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome"))
-    second = question_root("STUDY", QuestionSpec(text="Second?", outcome="construct:outcome"))
+    request = EditQuestionRequest(
+        input=EditQuestionInput(question=QuestionSpec(text="Second?", outcome="construct:outcome"))
+    )
+    at = datetime(2026, 1, 1, tzinfo=UTC)
+    started = ActionMessage(
+        timestamp=at,
+        severity="info",
+        code="EDIT_QUESTION_STARTED",
+        subject="edit_question",
+        detail="Started question edit.",
+    )
+    second = repository.append(
+        AttemptRecord(
+            seq=2,
+            ts=at.isoformat(),
+            attempt=action_attempt(request, edit_question("STUDY", request)),
+        ),
+        messages=(started,),
+    )
     assert isinstance(first.record.attempt.outcome, Applied)
     assert first.parent_ids == ()
     assert isinstance(second.record.attempt.outcome, Rejected)
-    assert second.record.messages[-1].code == "INPUT_UNAVAILABLE"
+    log = read_call_log(repository, second.commit_id)
+    messages = tuple(message for message in log.messages if message.kind == "log")
+    assert messages[0] == started
+    assert [message.code for message in messages] == ["EDIT_QUESTION_STARTED", "INPUT_UNAVAILABLE"]
+    assert messages[-1].detail == second.record.attempt.outcome.detail
+    assert (
+        next(message.failure for message in log.messages if message.kind == "failure")
+        == second.record.attempt.outcome
+    )
     assert str(repository.repo.references["refs/question"].target) == first.commit_id
     assert (
         repository.state().current["question"] == first.record.attempt.outcome.effects.produced[0]
@@ -342,7 +373,9 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         assert outcome.effects.reports == {}
         if comparison_action == "data_diff":
             announcements = tuple(
-                message for message in leaf.record.messages if message.code == finding.code
+                message
+                for message in read_call_log(repository, leaf.commit_id).messages
+                if message.kind == "log" and message.code == finding.code
             )
             assert len(announcements) == 1
             assert announcements[0].severity == "warning"

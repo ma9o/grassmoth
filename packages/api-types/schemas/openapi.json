@@ -544,7 +544,7 @@
     "/api/studies/{workspace_id}/timeline": {
       "get": {
         "summary": "Get Timeline",
-        "description": "Slim call log: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.",
+        "description": "Timeline metadata: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.",
         "operationId": "get_timeline_api_studies__workspace_id__timeline_get",
         "parameters": [
           {
@@ -1405,24 +1405,6 @@
             "title": "Ts",
             "type": "string"
           },
-          "messages": {
-            "default": [],
-            "description": "Structured action messages emitted during execution.",
-            "items": {
-              "$ref": "#/components/schemas/ActionMessage"
-            },
-            "title": "Messages",
-            "type": "array"
-          },
-          "trace_ids": {
-            "default": [],
-            "description": "References identifying the retained execution traces.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Trace Ids",
-            "type": "array"
-          },
           "attempt": {
             "$ref": "#/components/schemas/ActionAttempt"
           }
@@ -1431,8 +1413,6 @@
           "seq",
           "attempt_id",
           "ts",
-          "messages",
-          "trace_ids",
           "attempt"
         ],
         "title": "AttemptRecord",
@@ -24051,7 +24031,7 @@
       },
       "RunningAction": {
         "additionalProperties": false,
-        "description": "Timeline discovery of the active call and its accumulated messages.",
+        "description": "Timeline discovery of an active call; GET its ActionPoll for execution messages.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -24072,20 +24052,12 @@
               }
             ],
             "title": "Request"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ExecutionMessage"
-            },
-            "title": "Messages",
-            "type": "array"
           }
         },
         "required": [
           "call_id",
           "action",
-          "request",
-          "messages"
+          "request"
         ],
         "title": "RunningAction",
         "type": "object",
@@ -25907,7 +25879,7 @@
       },
       "TimelineRecord": {
         "additionalProperties": false,
-        "description": "A replayable call log, excluding every scientific result and check payload.",
+        "description": "Call arguments and publication metadata; execution messages belong to ActionPoll.",
         "properties": {
           "seq": {
             "title": "Seq",
@@ -25917,20 +25889,6 @@
             "title": "Ts",
             "type": "string"
           },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ActionMessage"
-            },
-            "title": "Messages",
-            "type": "array"
-          },
-          "trace_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Trace Ids",
-            "type": "array"
-          },
           "attempt": {
             "$ref": "#/components/schemas/Attempt_ActionId_Union_ScientificActionRequest__DataDiffRequest_GitOid___ModelDiffRequest_GitOid___NoneType_"
           }
@@ -25938,8 +25896,6 @@
         "required": [
           "seq",
           "ts",
-          "messages",
-          "trace_ids",
           "attempt"
         ],
         "title": "TimelineRecord",

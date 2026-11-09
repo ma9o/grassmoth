@@ -287,7 +287,6 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             Applied(result=None, effects=ActionEffects(produced=[edited])),
             seq=3,
             ts="2026-09-15T12:02:00Z",
-            trace_ids=[],
         )
     )
     retained = ArtifactStore("TEST").read_result(result_ref, SimulateOutput).report

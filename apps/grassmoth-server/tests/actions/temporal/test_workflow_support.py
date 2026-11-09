@@ -249,7 +249,7 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
                     outcome=Raised(error_type=f"Arm{index}", error_message=f"arm {index}"),
                 )
             if name == "journal_activity":
-                publications.append(payload.record)
+                publications.append(payload)
                 return StudyRevision(
                     record=payload.record,
                     parent_ids=(),
@@ -295,9 +295,13 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
             assert isinstance(first, CompletedCall)
             assert first.seq == 1
         assert executions == [0, 1]
-        assert [record.seq for record in publications] == [2, 1]
-        assert first.messages[-1].detail == "arm 0"
-        assert second.messages[-1].detail == "arm 1"
+        assert [publication.record.seq for publication in publications] == [2, 1]
+        assert publications[1].record.attempt.outcome.error_message == "arm 0"
+        assert publications[0].record.attempt.outcome.error_message == "arm 1"
+        assert all(
+            [message.code for message in publication.messages] == ["FIT_STARTED"]
+            for publication in publications
+        )
         assert memos[-1][RUNNING_ACTION_MEMO] == ()
 
     asyncio.run(scenario())

@@ -110,7 +110,8 @@ class ChecksResult(Value):
 
 
 class AttemptPublication(Value):
-    """The writer receives the same record; Git publication identity is computed outside it."""
+    """Publish call metadata and its separately accumulated execution messages."""
 
     workspace_id: str
     record: AttemptRecord
+    messages: tuple[ActionMessage, ...] = ()

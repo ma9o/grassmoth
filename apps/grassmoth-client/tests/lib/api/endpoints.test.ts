@@ -9,7 +9,7 @@ import {
 import { dump } from "npyjs";
 import { beforeEach, expect, it, vi } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { getLLMTraceForAction, readActionResult } from "@/lib/api/endpoints";
+import { readActionPoll } from "@/lib/api/endpoints";
 
 const { fetcher } = vi.hoisted(() => ({
   fetcher: vi.fn<(request: Request) => Promise<Response>>(),
@@ -30,8 +30,6 @@ const comparison: TimelineRevision = {
   record: {
     seq: 1,
     ts: "2026-10-06T12:00:00Z",
-    messages: [],
-    trace_ids: [],
     attempt: {
       action: "model_diff",
       request: {
@@ -58,7 +56,9 @@ it("reads a recorded comparison by call ID without submitting inputs", async () 
     messages: [],
   };
   fetcher.mockResolvedValue(messagePack(result));
-  expect(await readActionResult("user-1", comparison)).toEqual(result);
+  expect(await readActionPoll("user-1", "model_diff", fixtureValue(comparison.call_id))).toEqual(
+    result,
+  );
   const [call] = fixtureValue(fetcher.mock.calls.at(0));
   expect(decodeURIComponent(call.url)).toBe(
     `http://viewer/api/studies/user-1/model_diff/${comparison.call_id}`,
@@ -67,18 +67,11 @@ it("reads a recorded comparison by call ID without submitting inputs", async () 
   expect(await call.text()).toBe("");
 });
 
-it("rejects a historical entry without a call ID before reading", async () => {
-  await expect(readActionResult("user-1", { ...comparison, call_id: null })).rejects.toThrow(
-    "This historical attempt has no retained call identity",
-  );
-  expect(fetcher).not.toHaveBeenCalled();
-});
-
-it("reports unavailable saved results without retrying execution", async () => {
-  fetcher.mockResolvedValue(messagePack({ status: "running" }));
-  await expect(readActionResult("user-1", comparison)).rejects.toThrow(
-    "The saved successful call is unavailable",
-  );
+it("reports HTTP failures without retrying execution", async () => {
+  fetcher.mockResolvedValue(Response.json({ detail: "Unknown call" }, { status: 404 }));
+  await expect(
+    readActionPoll("user-1", "model_diff", fixtureValue(comparison.call_id)),
+  ).rejects.toThrow("Cannot read model_diff (404)");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
@@ -99,7 +92,10 @@ it("reads retained traces from a failed call's messages", async () => {
       messages: [{ kind: "trace", timestamp: comparison.record.ts, trace_id: "worker", trace }],
     }),
   );
-  expect(await getLLMTraceForAction("user-1", comparison, ["worker"])).toEqual(trace);
+  const result = await readActionPoll("user-1", "model_diff", fixtureValue(comparison.call_id));
+  expect(result.messages).toEqual([
+    { kind: "trace", timestamp: comparison.record.ts, trace_id: "worker", trace },
+  ]);
   expect(fixtureValue(fetcher.mock.calls[0])[0].method).toBe("GET");
 });
 
@@ -138,9 +134,10 @@ it("decodes binary NPY buffers once with shape, non-finite values and exact 64-b
       messages: [],
     }),
   );
-  const saved = await readActionResult("user-1", comparison);
+  const saved = await readActionPoll("user-1", "model_diff", fixtureValue(comparison.call_id));
   expect(saved.body).toEqual(body);
-  if (saved.action !== "model_diff") throw new Error("Expected model comparison");
+  if (saved.status !== "success" || saved.action !== "model_diff")
+    throw new Error("Expected model comparison");
   const laws = fixtureValue(saved.body.changes.distributions);
   const law = fixtureValue(laws["distribution:floats"]);
   const integerLaw = fixtureValue(laws["distribution:integers"]);

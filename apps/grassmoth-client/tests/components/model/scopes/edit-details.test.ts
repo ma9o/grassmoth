@@ -48,8 +48,6 @@ const tick: TimelineRevision = {
   record: {
     seq: 5,
     ts: "2026-09-30T00:00:00Z",
-    messages: [],
-    trace_ids: [],
     attempt: {
       action: "edit_model",
       request: {

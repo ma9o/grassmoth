@@ -15,6 +15,7 @@ import pygit2
 
 from grassmoth.public import DataRef, GitOid
 from grassmoth_server.actions.contracts.inputs import FitTarget, NewFitTarget
+from grassmoth_server.actions.contracts.logs import CallLogSnapshot
 from grassmoth_server.actions.contracts.requests import (
     FitRequest,
     ScientificActionRequest,
@@ -39,6 +40,8 @@ from grassmoth_server.study.records import (
     recorded_question,
 )
 from grassmoth_server.study.state import ArtifactRecord, StudyState, apply_effects
+
+_EMPTY_LOG_SNAPSHOT = CallLogSnapshot()
 
 
 class StudyRepository:
@@ -154,8 +157,6 @@ class StudyRepository:
                 seq=saved.seq,
                 attempt_id=saved.attempt_id,
                 ts=saved.ts,
-                messages=saved.messages,
-                trace_ids=saved.trace_ids,
                 attempt=action_attempt(saved.request, public_outcome),
             ),
             commit_id=GitOid(str(commit.id)),
@@ -212,11 +213,12 @@ class StudyRepository:
         self,
         record: AttemptRecord,
         *,
-        logs: dict[str, bytes] | None = None,
+        messages: tuple[ActionMessage, ...] = (),
+        snapshot: CallLogSnapshot = _EMPTY_LOG_SNAPSHOT,
     ) -> StudyRevision:
         """Atomically publish a call and its law owners, admitting one immutable question."""
         from grassmoth_server.storage import paths
-        from grassmoth_server.study.persistence.log_codec import assemble_call_log
+        from grassmoth_server.study.persistence.log_codec import finalize_call_log
 
         request = record.attempt.request
         if request is None:
@@ -241,16 +243,6 @@ class StudyRepository:
                     )
                     record = record.revised(
                         attempt=record.attempt.revised(outcome=outcome),
-                        messages=(
-                            *record.messages[:-1],
-                            ActionMessage(
-                                timestamp=datetime.fromisoformat(record.ts),
-                                severity="error",
-                                code=outcome.code,
-                                subject=outcome.subject,
-                                detail=outcome.detail,
-                            ),
-                        ),
                     )
                 else:
                     question_ref = "refs/question"
@@ -293,8 +285,6 @@ class StudyRepository:
                 attempt_id=record.attempt_id,
                 ts=record.ts,
                 request=request,
-                messages=record.messages,
-                trace_ids=record.trace_ids,
                 outcome=saved_outcome,
             )
             tree.insert(
@@ -302,12 +292,7 @@ class StudyRepository:
                 write_blob(self.repo, saved.model_dump_json(round_trip=True).encode()),
                 pygit2.GIT_FILEMODE_BLOB,
             )
-            log = assemble_call_log(
-                record.messages,
-                logs or {},
-                at=datetime.fromisoformat(record.ts),
-                failure=None if isinstance(outcome, Applied) else outcome,
-            )
+            log = finalize_call_log(record, messages, snapshot)
             tree.insert(
                 "log.json",
                 write_blob(self.repo, log.model_dump_json(round_trip=True).encode()),

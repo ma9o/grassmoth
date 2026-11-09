@@ -48,7 +48,7 @@ from grassmoth_server.llm.openrouter import create_openrouter_client
 from grassmoth_server.study import calls as study_calls
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
-from grassmoth_server.study.records import ActionMessage, Raised, Rejected
+from grassmoth_server.study.records import ActionMessage, Rejected
 from grassmoth_test_support.helpers import graph_constructs
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
@@ -285,14 +285,14 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                         )
                     ),
                 ):
-                    raised = await execute(request)
-                    outcome = raised.record.attempt.outcome
-                    if isinstance(request, FitRequest):
-                        assert isinstance(outcome, Raised), raised
-                        assert outcome.error_type == "ModelFitError"
-                    else:
-                        assert isinstance(outcome, Rejected), raised
-                        assert outcome.code == "model_execution"
+                    rejected = await execute(request)
+                    outcome = rejected.record.attempt.outcome
+                    assert isinstance(outcome, Rejected), rejected
+                    assert outcome.code == (
+                        "FIT_CAPACITY_UNAVAILABLE"
+                        if isinstance(request, FitRequest)
+                        else "model_execution"
+                    )
                     assert state().current == before
 
                 status = await _timeline(workspace_id, clients)
@@ -331,7 +331,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     "rejected",
                     "applied",
                     "applied",
-                    "raised",
+                    "rejected",
                     "rejected",
                     "applied",
                 ]
@@ -528,9 +528,14 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 assert isinstance(preparing, RunningPoll)
                 assert running.call_id == preparing.call_id
                 assert running.action == "prepare_data"
+                assert set(running.model_dump()) == {"call_id", "action", "request"}
+                polled = await study_calls.poll_action(
+                    workspace_id, running.action, running.call_id, clients
+                )
+                assert not isinstance(polled, StudyError)
                 assert [
                     message.code
-                    for message in running.messages
+                    for message in polled.decode().messages
                     if isinstance(message, ActionMessage)
                 ] == ["PREPARE_DATA_STARTED"]
 

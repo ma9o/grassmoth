@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from pydantic import TypeAdapter
-
-from grassmoth.public import Value
 from grassmoth_server.actions.contracts.call_state import CompletedCall
-from grassmoth_server.actions.contracts.logs import ActionLog
-from grassmoth_server.actions.contracts.progress import ProgressEvent
+from grassmoth_server.actions.contracts.logs import ActionLog, CallLogSnapshot
 from grassmoth_server.actions.contracts.requests import call_identity
 from grassmoth_server.actions.progress import read_events
 from grassmoth_server.storage import backend as storage
@@ -26,31 +21,6 @@ if TYPE_CHECKING:
     from grassmoth_server.actions.contracts.call_state import RunningCall
     from grassmoth_server.study.persistence.history import StudyRepository
     from grassmoth_server.study.records import FailedOutcome
-
-_PROGRESS = TypeAdapter(tuple[ProgressEvent, ...])
-_MESSAGES = TypeAdapter(tuple[ActionMessage, ...])
-
-
-class CallLogSnapshot(Value):
-    """One immutable collection of a call's traces, progress and execution messages."""
-
-    traces: Mapping[str, bytes]
-    events: tuple[ProgressEvent, ...]
-    execution_messages: tuple[ActionMessage, ...]
-
-    @property
-    def logs(self) -> Mapping[str, bytes]:
-        """Encode the collected records for the shared live and durable log assembler."""
-        return {
-            **self.traces,
-            "progress.json": _PROGRESS.dump_json(self.events),
-            "messages.json": _MESSAGES.dump_json(self.execution_messages),
-        }
-
-    @property
-    def trace_ids(self) -> tuple[str, ...]:
-        """Identify only LLM traces, excluding progress and execution message records."""
-        return tuple(path.removeprefix("traces/").removesuffix(".json") for path in self.traces)
 
 
 def emit_message(workspace_id: str, call_id: str, message: ActionMessage) -> None:
@@ -99,7 +69,7 @@ def collect_call_log(
     snapshot = collect_call_snapshot(workspace_id, identity)
     return assemble_call_log(
         call.messages,
-        snapshot.logs,
+        snapshot,
         at=at,
         failure=failure,
     )

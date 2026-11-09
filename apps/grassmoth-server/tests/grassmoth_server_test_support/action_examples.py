@@ -105,7 +105,6 @@ def examples() -> tuple[Example, ...]:
             ]
         )
         trace_ids = ("synthetic-authoring",) if name == "authored" else ()
-        log_messages = tuple(messages)
         if trace_ids:
             messages.append(
                 {
@@ -157,8 +156,6 @@ def examples() -> tuple[Example, ...]:
                     "seq": seq,
                     "ts": ORIGIN,
                     "attempt": attempt,
-                    "messages": [] if failure else log_messages,
-                    "trace_ids": trace_ids,
                 },
             }
         )

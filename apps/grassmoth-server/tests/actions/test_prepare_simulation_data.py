@@ -127,7 +127,6 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
             Applied(result=None, effects=ActionEffects(produced=[model_info])),
             seq=1,
             ts="2026-09-25T12:00:00Z",
-            trace_ids=[],
         )
     ).commit_id
     times = (0.0, 0.5, 2.0)
@@ -174,7 +173,6 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         ),
         seq=2,
         ts="2026-09-25T12:01:00Z",
-        trace_ids=[],
     )
     source_commit = history.append(simulation_record).commit_id
     # A later simulation must not replace the explicitly selected source.

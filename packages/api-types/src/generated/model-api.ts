@@ -170,7 +170,7 @@ export interface paths {
         };
         /**
          * Get Timeline
-         * @description Slim call log: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.
+         * @description Timeline metadata: call IDs, retained arguments, outcome summaries and dependencies. The viewer reads complete results and messages with GET using each call_id.
          */
         readonly get: operations["get_timeline_api_studies__workspace_id__timeline_get"];
         readonly put?: never;
@@ -454,18 +454,6 @@ export interface components {
              * @description Recorded attempt timestamp.
              */
             readonly ts: string;
-            /**
-             * Messages
-             * @description Structured action messages emitted during execution.
-             * @default []
-             */
-            readonly messages: readonly components["schemas"]["ActionMessage"][];
-            /**
-             * Trace Ids
-             * @description References identifying the retained execution traces.
-             * @default []
-             */
-            readonly trace_ids: readonly string[];
             readonly attempt: components["schemas"]["ActionAttempt"];
         };
         /**
@@ -7108,15 +7096,13 @@ export interface components {
         readonly Role: "endogenous" | "exogenous";
         /**
          * RunningAction
-         * @description Timeline discovery of the active call and its accumulated messages.
+         * @description Timeline discovery of an active call; GET its ActionPoll for execution messages.
          */
         readonly RunningAction: {
             readonly call_id: components["schemas"]["CallId-Output"];
             readonly action: components["schemas"]["ActionId"];
             /** Request */
             readonly request: components["schemas"]["ScientificActionRequest"] | Domain.DataDiffRequest<Domain.GitOid> | Domain.ModelDiffRequest<Domain.GitOid>;
-            /** Messages */
-            readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
         /**
          * RunningPoll
@@ -7814,17 +7800,13 @@ export interface components {
         readonly TemporalStatus: "time_varying" | "time_invariant";
         /**
          * TimelineRecord
-         * @description A replayable call log, excluding every scientific result and check payload.
+         * @description Call arguments and publication metadata; execution messages belong to ActionPoll.
          */
         readonly TimelineRecord: {
             /** Seq */
             readonly seq: number;
             /** Ts */
             readonly ts: string;
-            /** Messages */
-            readonly messages: readonly components["schemas"]["ActionMessage"][];
-            /** Trace Ids */
-            readonly trace_ids: readonly string[];
             readonly attempt: Domain.Attempt<Domain.ActionId, Domain.ScientificActionRequest | Domain.DataDiffRequest<Domain.GitOid> | Domain.ModelDiffRequest<Domain.GitOid>, null>;
         };
         /**

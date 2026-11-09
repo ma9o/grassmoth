@@ -90,12 +90,11 @@ type ActionPoll = Annotated[RunningPoll | FailedPoll | ActionSuccess, Field(disc
 
 
 class RunningAction(Value):
-    """Timeline discovery of the active call and its accumulated messages."""
+    """Timeline discovery of an active call; GET its ActionPoll for execution messages."""
 
     call_id: CallId  # noqa: FIELD003 -- External clients discover the active call here before GET polling.
     action: ActionId
     request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
-    messages: tuple[ExecutionMessage, ...]
 
 
 class StudyError(Value):

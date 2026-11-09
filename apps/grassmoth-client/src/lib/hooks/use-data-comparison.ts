@@ -2,7 +2,7 @@
 
 import type { DataComparisonReport, GitOid, TimelineRevision } from "@grassmoth/api-types";
 import { useQueries } from "@tanstack/react-query";
-import { readActionResult } from "@/lib/api/endpoints";
+import { recordedCallQuery, successfulResult } from "./use-action-poll";
 import { producingCall } from "@/lib/model-asset/call-dependencies";
 import { dataComparisonView, type DataSourceResult } from "@/lib/model-asset/data-comparison";
 
@@ -21,10 +21,8 @@ export function useDataComparison(
   ];
   const queries = useQueries({
     queries: calls.map((call) => ({
-      queryKey: ["action-result", workspaceId, call.call_id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => readActionResult(workspaceId, call, signal),
-      staleTime: Infinity,
-      retry: false,
+      ...recordedCallQuery(workspaceId, call),
+      select: successfulResult,
     })),
   });
   const sources = new Map<GitOid, DataSourceResult>();

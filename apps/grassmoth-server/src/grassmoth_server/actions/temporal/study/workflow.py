@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from datetime import timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -33,6 +32,7 @@ with workflow.unsafe.imports_passed_through():
         PrepareDataRequest,
         call_identity,
     )
+    from grassmoth_server.actions.messages import completion_message
     from grassmoth_server.actions.temporal.activity_policy import temporal_failure
     from grassmoth_server.actions.temporal.client import (
         MODEL_CHECKS_TASK_QUEUE,
@@ -142,20 +142,15 @@ class StudyWorkflow:
         except (ActivityError, ChildWorkflowError) as exc:
             failure = temporal_failure(exc)
             progress = self._attempts[request.attempt_id]
+            attempt = action_attempt(request.request, failure)
             self._attempts[request.attempt_id] = CompletedCall(
                 attempt_id=request.attempt_id,
                 seq=running.seq,
                 commit_id=None,
-                attempt=action_attempt(request.request, failure),
+                attempt=attempt,
                 messages=(
                     *progress.messages,
-                    ActionMessage(
-                        subject=request.request.action,
-                        detail=failure.error_message,
-                        timestamp=workflow.now(),
-                        severity="error",
-                        code=_error_label(failure.error_type),
-                    ),
+                    completion_message(attempt, workflow.now()),
                 ),
             )
         finally:
@@ -189,7 +184,6 @@ class StudyWorkflow:
                 seq=saved.record.seq,
                 commit_id=saved.commit_id,
                 attempt=saved.record.attempt,
-                messages=saved.record.messages,
             )
             return
         lineage = (
@@ -377,30 +371,6 @@ class StudyWorkflow:
         running: RunningCall,
         attempt: ActionAttempt,
     ) -> None:
-        outcome = attempt.outcome
-        label = (
-            "ACTION_COMPLETED"
-            if isinstance(outcome, Applied)
-            else outcome.code
-            if isinstance(outcome, Rejected)
-            else _error_label(outcome.error_type)
-        )
-        messages = (
-            *running.messages,
-            ActionMessage(
-                subject=outcome.subject
-                if isinstance(outcome, Rejected)
-                else request.request.action,
-                detail=outcome.detail
-                if isinstance(outcome, Rejected)
-                else "Action completed."
-                if isinstance(outcome, Applied)
-                else outcome.error_message,
-                timestamp=workflow.now(),
-                severity="info" if isinstance(outcome, Applied) else "error",
-                code=label,
-            ),
-        )
         revision = await workflow.execute_activity(
             "journal_activity",
             AttemptPublication(
@@ -410,8 +380,8 @@ class StudyWorkflow:
                     attempt_id=request.attempt_id,
                     ts=workflow.now().isoformat(),
                     attempt=attempt,
-                    messages=messages,
                 ),
+                messages=running.messages,
             ),
             result_type=StudyRevision,
             start_to_close_timeout=_JOURNAL_TIMEOUT,
@@ -422,7 +392,6 @@ class StudyWorkflow:
             seq=revision.record.seq,
             commit_id=revision.commit_id,
             attempt=revision.record.attempt,
-            messages=revision.record.messages,
         )
         self._sync_running_memo()
         try:
@@ -436,8 +405,3 @@ class StudyWorkflow:
             workflow.logger.warning(
                 "run scratch collection failed after seq %d: %s", running.seq, exc
             )
-
-
-def _error_label(error_type: str) -> str:
-    words = re.sub(r"(?<!^)(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])", "_", error_type)
-    return "ACTION_FAILED_" + re.sub(r"[^A-Za-z0-9]+", "_", words).strip("_").upper()

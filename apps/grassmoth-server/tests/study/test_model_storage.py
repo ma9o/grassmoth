@@ -202,7 +202,6 @@ def _commit(workspace, artifact_id, payload, *, pins=None, retracted=(), reports
             ),
             seq=journal.latest_seq() + 1,
             ts="2026-09-12T12:00:00Z",
-            trace_ids=[],
         ),
     )
     return info
@@ -433,7 +432,6 @@ def test_uncommitted_versions_and_failed_attempts_never_change_published_model(w
         AttemptRecord(
             seq=3,
             ts="2026-09-12T13:00:00Z",
-            trace_ids=[],
             attempt=EditAttempt(
                 action="edit_model",
                 request=EditModelRequest[GitOid](

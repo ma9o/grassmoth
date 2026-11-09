@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Literal
 
 from grassmoth.public import (
@@ -14,7 +15,7 @@ from grassmoth.public import (
     QueryTargetSubject,
 )
 from grassmoth_server.actions.contracts.progress import ExtractionWorkerEvent
-from grassmoth_server.study.records import ActionMessage
+from grassmoth_server.study.records import ActionMessage, Applied, Rejected
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -32,9 +33,40 @@ if TYPE_CHECKING:
         SimulationReport,
     )
     from grassmoth_server.actions.contracts.progress import ProgressEvent
+    from grassmoth_server.study.records import ActionAttempt
 
 
 type FindingEvidence = str | NumericCriterionEvidence | tuple[NumericCriterionEvidence, ...]
+
+
+def completion_message(attempt: ActionAttempt, timestamp: datetime) -> ActionMessage:
+    """Describe the final applied, rejected or raised outcome with one terminal message."""
+    outcome = attempt.outcome
+    if isinstance(outcome, Applied):
+        return ActionMessage(
+            timestamp=timestamp,
+            severity="info",
+            code="ACTION_COMPLETED",
+            subject=attempt.action,
+            detail="Action completed.",
+        )
+    if isinstance(outcome, Rejected):
+        return ActionMessage(
+            timestamp=timestamp,
+            severity="error",
+            code=outcome.code,
+            subject=outcome.subject,
+            detail=outcome.detail,
+        )
+    words = re.sub(r"(?<!^)(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])", "_", outcome.error_type)
+    label = re.sub(r"[^A-Za-z0-9]+", "_", words).strip("_").upper()
+    return ActionMessage(
+        timestamp=timestamp,
+        severity="error",
+        code=f"ACTION_FAILED_{label}",
+        subject=attempt.action,
+        detail=outcome.error_message,
+    )
 
 
 def _explanation(evidence: FindingEvidence) -> str:

@@ -1,6 +1,6 @@
 import type { ModelDiffOutput, TimelineRevision } from "@grassmoth/api-types";
-import { skipToken, useQuery } from "@tanstack/react-query";
-import { readActionResult } from "@/lib/api/endpoints";
+import { useQuery } from "@tanstack/react-query";
+import { recordedCallQuery } from "./use-action-poll";
 
 export function useModelDiff(
   workspaceId: string,
@@ -18,11 +18,8 @@ export function useModelDiff(
     );
   });
   return useQuery({
-    queryKey: ["action-result", workspaceId, call?.call_id],
-    queryFn: call ? ({ signal }) => readActionResult(workspaceId, call, signal) : skipToken,
+    ...recordedCallQuery(workspaceId, call),
     select: (result): ModelDiffOutput | null =>
-      result.action === "model_diff" ? result.body : null,
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
+      result.status === "success" && result.action === "model_diff" ? result.body : null,
   });
 }

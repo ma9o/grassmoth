@@ -12,7 +12,7 @@ export function revision(seq: number, attempt: TimelineRecord["attempt"]): Timel
     call_id: `call:${seq.toString(16).padStart(64, "0")}`,
     commit_id: seq.toString(16).padEnd(40, "0"),
     parent_ids: [(seq - 1).toString(16).padEnd(40, "0")],
-    record: { seq, ts: "2026-01-01T00:00:00Z", messages: [], trace_ids: [], attempt },
+    record: { seq, ts: "2026-01-01T00:00:00Z", attempt },
   };
 }
 export const simulation = revision(5, {

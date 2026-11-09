@@ -273,6 +273,7 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert client.get(f"/api/studies/MISSING/edit_question/{result['call_id']}").status_code == 404
     timeline = client.get("/api/studies/CALLS/timeline").json()
     assert timeline["attempts"][0]["record"]["attempt"]["request"]["reasoning"] == request.reasoning
+    assert all(set(entry["record"]) == {"seq", "ts", "attempt"} for entry in timeline["attempts"])
     assert len(repository.attempts()) == 2
     assert (
         client.post(
@@ -348,3 +349,40 @@ def test_get_reads_running_call_without_starting_workflow_or_work(tmp_path, monk
         assert client.get(f"/api/studies/RUNNING/edit_question/call:{'0' * 64}").status_code == 404
     assert len(calls) == 3
     assert not (tmp_path / "RUNNING" / "study" / "history.git").exists()
+
+
+def test_running_timeline_discovers_calls_without_collecting_execution_logs(monkeypatch):
+    from temporalio.client import WorkflowExecutionStatus
+
+    from grassmoth_server.actions.contracts.call_state import RunningCall
+    from grassmoth_server.study import calls
+
+    request = EditQuestionRequest(
+        input=EditQuestionInput(
+            question=QuestionSpec(text="Timeline?", outcome="construct:outcome")
+        )
+    )
+    running = RunningCall(attempt_id=UUID(int=11), seq=1, request=request)
+
+    async def memo_value(*args, **kwargs):
+        return (running,)
+
+    async def describe():
+        return SimpleNamespace(status=WorkflowExecutionStatus.RUNNING, memo_value=memo_value)
+
+    async def get(self):
+        return SimpleNamespace(get_workflow_handle=lambda _: SimpleNamespace(describe=describe))
+
+    def cannot_collect(*args, **kwargs):
+        raise AssertionError("Timeline discovery must not read execution logs")
+
+    monkeypatch.setattr(calls.TemporalClientProvider, "get", get)
+    monkeypatch.setattr(calls, "collect_call_log", cannot_collect)
+    discovered = asyncio.run(calls._running_actions("TIMELINE", calls.TemporalClientProvider()))
+    assert [call.model_dump(mode="json") for call in discovered] == [
+        {
+            "call_id": call_identity(request),
+            "action": "edit_question",
+            "request": request.model_dump(mode="json"),
+        }
+    ]

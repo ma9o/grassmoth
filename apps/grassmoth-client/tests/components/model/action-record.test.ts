@@ -1,4 +1,5 @@
 import type {
+  ActionPoll,
   GitOid,
   RunningAction,
   SimulateRequest,
@@ -7,7 +8,11 @@ import type {
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionRecord, type ActionTraceState } from "@/components/model/action-record";
+import { ActionRecord } from "@/components/model/action-record";
+import { ActionExecution } from "@/components/model/action-log";
+
+import { runningPoll, simulatedResult, failedPoll } from "@/lib/__fixtures__/action-results";
+import { executionMessages, executionFailure } from "@/lib/__fixtures__/execution-log";
 
 const intent = "Check <revised> assumptions.\nGoal: choose a model to fit.";
 const request: SimulateRequest<GitOid> = {
@@ -27,8 +32,6 @@ const tick: TimelineRevision = {
   record: {
     seq: 2,
     ts: "2026-10-05T12:00:00Z",
-    messages: [],
-    trace_ids: [],
     attempt: {
       action: "simulate",
       request: { ...request, reasoning: null },
@@ -40,14 +43,17 @@ const tick: TimelineRevision = {
     },
   },
 };
-const render = (selected: TimelineRevision | undefined, running: readonly RunningAction[] = []) =>
+const render = (
+  selected: TimelineRevision | undefined,
+  running: readonly RunningAction[] = [],
+  poll: ActionPoll = { ...runningPoll, messages: executionMessages },
+) =>
   renderToStaticMarkup(
     createElement(ActionRecord, {
-      workspaceId: "TEST",
       context: null,
       tick: selected,
       running,
-      useActionTrace: (): ActionTraceState => ({ status: "absent" }),
+      useActionPoll: () => ({ data: poll, error: null }),
     }),
   );
 
@@ -79,19 +85,11 @@ describe("action reasoning", () => {
         action: "simulate",
         call_id: `call:${"2".repeat(64)}`,
         request,
-        messages: [
-          {
-            kind: "log",
-            timestamp: tick.record.ts,
-            severity: "info",
-            code: "SIMULATE_STARTED",
-            subject: "action",
-            detail: "",
-          },
-        ],
       },
     ]);
-    expect(html.indexOf('aria-label="Reasoning"')).toBeLessThan(html.indexOf("SIMULATE_STARTED"));
+    expect(html.indexOf('aria-label="Reasoning"')).toBeLessThan(
+      html.indexOf("FIT_CAPACITY_ESTIMATE"),
+    );
   });
 
   it("omits the section when no reasoning was supplied", () => {
@@ -105,7 +103,6 @@ describe("action reasoning", () => {
         action: "simulate",
         call_id: `call:${String(index).repeat(64)}`,
         request: { ...request, reasoning: `Arm ${index}` },
-        messages: [],
       })),
     );
     expect(html.match(/aria-label="simulate · running"/g)).toHaveLength(2);
@@ -113,4 +110,63 @@ describe("action reasoning", () => {
     expect(html).toContain("Arm 2");
     expect(html).not.toContain("No actions yet.");
   });
+});
+
+it("keeps the complete execution log visible after a running action succeeds", () => {
+  const live = render(undefined, [{ action: "simulate", call_id: runningPoll.call_id, request }]);
+  const completed = render(tick, [], {
+    call_id: runningPoll.call_id,
+    action: "simulate",
+    status: "success",
+    commit_id: tick.commit_id,
+    body: simulatedResult,
+    messages: executionMessages,
+  });
+  for (const html of [live, completed]) {
+    for (const text of [
+      "FIT_CAPACITY_ESTIMATE",
+      "128 MiB",
+      "grassmoth.step",
+      "2 workers planned",
+      "worker 7",
+      "4 windows",
+      "8 extractions",
+      "3 LLM calls",
+      "1/2 completed",
+      "Agent conversation",
+      "Inspecting retained observations.",
+    ]) {
+      expect(html).toContain(text);
+    }
+    expect(html.indexOf("FIT_CAPACITY_ESTIMATE")).toBeLessThan(html.indexOf("grassmoth.step"));
+    expect(html.indexOf("grassmoth.step")).toBeLessThan(html.indexOf("Agent conversation"));
+  }
+});
+
+it("shows retained conversations and complete failure details for failed calls", () => {
+  const html = render(tick, [], {
+    ...failedPoll,
+    messages: [...executionMessages, executionFailure],
+  });
+  expect(html).toContain("Inspecting retained observations.");
+  expect(html).toContain("ExtractionError: Worker failed");
+  expect(html).toContain("Retained provider error details.");
+});
+
+it("preserves progress counters and received messages when a later poll fails", () => {
+  const html = renderToStaticMarkup(
+    createElement(ActionExecution, {
+      action: "prepare_data",
+      callId: runningPoll.call_id,
+      useActionPoll: () => ({
+        data: { ...runningPoll, action: "prepare_data" as const, messages: executionMessages },
+        error: new Error("Connection interrupted"),
+      }),
+    }),
+  );
+  expect(html).toContain("Cannot load action log: Connection interrupted");
+  expect(html).toContain('aria-label="Progress"');
+  expect(html).toContain("3 reported by");
+  expect(html).toContain("1/2 completed");
+  expect(html).toContain("FIT_CAPACITY_ESTIMATE");
 });

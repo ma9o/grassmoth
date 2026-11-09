@@ -2,14 +2,14 @@ import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import type { TimelineRevision } from "@grassmoth/api-types";
 import { QueryClient, skipToken, useQuery } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
-import { readActionResult } from "@/lib/api/endpoints";
+import { readActionPoll } from "@/lib/api/endpoints";
 import { useModelDiff } from "@/lib/hooks/use-model-diff";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQuery: vi.fn(),
 }));
-vi.mock("@/lib/api/endpoints", () => ({ readActionResult: vi.fn() }));
+vi.mock("@/lib/api/endpoints", () => ({ readActionPoll: vi.fn() }));
 
 const comparison: TimelineRevision = {
   call_id: `call:${"3".repeat(64)}`,
@@ -18,8 +18,6 @@ const comparison: TimelineRevision = {
   record: {
     seq: 1,
     ts: "2026-10-06T12:00:00Z",
-    messages: [],
-    trace_ids: [],
     attempt: {
       action: "model_diff",
       request: {
@@ -45,7 +43,12 @@ it("replays only the saved comparison with its original arguments", async () => 
   if (typeof queryFn !== "function") throw new Error("Expected a saved comparison query");
   const signal = new AbortController().signal;
   await queryFn({ queryKey: options.queryKey, signal, client: new QueryClient(), meta: undefined });
-  expect(readActionResult).toHaveBeenCalledExactlyOnceWith("STUDY", comparison, signal);
+  expect(readActionPoll).toHaveBeenCalledExactlyOnceWith(
+    "STUDY",
+    "model_diff",
+    comparison.call_id,
+    signal,
+  );
 });
 
 it("never submits missing, reversed, failed or unknown comparison calls", () => {
@@ -75,5 +78,5 @@ it("never submits missing, reversed, failed or unknown comparison calls", () => 
   useModelDiff("STUDY", "after", "before", [comparison]);
   useModelDiff("STUDY", "before", "after", [failed, unknown]);
   for (const [options] of vi.mocked(useQuery).mock.calls) expect(options.queryFn).toBe(skipToken);
-  expect(readActionResult).not.toHaveBeenCalled();
+  expect(readActionPoll).not.toHaveBeenCalled();
 });

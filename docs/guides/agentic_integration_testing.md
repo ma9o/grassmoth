@@ -136,7 +136,7 @@ lint, type, documentation, and duplicate checks when they apply to the change.
 
 New studies initialize `history.git/` at the workspace root on first use. The
 [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 32. Start a new study for older formats; there is no automatic
+requires format 33. Start a new study for older formats; there is no automatic
 migration or bundle restore step.
 
 A tracked study includes its packed `history.git/`. With its workers stopped and
@@ -243,7 +243,7 @@ Hand-authored relative source folders remain valid alongside `tmp/input/`.
 
 ### Publishing a workspace
 
-Hosted R2 serving is not implemented for format 32.
+Hosted R2 serving is not implemented for format 33.
 
 ## Step-by-Step Flow
 
@@ -276,7 +276,7 @@ curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
 The study facade (tool server, port `8100`) is the source of truth:
 
 ```bash
-# Slim journal: every recorded call's arguments, status, messages and dependencies
+# Timeline: recorded call arguments, statuses and dependencies
 curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline \
   | jq '.attempts[] | {commit_id, seq: .record.seq, attempt: .record.attempt}'
 

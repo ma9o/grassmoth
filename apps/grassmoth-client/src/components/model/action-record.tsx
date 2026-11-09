@@ -2,29 +2,20 @@
 
 import { attemptError } from "@/lib/model-asset/journal";
 
-import type { ActionMessage, LLMTrace, RunningAction } from "@grassmoth/api-types";
+import type { RunningAction } from "@grassmoth/api-types";
 import { LoaderCircle, X } from "lucide-react";
-import { useMemo } from "react";
-import { ChatMessages } from "@/components/ui/custom/chat-messages";
-import { useAttemptProgress } from "@/lib/hooks/use-attempt-progress";
+import type { UseActionPoll } from "@/lib/hooks/use-action-poll";
 import type { TimelineRevision } from "@grassmoth/api-types";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
 import { timelineTickLabel } from "@/lib/model-asset/timeline-presentation";
-import { cn } from "@/lib/utils";
-import { traceToUIMessages } from "@/lib/utils/trace-to-ui-messages";
+import { ActionExecution } from "./action-log";
 import { ActionFindings } from "./action-findings";
 import { Hint, Section } from "./scope-primitives";
 import { DataComparisonOutcome, DataDetails } from "./scopes/data-details";
 import { EditDetails } from "./scopes/edit-details";
 import { QuestionDetails } from "./scopes/question-details";
 import { FitOutcome } from "./scopes/fit-details";
-
-export type ActionTraceState =
-  | { status: "loading" }
-  | { status: "ready"; trace: LLMTrace }
-  | { status: "absent" };
-export type UseActionTrace = (seq: number, enabled: boolean) => ActionTraceState;
 
 function ActionReasoning({ reasoning }: { reasoning: string | null | undefined }) {
   if (!reasoning) return null;
@@ -33,118 +24,6 @@ function ActionReasoning({ reasoning }: { reasoning: string | null | undefined }
       <h3 className="mb-1 text-[11px] font-semibold">Reasoning</h3>
       <p className="whitespace-pre-wrap break-words text-[11.5px] leading-relaxed">{reasoning}</p>
     </section>
-  );
-}
-
-function ActionLabels({ messages }: { messages: readonly ActionMessage[] }) {
-  return (
-    <ul className="space-y-1 px-4 py-1 text-[10px] font-mono" aria-label="Action messages">
-      {messages.map((message, index) => (
-        <li
-          key={`${message.timestamp}:${index}`}
-          className={cn(
-            "flex flex-wrap gap-x-2 text-muted-foreground",
-            message.severity === "warning" && "text-amber-700",
-            message.severity === "error" && "text-destructive",
-          )}
-        >
-          <time dateTime={message.timestamp} title={message.timestamp}>
-            {new Date(message.timestamp).toLocaleTimeString()}
-          </time>
-          <span>{message.severity}</span>
-          <span className="break-all">{message.code}</span>
-          <span>{message.detail}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/**
- * What a running data preparation has reported: each step's latest status and the extraction
- * workers' counts. No other action reports progress, so their running entries show messages alone.
- */
-function AttemptProgress({
-  workspaceId,
-  running,
-}: {
-  workspaceId: string;
-  running: RunningAction;
-}) {
-  const progress = useAttemptProgress(workspaceId, running);
-  const view = progress.data;
-  // Nothing retained for this attempt: progress is unknown, not zero.
-  if (view.cursor === null)
-    return <p className="px-4 text-[10px] text-muted-foreground">Progress unavailable.</p>;
-  const finished = Object.values(view.workers).filter(
-    (worker) => worker.state === "completed" || worker.state === "failed",
-  );
-  return (
-    <dl
-      aria-label="Progress"
-      className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 px-4 py-1 font-mono text-[10px] text-muted-foreground"
-    >
-      {view.extraction && (
-        <>
-          <dt>extraction</dt>
-          <dd
-            className={cn("break-all", view.extraction.status === "failed" && "text-destructive")}
-          >
-            {view.extraction.status}
-            {view.extraction.error &&
-              ` · ${view.extraction.error.type}: ${view.extraction.error.message}`}
-          </dd>
-        </>
-      )}
-      {view.snapshot && (
-        <>
-          <dt>workers</dt>
-          <dd>
-            {view.snapshot.completed_workers}/{view.snapshot.total_workers} completed ·{" "}
-            {view.snapshot.running_workers} running · {view.snapshot.pending_workers} pending ·{" "}
-            {view.snapshot.failed_workers} failed
-          </dd>
-        </>
-      )}
-      {finished.length > 0 && (
-        <>
-          <dt>LLM calls</dt>
-          <dd>
-            {finished.reduce((calls, worker) => calls + (worker.n_llm_calls ?? 0), 0)} reported by{" "}
-            {finished.length} finished {finished.length === 1 ? "worker" : "workers"}
-          </dd>
-        </>
-      )}
-    </dl>
-  );
-}
-
-/** The model calls recorded inside the action, failed attempts included. */
-function ActionTrace({
-  tick,
-  useActionTrace,
-}: {
-  tick: TimelineRevision;
-  useActionTrace: UseActionTrace;
-}) {
-  const traceState = useActionTrace(tick.record.seq, tick.record.trace_ids.length > 0);
-  const messages = useMemo(
-    () => (traceState.status === "ready" ? traceToUIMessages(traceState.trace) : []),
-    [traceState],
-  );
-  if (tick.record.trace_ids.length === 0) return null;
-  if (traceState.status === "loading")
-    return (
-      <p role="status" className="px-4 text-xs text-muted-foreground">
-        Loading conversation…
-      </p>
-    );
-  if (traceState.status === "absent")
-    return <p className="px-4 text-xs text-muted-foreground">Conversation unavailable.</p>;
-  return (
-    <div className="px-4 [&_.prose]:text-[11.5px] [&_pre]:text-[10px]">
-      <ChatMessages messages={messages} />
-    </div>
   );
 }
 
@@ -164,17 +43,15 @@ function ActionTrace({
  * Executing calls have no completed timeline node yet, so each streams its own progress.
  */
 export function ActionRecord({
-  workspaceId,
   context,
   tick,
   running,
-  useActionTrace,
+  useActionPoll,
 }: {
-  workspaceId: string;
   context: ScopeContext | null;
   tick: TimelineRevision | undefined;
   running: readonly RunningAction[];
-  useActionTrace: UseActionTrace;
+  useActionPoll: UseActionPoll;
 }) {
   const request = tick?.record.attempt.request;
   const call =
@@ -209,17 +86,11 @@ export function ActionRecord({
                 title={`${humanize(tick.record.attempt.action).replace(/^./, (letter) => letter.toUpperCase())} failed`}
               >
                 <Hint issue>{attemptError(tick.record.attempt.outcome)}</Hint>
-                <ActionLabels messages={tick.record.messages} />
               </Section>
             ) : tick.record.attempt.request === null ? (
               <Section title="Unknown call">
                 <Hint>This attempt has no retained call arguments.</Hint>
-                <ActionLabels messages={tick.record.messages} />
               </Section>
-            ) : tick.record.attempt.action === "simulate" ? (
-              <section role="log" aria-label="Simulator log">
-                <ActionLabels messages={tick.record.messages} />
-              </section>
             ) : context ? (
               <>
                 {call?.action === "edit_question" && (
@@ -240,20 +111,16 @@ export function ActionRecord({
                     <Hint>
                       Compared the selected model definitions, laws, checks and saved evidence.
                     </Hint>
-                    <ActionLabels messages={tick.record.messages} />
                   </Section>
                 )}
                 {call && <ActionFindings context={context} call={call} />}
               </>
             ) : null}
-            {tick.record.attempt.action !== "simulate" && tick.record.trace_ids.length > 0 && (
-              <details className="px-3 text-xs">
-                <summary className="cursor-pointer text-muted-foreground">
-                  Agent conversation
-                </summary>
-                <ActionTrace tick={tick} useActionTrace={useActionTrace} />
-              </details>
-            )}
+            <ActionExecution
+              action={tick.record.attempt.action}
+              callId={tick.call_id}
+              useActionPoll={useActionPoll}
+            />
           </>
         ) : (
           running.length === 0 && (
@@ -263,8 +130,6 @@ export function ActionRecord({
         {running.map((call) => (
           <section
             key={call.call_id}
-            role="log"
-            aria-live="polite"
             aria-label={`${call.action} · running`}
             className="border-t pt-2 first:border-t-0 first:pt-0"
           >
@@ -273,10 +138,11 @@ export function ActionRecord({
               {call.action} · running
             </h3>
             <ActionReasoning reasoning={call.request.reasoning} />
-            <ActionLabels messages={call.messages.filter((message) => message.kind === "log")} />
-            {call.action === "prepare_data" && (
-              <AttemptProgress workspaceId={workspaceId} running={call} />
-            )}
+            <ActionExecution
+              action={call.action}
+              callId={call.call_id}
+              useActionPoll={useActionPoll}
+            />
           </section>
         ))}
       </div>

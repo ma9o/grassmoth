@@ -167,7 +167,6 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
             ),
             seq=1,
             ts="2026-09-14T12:00:00Z",
-            trace_ids=[],
         )
     )
     assert read_model(store, info.revision) == dynamical_model_spec
@@ -189,7 +188,6 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
             Applied(result=None, effects=ActionEffects(produced=[revision])),
             seq=2,
             ts="2026-09-14T13:00:00Z",
-            trace_ids=[],
         )
     )
     assert read_model(store, revision.revision) == changed

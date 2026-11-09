@@ -333,7 +333,6 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
             ),
             seq=1,
             ts="2026-09-28T00:00:00Z",
-            trace_ids=[],
         )
     ).commit_id
     origin = datetime(2026, 1, 1, tzinfo=UTC)
@@ -449,7 +448,6 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                     ),
                     seq=2 + start - 5,
                     ts="2026-09-28T00:00:00Z",
-                    trace_ids=[],
                 )
             ).commit_id
         )

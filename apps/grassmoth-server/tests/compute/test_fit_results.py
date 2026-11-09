@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from grassmoth.public import DataRef, FitOutput, NumericalArray
+from grassmoth_server.actions.call_logs import read_call_log
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
 from grassmoth_server.actions.contracts.requests import FitRequest, call_identity
@@ -375,7 +376,11 @@ def test_checks_and_announcements_decode_once_before_publication(
         (m.code, m.subject, m.detail) for m in expected
     ]
     completed = ActionMessage(
-        timestamp=at, severity="info", code="ACTION_COMPLETED", subject="fit", detail="Done"
+        timestamp=at,
+        severity="info",
+        code="ACTION_COMPLETED",
+        subject="fit",
+        detail="Action completed.",
     )
     saved = run_async(
         journal_activity(
@@ -385,12 +390,15 @@ def test_checks_and_announcements_decode_once_before_publication(
                     seq=1,
                     ts=at.isoformat(),
                     attempt=action_attempt(request, applied),
-                    messages=(*checked.messages, completed),
                 ),
+                messages=checked.messages,
             )
         )
     )
-    assert saved.record.messages == (*checked.messages, completed)
+    assert read_call_log(StudyRepository("FIT"), saved.commit_id).messages == (
+        *checked.messages,
+        completed,
+    )
     assert len(reads) == 1
 
 

@@ -1,22 +1,18 @@
 "use client";
 
 import type { ModelSnapshot, TimelineRevision } from "@grassmoth/api-types";
-import { queryOptions, skipToken, useQueries, useQuery } from "@tanstack/react-query";
-import { readActionResult } from "@/lib/api/endpoints";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { recordedCallQuery, successfulResult } from "./use-action-poll";
 import { callDependencies, producingCall } from "@/lib/model-asset/call-dependencies";
 import { composeCallView } from "@/lib/model-asset/compose-call-view";
 import { useStudyJournal } from "./use-study-journal";
 
 function callQuery(workspaceId: string, call: TimelineRevision | undefined, enabled: boolean) {
-  return queryOptions({
-    queryKey: ["action-result", workspaceId, call?.call_id],
-    queryFn: call
-      ? ({ signal }: { signal: AbortSignal }) => readActionResult(workspaceId, call, signal)
-      : skipToken,
+  return {
+    ...recordedCallQuery(workspaceId, call),
     enabled: enabled && call !== undefined,
-    staleTime: Infinity,
-    retry: false,
-  });
+    select: successfulResult,
+  };
 }
 
 /** A selected call or explicitly named input revision resolves to its applied producer. */

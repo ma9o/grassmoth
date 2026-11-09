@@ -89,7 +89,6 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             ),
             seq=1,
             ts="2026-01-01T00:00:00Z",
-            trace_ids=[],
         )
     )
     by_type = {
@@ -184,7 +183,6 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             ),
             seq=2,
             ts="2026-01-01T01:00:00Z",
-            trace_ids=[],
         )
     )
 

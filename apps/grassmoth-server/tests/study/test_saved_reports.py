@@ -133,10 +133,10 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
                 else evaluate_model_checks_activity(activity_input)
             )
             assert len(evaluated.model_dump_json().encode()) < 10_000
-            record = record.revised(messages=evaluated.messages)
         publication = AttemptPublication(
             workspace_id=workspace,
             record=record,
+            messages=evaluated.messages if evaluated is not None else (),
         )
         assert len(publication.model_dump_json().encode()) < 20_000
         from grassmoth_server.study.queries import results
@@ -419,4 +419,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         .peel(pygit2.Blob)
         .data
     )
-    assert all(record.record.trace_ids == () for record in repository.attempts())
+    assert all(
+        "trace_ids" not in repository.saved_record(record.commit_id).model_dump()
+        for record in repository.attempts()
+    )

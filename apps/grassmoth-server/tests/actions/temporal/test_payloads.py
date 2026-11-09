@@ -197,13 +197,16 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
                 "parameter_draws": {},
                 "arms": {
                     "kind": "single",
-                    "action": {"latent_paths": values, "observations": values},
+                    "action": {
+                        "latent_paths": values,
+                        "observations": NumericalArray.from_numpy(np.empty((1, 2, 0))),
+                    },
                 },
                 "observation_layout": {
                     "variables": [],
-                    "support_start_times": values,
-                    "support_end_times": values,
-                    "mask": values,
+                    "support_start_times": NumericalArray.from_numpy(np.empty((2, 0))),
+                    "support_end_times": NumericalArray.from_numpy(np.empty((2, 0))),
+                    "mask": NumericalArray.from_numpy(np.empty((1, 2, 0), dtype=bool)),
                 },
             }
         )

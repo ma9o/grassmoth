@@ -29,7 +29,7 @@ from grassmoth_server.actions.temporal.study.messages import AttemptPublication,
 from grassmoth_server.llm.traces import LLMTrace, TraceMessage, TraceUsage
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
-from grassmoth_server.storage.traces import collect_run_traces, trace_log_path
+from grassmoth_server.storage.traces import collect_run_traces
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import ActionMessage, AttemptRecord, EditAttempt, Raised
 
@@ -66,14 +66,16 @@ def _scratch_trace(workspace_id: str, call_id: str, subroutine_id: str) -> str:
     return path
 
 
-def test_collects_finalized_traces_and_validates_commit_paths(data_root):
+def test_collects_finalized_traces_and_validates_trace_identities(data_root):
     del data_root
     _scratch_trace("ws-trace", "call-test", "zeta")
     _scratch_trace("ws-trace", "call-test", "alpha")
     logs = collect_run_traces("ws-trace", "call-test")
-    assert list(logs) == ["traces/alpha.json", "traces/zeta.json"]
+    assert list(logs) == ["alpha", "zeta"]
+    assert logs["alpha"] == _trace()
+    _scratch_trace("ws-trace", "call-test", "invalid trace")
     with pytest.raises(ValueError, match="Invalid attempt trace subroutine id"):
-        trace_log_path("../scratch")
+        collect_run_traces("ws-trace", "call-test")
 
 
 def test_collected_snapshot_retains_all_sources_after_scratch_removal(data_root):
@@ -90,18 +92,14 @@ def test_collected_snapshot_retains_all_sources_after_scratch_removal(data_root)
     )
     emit_message(workspace_id, identity, message)
     snapshot = collect_call_snapshot(workspace_id, identity)
-    logs = snapshot.logs
     storage.rm_tree(data_module.call_dir(workspace_id, identity))
-    assert snapshot.logs == logs
-    assert snapshot.trace_ids == ("stage",)
     assert snapshot.execution_messages == (message,)
     assert len(snapshot.events) == 1
     event = snapshot.events[0]
     assert isinstance(event, StepEvent)
     assert event.status == "running"
     assert event.cursor
-    assert LLMTrace.model_validate_json(logs["traces/stage.json"]) == _trace()
-    assert set(logs) == {"traces/stage.json", "progress.json", "messages.json"}
+    assert snapshot.traces == {"stage": _trace()}
 
 
 def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_root):
@@ -163,11 +161,11 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     ]
     publication_input = AttemptPublication(
         workspace_id="ws-trace",
+        messages=messages,
         record=AttemptRecord(
             seq=1,
             attempt_id=attempt_id,
-            messages=messages,
-            ts="2026-10-01T00:00:00Z",
+            ts=datetime.now(UTC).isoformat(),
             attempt=EditAttempt(
                 action="edit_model",
                 request=request,
@@ -185,15 +183,20 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     record = StudyRepository("ws-trace").call(call_identity(request))
     assert record is not None
     assert record.record.attempt.outcome.status == "raised"
-    assert record.record.trace_ids == ("latent-structure",)
     repository = StudyRepository("ws-trace")
     assert repository.call(call_identity(request)) == record
+    saved_metadata = repository.saved_record(publication.commit_id).model_dump()
+    assert "messages" not in saved_metadata
+    assert "trace_ids" not in saved_metadata
     log = read_call_log(repository, publication.commit_id)
     assert {message.kind for message in log.messages} == {"log", "progress", "trace", "failure"}
-    assert [message for message in log.messages if message.kind == "log"] == [
+    recorded_messages = [message for message in log.messages if message.kind == "log"]
+    assert recorded_messages[:-1] == [
         *messages,
         execution_message,
     ]
+    assert recorded_messages[-1].code == "ACTION_FAILED_LLM_SUBROUTINE_ERROR"
+    assert recorded_messages[-1].detail == "validation failed"
     assert (
         next(message for message in log.messages if message.kind == "progress").progress
         == next(message for message in live.messages if message.kind == "progress").progress
@@ -285,9 +288,7 @@ def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkey
                 )
             )
         )
-    trace = LLMTrace.model_validate_json(
-        collect_run_traces("ws-trace", "call-test")["traces/extraction.json"]
-    )
+    trace = collect_run_traces("ws-trace", "call-test")["extraction"]
     assert [message.role for message in trace.messages] == ["user", "assistant"]
     assert trace.messages[-1].tool_calls is not None
     assert trace.messages[-1].tool_calls[0]["arguments"] == '{"file":"data.csv"}'
@@ -367,11 +368,19 @@ def test_failed_extraction_chunks_become_durable_messages_once(data_root):
         ),
     )
     publication = asyncio.run(journal_activity(publication_input))
-    messages = publication.record.messages
-    assert [(message.subject, message.severity, message.detail) for message in messages] == [
+    messages = tuple(
+        message
+        for message in read_call_log(
+            StudyRepository(store.workspace_id), publication.commit_id
+        ).messages
+        if message.kind == "log"
+    )
+    assert [(message.subject, message.severity, message.detail) for message in messages[:-1]] == [
         (f"extraction_worker:{worker_id}", "error", detail) for worker_id, detail in errors.items()
     ]
-    assert all(message.code == "EXTRACTION_CHUNK_FAILED" for message in messages)
+    assert all(message.code == "EXTRACTION_CHUNK_FAILED" for message in messages[:-1])
+    assert messages[-1].code == "ACTION_FAILED_VALUE_ERROR"
+    assert messages[-1].detail == "Panel assembly failed"
     storage.rm_tree(data_module.call_dir(store.workspace_id, identity))
     assert asyncio.run(journal_activity(publication_input)) == publication
     saved = read_call_log(StudyRepository(store.workspace_id), publication.commit_id)

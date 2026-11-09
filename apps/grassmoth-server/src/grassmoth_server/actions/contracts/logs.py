@@ -1,5 +1,6 @@
 """One typed accumulator for every kind of action execution message."""
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field
@@ -8,6 +9,14 @@ from grassmoth.public import Value
 from grassmoth_server.actions.contracts.progress import ProgressEvent
 from grassmoth_server.llm.traces import LLMTrace
 from grassmoth_server.study.records import ActionMessage, FailedOutcome
+
+
+class CallLogSnapshot(Value):
+    """Parsed call-owned records collected once for live or durable log assembly."""
+
+    traces: Mapping[str, LLMTrace] = Field(default_factory=dict)
+    events: tuple[ProgressEvent, ...] = ()
+    execution_messages: tuple[ActionMessage, ...] = ()
 
 
 class ProgressMessage(Value):
