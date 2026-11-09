@@ -21,6 +21,7 @@ from grassmoth_test_support.model import (
     likelihood_named,
     load_model_fixture,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _all_fixed_spec_yields_no_sites__all_fixed_spec() -> DynamicalModelSpec:
@@ -35,22 +36,26 @@ def _all_fixed_spec_yields_no_sites__all_fixed_spec() -> DynamicalModelSpec:
     manifest_1 = indicator_named(dynamical_model_spec, "manifest_1")
     manifest_1_likelihood = likelihood_named(dynamical_model_spec, "manifest_1")
     (latent_1_drift,) = latent_1.dynamics
-    manifest_0_revised = manifest_0.revised(
-        likelihood=manifest_0_likelihood.revised(
+    manifest_0_revised = revise_fixture(
+        manifest_0,
+        likelihood=revise_fixture(
+            manifest_0_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(0.0, "observation_intercept")
                     + (coefficient(1.0, "loading") * state(latent_0.id))
                 ),
                 scale=coefficient(1.0, "observation_scale"),
-            )
-        )
+            ),
+        ),
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         indicators=(manifest_0_revised,),
         dynamics=(
-            latent_0_drift.revised(
-                expression=restoring_force(latent_0.id, center=0.0, stiffness=1.0, quartic=0.0)
+            revise_fixture(
+                latent_0_drift,
+                expression=restoring_force(latent_0.id, center=0.0, stiffness=1.0, quartic=0.0),
             ),
         ),
         coefficients=(
@@ -59,22 +64,26 @@ def _all_fixed_spec_yields_no_sites__all_fixed_spec() -> DynamicalModelSpec:
             coefficient(1.0, "initial_scale"),
         ),
     )
-    manifest_1_revised = manifest_1.revised(
-        likelihood=manifest_1_likelihood.revised(
+    manifest_1_revised = revise_fixture(
+        manifest_1,
+        likelihood=revise_fixture(
+            manifest_1_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(0.0, "observation_intercept")
                     + (coefficient(1.0, "loading") * state(latent_1.id))
                 ),
                 scale=coefficient(1.0, "observation_scale"),
-            )
-        )
+            ),
+        ),
     )
-    latent_1_revised = latent_1.revised(
+    latent_1_revised = revise_fixture(
+        latent_1,
         indicators=(manifest_1_revised,),
         dynamics=(
-            latent_1_drift.revised(
-                expression=restoring_force(latent_1.id, center=0.0, stiffness=1.0, quartic=0.0)
+            revise_fixture(
+                latent_1_drift,
+                expression=restoring_force(latent_1.id, center=0.0, stiffness=1.0, quartic=0.0),
             ),
         ),
         coefficients=(

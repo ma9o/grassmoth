@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Self
 
 from pydantic import ConfigDict, Field, FiniteFloat
 
@@ -29,6 +30,10 @@ class StateAssignment(Value):
     target: ConstructId
     time: FiniteFloat = Field(description="Absolute time in model days.")
     value: FiniteFloat
+
+    def at_time(self, *, time: FiniteFloat) -> Self:
+        """Return the same state assignment at a new model time."""
+        return self._revised(time=time)
 
 
 class CausalEffectResult(Value):

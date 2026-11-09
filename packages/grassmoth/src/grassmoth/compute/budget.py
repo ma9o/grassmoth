@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Self
+
 from pydantic import Field
 
 from grassmoth.artifacts.base import Value
@@ -82,3 +84,7 @@ class ComputeBudget(Value):
                 *((available - fixed) // needed for available, needed, fixed in pools if needed),
             )
         )
+
+    def with_occupied(self, *, occupied: MemoryDemand) -> Self:
+        """Return the budget with the current occupied memory."""
+        return self._revised(occupied=occupied)

@@ -224,7 +224,7 @@ def bind_panel(
         wide = pivot_to_wide(observation_selection, grid).rename(labels)
         indices = model_time_indices(grid, np.asarray([event.spec.time for event in events]))
         events = tuple(
-            ResolvedIntervention(event.index, event.spec.revised(time=float(grid[index])))
+            ResolvedIntervention(event.index, event.spec.at_time(time=float(grid[index])))
             for event, index in zip(events, indices, strict=True)
         )
     values, times, names, wide = prepare_fit_inputs(compiled_dynamical_model, wide)

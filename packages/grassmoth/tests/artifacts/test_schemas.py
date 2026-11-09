@@ -47,6 +47,7 @@ from grassmoth.artifacts.observations.spec import (
     NumericMeasurement,
 )
 from grassmoth_test_support.helpers import graph_constructs, make_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -532,7 +533,7 @@ class TestModelContainment:
         result = dynamical_model_spec.with_entities(
             edges=replace_constructs(
                 dynamical_model_spec.edges,
-                (observed, latent.revised(indicators=())),
+                (observed, revise_fixture(latent, indicators=())),
             )
         )
         assert result.get_construct(latent.id).indicators == ()
@@ -601,7 +602,7 @@ class TestDuration:
 
     def test_invalid_model_clock(self):
         with pytest.raises(ValueError, match="Invalid duration"):
-            make_model(["X"]).revised(measurement_clock="bad")
+            revise_fixture(make_model(["X"]), measurement_clock="bad")
 
 
 class TestDeriveObservationSemantics:

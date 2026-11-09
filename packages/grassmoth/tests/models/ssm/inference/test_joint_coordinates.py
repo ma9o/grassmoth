@@ -20,6 +20,7 @@ from grassmoth.models.ssm.structure.observation import DenseLoadings, Observatio
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.interval_particle import gaussian_interval_case, interval_target
 from grassmoth_test_support.observation import observation_laws
+from grassmoth_test_support.values import revise_fixture
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
 
 """Centred joint coordinates of particle starts, without fitting a study."""
@@ -45,7 +46,8 @@ def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
 
     model = make_model(list(state_names), [("x", "y")] if len(state_names) == 2 else [])
     constructs = tuple(
-        c.revised(
+        revise_fixture(
+            c,
             coefficients=(
                 coefficient(0.0, role="initial_mean"),
                 coefficient(1.0, role="initial_scale"),
@@ -58,9 +60,10 @@ def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
                 ),
             ),
             indicators=tuple(
-                i.revised(
+                revise_fixture(
+                    i,
                     reasoning={"text": "Analytic control instrument"},
-                    observation=i.observation.revised(aggregation="last"),
+                    observation=revise_fixture(i.observation, aggregation="last"),
                     likelihood=LikelihoodSpec(
                         law=DeltaLawSpec(v=state(c.id))
                         if c.name == "x"
@@ -76,10 +79,11 @@ def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
         for c in model.constructs
     )
     edges = tuple(
-        e.revised(
+        revise_fixture(
+            e,
             mechanisms=(
                 DriftMechanismSpec(id=MechanismId("mechanism:cross"), expression=state(e.cause.id)),
-            )
+            ),
         )
         for e in replace_constructs(model.edges, constructs)
     )
@@ -423,21 +427,25 @@ def test_compiler_mask_tracks_available_direct_multi_state_readings_only():
     driver = next(c for c in model.constructs if c.name == "driver")
     outcome = next(c for c in model.constructs if c.name == "outcome")
     baseline = next(c for c in model.constructs if c.name == "baseline")
-    changed = outcome.revised(
+    changed = revise_fixture(
+        outcome,
         indicators=tuple(
-            i.revised(
-                likelihood=i.likelihood.revised(
-                    law=i.likelihood.law.revised(
+            revise_fixture(
+                i,
+                likelihood=revise_fixture(
+                    i.likelihood,
+                    law=revise_fixture(
+                        i.likelihood.law,
                         loc=coefficient(0.0, role="observation_intercept")
                         + coefficient(1.0, role="loading") * state(driver.id)
                         + coefficient(1.0, role="loading") * state(outcome.id)
-                        + coefficient(0.0, role="loading") * state(baseline.id)
+                        + coefficient(0.0, role="loading") * state(baseline.id),
                     ),
                     standardized=True,
-                )
+                ),
             )
             for i in outcome.indicators
-        )
+        ),
     )
     model = model.with_entities(edges=replace_constructs(model.edges, (changed,)))
     compiled = compile_fit_fixture(model).compiled_dynamical_model
@@ -486,7 +494,7 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
         tuning=JointTuning(parameterization=coordinates.record),
     )
     for changed_target, changed_settings in (
-        (target, settings.revised(algorithm=NutsDASpec(parameterization="non_centred"))),
+        (target, revise_fixture(settings, algorithm=NutsDASpec(parameterization="non_centred"))),
         (replace(target, point_reading_mask=jnp.zeros_like(target.point_reading_mask)), settings),
     ):
         result = run_nuts_da(

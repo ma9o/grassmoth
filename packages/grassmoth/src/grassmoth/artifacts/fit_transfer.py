@@ -61,10 +61,10 @@ def transfer_fit(result: FitOutput) -> FitOutput:
         start = (-origin) % factor
         return NumericalArray.from_numpy(values.values[:, start::factor])
 
-    return result.revised(
+    return result.with_inference(
         dynamical_model_spec=conditioned,
-        inference=report.revised(
-            evidence=evidence.revised(
+        inference=report.with_transfer(
+            evidence=evidence.with_transfer_buffers(
                 chain_extra_fields={
                     name: NumericalArray.from_numpy(value.values[:, ::factor])
                     for name, value in evidence.chain_extra_fields.items()
@@ -85,16 +85,16 @@ def transfer_fit(result: FitOutput) -> FitOutput:
                 if evidence.all_complete_log_posterior_history is not None
                 else None,
             ),
-            core=report.core.revised(
-                inference_metadata=metadata.revised(
+            core=report.core.with_metadata(
+                inference_metadata=metadata.with_transfer_counts(
                     thinning_factor=metadata.thinning_factor * factor,
                     draws_kept_per_chain=kept,
                     num_samples_total=chains * kept,
                 ),
             ),
-            detail=report.detail.revised(
+            detail=report.detail.with_traces(
                 trace_data=tuple(
-                    trace.revised(
+                    trace.with_chains(
                         chains=tuple(
                             ArrayVector(
                                 array=owned,

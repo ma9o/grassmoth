@@ -44,6 +44,7 @@ from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 
 def _fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model() -> (
@@ -246,10 +247,12 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
     )
     conditioned = dynamical_model_spec.with_entities(
         parameters=tuple(
-            p.revised(
+            revise_fixture(
+                p,
                 distribution=layout.distribution_id,
                 transform={"kind": "identity"},
-                reasoning=p.reasoning.revised(
+                reasoning=revise_fixture(
+                    p.reasoning,
                     text=p.reasoning.text + " [1]",
                     reference_urls=("https://example.org/prior",),
                 ),
@@ -259,7 +262,7 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                c.revised(distribution=layout.distribution_id)
+                revise_fixture(c, distribution=layout.distribution_id)
                 for c in dynamical_model_spec.constructs
             ),
         ),
@@ -527,7 +530,7 @@ def test_rename_changes_only_construct_label():
     assert original.indicators == renamed.indicators
     assert original.edges[0].id == renamed.edges[0].id
     assert original.edges[0].effect == renamed.edges[0].effect
-    assert original.edges[0].cause.revised(name="Renamed") == renamed.edges[0].cause
+    assert revise_fixture(original.edges[0].cause, name="Renamed") == renamed.edges[0].cause
     assert selected_state_ids(StructuralSelection(original, None)) == selected_state_ids(
         StructuralSelection(renamed, None)
     )

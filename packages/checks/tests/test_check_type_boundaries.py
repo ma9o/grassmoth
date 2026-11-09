@@ -239,7 +239,8 @@ def test_core_bypasses_reject_self_updates_and_allow_validated_revisions() -> No
         self.model_copy(update={})
         self.model_copy(**changes)
         object.__setattr__(self, 'question', 'changed')
-        self.revised(question='changed')
+        self._revised(question='changed')
+        value._revised(question='changed')
         value.model_copy()
         cast('Mapping[str, int]', value)
 """
@@ -248,7 +249,12 @@ def test_core_bypasses_reject_self_updates_and_allow_validated_revisions() -> No
         path="src/grassmoth/artifacts/model/dynamical_model_spec.py",
         rules=frozenset({"CORE001"}),
     )
-    assert [item.target for item in violations] == ["model_copy", "model_copy", "__setattr__"]
+    assert [item.target for item in violations] == [
+        "model_copy",
+        "model_copy",
+        "__setattr__",
+        "_revised",
+    ]
 
 
 def test_core_initialization_is_local_to_constructor_scope() -> None:

@@ -1,6 +1,6 @@
 """Persisted last-draw state and frozen tuning for production fit continuation."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field
 
@@ -27,6 +27,10 @@ class ParticleTuning(Value):
     parameter_reference_path: NumericalArray
     initialization: InitializationDiagnostics
 
+    def with_parameter_cholesky(self, *, parameter_chol: NumericalArray) -> Self:
+        """Return particle tuning with its parameter proposal factor."""
+        return self._revised(parameter_chol=parameter_chol)
+
 
 class JointTuning(Value):
     """Frozen native joint coordinates, including the mixed reading mask."""
@@ -49,3 +53,7 @@ class SamplerCheckpoint(Value):
     random_key: NumericalArray
     native_state: tuple[NumericalArray, ...]
     tuning: FrozenSamplerTuning
+
+    def with_tuning(self, *, tuning: FrozenSamplerTuning) -> Self:
+        """Return the checkpoint with its retained sampler tuning."""
+        return self._revised(tuning=tuning)

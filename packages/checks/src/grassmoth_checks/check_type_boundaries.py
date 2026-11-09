@@ -14,7 +14,8 @@ express. Explicit ``Any`` belongs to basedpyright's ``reportExplicitAny``.
 
 ``CORE001``
     Construction bypasses and mutable casts are checked by call name. Revisions
-    use validated owner construction; frozen-field initialization is constructor-only.
+    use validated owner construction; private revisions stay on self inside their owner.
+    Frozen-field initialization is constructor-only.
     Dump-spread rebuilds are forbidden throughout every checked Python tree.
 
 ``CORE002``
@@ -1224,6 +1225,13 @@ class _CoreVisitor(ast.NodeVisitor):
             )
             or (qualified in self.index.evidence and not self._owned_here(qualified))
         )
+        if name == "_revised" and role_for_path(self.path) is not None:
+            bypass = not (
+                self.class_name is not None
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "self"
+            )
         if (
             name == "__setattr__"
             and isinstance(node.func, ast.Attribute)

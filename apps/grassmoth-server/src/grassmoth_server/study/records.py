@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field
@@ -25,7 +25,6 @@ from grassmoth_server.study.state import StudyState
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from grassmoth.public import DataRef
     from grassmoth_server.study.state import ArtifactRecord
 
 
@@ -54,6 +53,10 @@ class Applied[ResultT](Value):
     effects: ActionEffects = Field(
         description="Produced and retracted artifacts and retained report references."
     )
+
+    def with_effects(self, *, effects: ActionEffects) -> Self:
+        """Return the applied result with its publication effects."""
+        return self._revised(effects=effects)
 
 
 class Rejected(Value):
@@ -99,6 +102,14 @@ class Attempt[ActionT: str, RequestT: Value, ResultT](Value):
     )
     outcome: Annotated[Applied[ResultT] | Rejected | Raised, Field(discriminator="status")]
 
+    def with_outcome(
+        self,
+        *,
+        outcome: Annotated[Applied[ResultT] | Rejected | Raised, Field(discriminator="status")],
+    ) -> Self:
+        """Return the attempt with its completed outcome."""
+        return self._revised(outcome=outcome)
+
 
 EditQuestionAttempt = Attempt[Literal["edit_question"], EditQuestionRequest, GitOid]
 EditAttempt = Attempt[Literal["edit_model"], EditModelRequest[GitOid], GitOid]
@@ -135,6 +146,10 @@ class AttemptRecord(AttemptMetadata):
     """Stored inside the Git object, with no self-referential publication ID."""
 
     attempt: ActionAttempt
+
+    def with_attempt(self, *, attempt: ActionAttempt) -> Self:
+        """Return the record with its published attempt."""
+        return self._revised(attempt=attempt)
 
 
 class StudyRevision(Value):
@@ -194,29 +209,9 @@ def recorded_question(revisions: Iterable[StudyRevision]) -> ArtifactRecord | No
 
 
 def argument_revisions(attempt: ActionAttempt) -> tuple[tuple[str, GitOid], ...]:
-    """Action input fields ending in ``_ref`` name exact scalar or structured references.
-
-    Their input schemas own the reference types: GitOid, DataRef, an optional
-    reference, or a tuple of references. Inline scientific payloads are not scanned.
-    """
+    """Project the pinned dependencies declared by each action's input owner."""
     request = attempt.request
-    if request is None:
-        return ()
-    references: list[tuple[str, GitOid]] = []
-    selected = request.input.target if isinstance(request, FitRequest) else request.input
-    for name in type(selected).model_fields:
-        if not name.endswith("_ref"):
-            continue
-        value = cast(
-            "GitOid | DataRef[GitOid, int | None] | tuple[GitOid | DataRef[GitOid, int | None], ...] | None",
-            getattr(selected, name),
-        )
-        if value is not None:
-            references.extend(
-                (name.removesuffix("_ref"), ref if isinstance(ref, GitOid) else ref.revision)
-                for ref in (value if isinstance(value, tuple) else (value,))
-            )
-    return tuple(references)
+    return () if request is None else request.input.revision_dependencies()
 
 
 def _producer_index(revisions: Sequence[StudyRevision]) -> dict[GitOid, StudyRevision]:

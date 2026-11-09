@@ -16,6 +16,7 @@ from grassmoth.artifacts.sampling import (
 )
 from grassmoth_server.actions.fit.action import run_fit
 from grassmoth_server_test_support.fit_cache import fixture
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = [pytest.mark.inference(concern="sampling"), pytest.mark.inference(concern="warmup")]
 
@@ -100,7 +101,7 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
     continued = run_fit(
         replace(
             inputs,
-            sampler=sampler.revised(num_warmup=0, num_samples_per_chain=1),
+            sampler=revise_fixture(sampler, num_warmup=0, num_samples_per_chain=1),
             previous=profiled,
         ),
         profile_dir=tmp_path / "continued",

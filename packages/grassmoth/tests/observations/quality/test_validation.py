@@ -26,17 +26,15 @@ from grassmoth.artifacts.reports.data_quality import DataProfileReport
 from grassmoth.observations.quality.profile import profile_data
 from grassmoth.observations.quality.profile import validate_extraction as validate_model_data
 from grassmoth_test_support.helpers import fixture_entity_id, make_model, observation_dataset
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
 
 def test_recorded_point_cadence_uses_declared_window_and_only_observed_times():
-    definition = (
-        _make_spec(model_clock="3h")
-        .indicators[0]
-        .observation.revised(aggregation="last")
-        .resolved(Duration("3h"))
-    )
+    definition = revise_fixture(
+        _make_spec(model_clock="3h").indicators[0].observation, aggregation="last"
+    ).resolved(Duration("3h"))
     times = [datetime(2020, 1, 1) + timedelta(hours=3 * index) for index in range(16)]
     data = pl.DataFrame(
         {
@@ -147,7 +145,7 @@ def validate_extraction(
     )
     profile = profile_data(observations)
     compatibility = validate_model_data(dynamical_model_spec, observations)
-    return profile.revised(findings=(*profile.findings, *compatibility.findings))
+    return revise_fixture(profile, findings=(*profile.findings, *compatibility.findings))
 
 
 def _all_issues(
@@ -222,7 +220,7 @@ def _make_spec(
             "indicators": definitions,
         }
     )
-    return dynamical_model_spec.revised(measurement_clock=model_clock).with_entities(
+    return revise_fixture(dynamical_model_spec, measurement_clock=model_clock).with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, [construct]),
     )
 

@@ -9,6 +9,7 @@ import pytest
 from grassmoth.artifacts.sampling import InferenceHardware
 from grassmoth_server import config
 from grassmoth_server.bootstrap import initialize_numerical_runtime
+from grassmoth_test_support.values import revise_fixture
 
 
 def pytest_configure() -> None:  # noqa: V103 - pytest calls this configuration hook before collection.
@@ -24,7 +25,7 @@ def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
         loaded,
         inference=replace(
             loaded.inference,
-            sampler=loaded.inference.sampler.revised(hardware=InferenceHardware.LOCAL),
+            sampler=revise_fixture(loaded.inference.sampler, hardware=InferenceHardware.LOCAL),
         ),
     )
     monkeypatch.setattr(config, "get_config", lambda: local)

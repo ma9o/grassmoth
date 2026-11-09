@@ -14,6 +14,7 @@ from grassmoth.models.causal.identification import check_identifiability
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.causal_graphs import make_graph
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -106,7 +107,8 @@ def test_model_reporting_keeps_nonparametric_findings_without_linear_iv_assumpti
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(
+                revise_fixture(
+                    construct,
                     temporal_status=TemporalStatus.TIME_INVARIANT,
                     indicators=() if construct.id == u_id else construct.indicators,
                 )

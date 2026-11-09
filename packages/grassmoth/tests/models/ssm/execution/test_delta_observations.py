@@ -53,6 +53,7 @@ from grassmoth_test_support.inference import (
 )
 from grassmoth_test_support.model import _exact_model_model, load_model_fixture
 from grassmoth_test_support.observation import observation_laws
+from grassmoth_test_support.values import revise_fixture
 
 
 def _authored_affine_delta_keeps_its_calibration_coefficients_complete_model() -> (
@@ -122,7 +123,7 @@ def test_authored_affine_delta_keeps_its_calibration_coefficients(exact_model):
     likelihood = LikelihoodSpec(
         law=DeltaLawSpec(v=predictor),
     )
-    indicator = owner.indicators[0].revised(likelihood=likelihood)
+    indicator = revise_fixture(owner.indicators[0], likelihood=likelihood)
     dynamical_model_spec = (
         _authored_affine_delta_keeps_its_calibration_coefficients_complete_model()
     )
@@ -179,15 +180,16 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
         if dtype in {"ordinal", "categorical"}
         else NumericMeasurement(dtype=dtype)
     )
-    indicator = owner.indicators[0].revised(
-        observation=owner.indicators[0].observation.revised(
-            measurement=measurement, aggregation="last"
-        )
+    indicator = revise_fixture(
+        owner.indicators[0],
+        observation=revise_fixture(
+            owner.indicators[0].observation, measurement=measurement, aggregation="last"
+        ),
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            (owner.revised(indicators=(indicator,)),),
+            (revise_fixture(owner, indicators=(indicator,)),),
         )
     )
     from grassmoth.artifacts.observations.dtypes import VALID_LIKELIHOODS_FOR_DTYPE
@@ -201,7 +203,7 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
     dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            (owner.revised(indicators=(indicator.revised(likelihood=exact),)),),
+            (revise_fixture(owner, indicators=(revise_fixture(indicator, likelihood=exact),)),),
         )
     )
 
@@ -279,9 +281,12 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
     owner = exact_model.constructs[0]
     indicator = owner.indicators[0]
     if unsupported == "interval":
-        indicator = indicator.revised(observation=indicator.observation.revised(aggregation="mean"))
+        indicator = revise_fixture(
+            indicator, observation=revise_fixture(indicator.observation, aggregation="mean")
+        )
     else:
-        indicator = indicator.revised(
+        indicator = revise_fixture(
+            indicator,
             reasoning={"text": "An affine equality needs a different constraint parameterization."},
             likelihood=LikelihoodSpec(
                 law=DeltaLawSpec(
@@ -296,7 +301,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
     exact_model = exact_model.with_entities(
         edges=replace_constructs(
             exact_model.edges,
-            (owner.revised(indicators=(indicator,)),),
+            (revise_fixture(owner, indicators=(indicator,)),),
         )
     )
 
@@ -353,15 +358,18 @@ def test_multiple_exact_indicators_must_agree_at_shared_times(exact_model):
 
     owner = exact_model.constructs[0]
     original = owner.indicators[0]
-    duplicate = original.revised(
-        observation=original.observation.revised(
-            id=scientific_id("indicator", "second_recording"), name="second_recording"
-        )
+    duplicate = revise_fixture(
+        original,
+        observation=revise_fixture(
+            original.observation,
+            id=scientific_id("indicator", "second_recording"),
+            name="second_recording",
+        ),
     )
     model = exact_model.with_entities(
         edges=replace_constructs(
             exact_model.edges,
-            (owner.revised(indicators=(original, duplicate)),),
+            (revise_fixture(owner, indicators=(original, duplicate)),),
         )
     )
     columns = {

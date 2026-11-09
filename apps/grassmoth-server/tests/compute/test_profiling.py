@@ -58,7 +58,7 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
         time_steps=1,
         compilation=tuple(ProgramCompileReport(name=name, seconds=1) for name in executables),
     )
-    result = Mock(profile=report, revised=Mock(side_effect=lambda **fields: Mock(**fields)))
+    result = Mock(profile=report, with_profile=Mock(side_effect=lambda **fields: Mock(**fields)))
     register = Mock(wraps=jax.monitoring.register_event_listener)
     unregister = Mock(wraps=jax.monitoring.unregister_event_listener)
     monkeypatch.setattr(jax.monitoring, "register_event_listener", register)

@@ -35,6 +35,7 @@ from grassmoth_test_support.model import (
     parameter_for,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _fully_fixed_dynamics_keep_the_explicit_draw_axis_model_fixture() -> DynamicalModelSpec:
@@ -44,13 +45,14 @@ def _fully_fixed_dynamics_keep_the_explicit_draw_axis_model_fixture() -> Dynamic
     latent_0_dynamics_decay = parameter_for(
         dynamical_model_spec, SiteKind.DYNAMICS_DECAY, "latent_0"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             PotentialMechanismSpec(
                 id=latent_0_drift.id,
                 expression=restoring_potential(latent_0.id, center=1.0, stiffness=0.4, quartic=0.2),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(dynamical_model_spec, latent_0_dynamics_decay)
     return dynamical_model_spec.with_entities(
@@ -117,15 +119,17 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
 
     dynamical_model_spec = _exact_model_model()
     dose = dynamical_model_spec.constructs[0]
-    indicator = dose.indicators[0].revised(
+    indicator = revise_fixture(
+        dose.indicators[0],
         reasoning={"text": "Given dose total"},
-        observation=dose.indicators[0].observation.revised(aggregation="sum"),
+        observation=revise_fixture(dose.indicators[0].observation, aggregation="sum"),
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(dose.id)),
         ),
     )
     layout = JointLawLayout(parameters=(), constructs=(dose.id,), time_points=(-2, 2, 4), labels={})
-    dose = dose.revised(
+    dose = revise_fixture(
+        dose,
         role="exogenous",
         indicators=(indicator,),
         dynamics=(),
@@ -137,7 +141,9 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
         for parameter in dynamical_model_spec.parameters
         if parameter.name not in {"rho_setting", "sigma_setting"}
     )
-    dynamical_model_spec = dynamical_model_spec.revised(measurement_clock="1d").with_entities(
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec, measurement_clock="1d"
+    ).with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (dose,)),
         parameters=parameters,
         distributions={

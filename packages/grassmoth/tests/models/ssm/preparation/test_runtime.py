@@ -68,6 +68,7 @@ from grassmoth_test_support.model import (
     replace_parameters,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _initial_state_correlation_prior_indices_are_dense_after_mask_filtering__make_spec() -> (
@@ -126,7 +127,8 @@ def _initial_state_correlation_priors_are_bounded_to_correlation_scale_with_para
     latent_0_latent_1_t0_var_lower = parameter_for(
         dynamical_model_spec, SiteKind.T0_VAR_LOWER, "latent_0", "latent_1"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             DriftMechanismSpec(
                 id=latent_0_potential.id,
@@ -134,7 +136,7 @@ def _initial_state_correlation_priors_are_bounded_to_correlation_scale_with_para
                     latent_0.id, center=0.0, stiffness=latent_0_dynamics_decay.id, quartic=0.0
                 ),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec,
@@ -153,7 +155,9 @@ def _initial_state_correlation_priors_are_bounded_to_correlation_scale_with_para
         ),
         parameters=replace_parameters(
             parameters,
-            latent_0_latent_1_t0_var_lower.revised(transform=InitialCorrelationTransformSpec()),
+            revise_fixture(
+                latent_0_latent_1_t0_var_lower, transform=InitialCorrelationTransformSpec()
+            ),
         ),
         distributions={
             key: law
@@ -184,7 +188,7 @@ def _initial_state_mean_and_sd_priors_bind_to_t0_sites_with_parameter_distributi
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            latent_0_latent_1_t0_var_lower.revised(transform=IdentityTransformSpec()),
+            revise_fixture(latent_0_latent_1_t0_var_lower, transform=IdentityTransformSpec()),
         ),
         distributions=parameter_laws(
             dynamical_model_spec,
@@ -216,7 +220,8 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(text="Test likelihood"),
@@ -241,7 +246,7 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec, latent_0_manifest_0_manifest_var_diag
@@ -281,7 +286,8 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(text="Test likelihood"),
@@ -306,7 +312,7 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec, latent_0_manifest_0_manifest_var_diag
@@ -352,8 +358,8 @@ def _manifest_standardization_applies_only_to_standardized_channels__make_spec()
     latent_0 = construct_named(dynamical_model_spec, "latent_0")
     x = indicator_named(dynamical_model_spec, "x")
     x_likelihood = likelihood_named(dynamical_model_spec, "x")
-    x_revised = x.revised(likelihood=x_likelihood.revised(standardized=True))
-    latent_0_revised = latent_0.revised(indicators=(x_revised,))
+    x_revised = revise_fixture(x, likelihood=revise_fixture(x_likelihood, standardized=True))
+    latent_0_revised = revise_fixture(latent_0, indicators=(x_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,))
     )
@@ -468,7 +474,7 @@ class TestBuilderPriorConversion:
                     assert isinstance(target, CompiledNodeTarget)
 
     def test_cross_lag_prior_requires_the_declared_measurement_clock(self):
-        dynamical_model_spec = _stress_mood_model().revised(measurement_clock=None)
+        dynamical_model_spec = revise_fixture(_stress_mood_model(), measurement_clock=None)
         with pytest.raises(ValueError, match="measurement clock"):
             compile_priors(
                 compile_model_fixture(dynamical_model_spec),

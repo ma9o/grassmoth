@@ -11,6 +11,7 @@ from grassmoth_server.study.state import (
     is_stale,
 )
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -18,7 +19,7 @@ pytestmark = pytest.mark.contract
 def test_install_supersede_and_retract_facts_without_mutating_the_prior_state():
     first = ArtifactRecord(artifact_id="raw_data", revision=git_oid(1))
     original = apply_effects(StudyState(), (first,))
-    second = first.revised(revision=git_oid(2))
+    second = revise_fixture(first, revision=git_oid(2))
     current = apply_effects(original, (second,))
     assert original.current["raw_data"] == first
     assert current.current["raw_data"] == second
@@ -44,7 +45,7 @@ def test_fact_freshness_follows_exact_execution_inputs_and_their_ancestors():
     assert not is_stale(state, "panel")
     assert not is_stale(state, "model")
     assert state.matches_inputs("panel", "raw_data")
-    revised = state.with_artifacts((raw.revised(revision=git_oid(4)),))
+    revised = state.with_artifacts((revise_fixture(raw, revision=git_oid(4)),))
     assert is_stale(revised, "panel")
     assert not is_stale(revised, "model")
     assert is_stale(state.without(["raw_data"]), "panel")

@@ -1,6 +1,6 @@
 """Small workflow-owned call states; scientific response bodies stay at the HTTP edge."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import Field
@@ -30,6 +30,10 @@ class RunningCall(Value):
     seq: int
     request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
     messages: tuple[ActionMessage, ...] = ()
+
+    def with_messages(self, *, messages: tuple[ActionMessage, ...]) -> Self:
+        """Return the running call with its accumulated messages."""
+        return self._revised(messages=messages)
 
 
 class CompletedCall(Value):

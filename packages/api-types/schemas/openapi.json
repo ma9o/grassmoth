@@ -3082,6 +3082,19 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "CompilationCacheStatus": {
+        "enum": [
+          "unobserved",
+          "disabled",
+          "not_consulted",
+          "miss",
+          "hit"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "CompletedExtractionWorker": {
         "additionalProperties": false,
         "description": "Counts of extracted observations and windows retained from a completed worker.",
@@ -23138,17 +23151,9 @@
             "type": "number"
           },
           "persistent_cache": {
+            "$ref": "#/components/schemas/CompilationCacheStatus",
             "default": "unobserved",
-            "description": "The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation.",
-            "enum": [
-              "unobserved",
-              "disabled",
-              "not_consulted",
-              "miss",
-              "hit"
-            ],
-            "title": "Persistent Cache",
-            "type": "string"
+            "description": "The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation."
           }
         },
         "required": [

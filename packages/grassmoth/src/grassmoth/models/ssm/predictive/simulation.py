@@ -113,7 +113,7 @@ def _window_input_events(
             held[event.index] = event
     return (
         *(
-            ResolvedIntervention(index=event.index, spec=event.spec.revised(time=start))
+            ResolvedIntervention(index=event.index, spec=event.spec.at_time(time=start))
             for event in held.values()
         ),
         *(event for event in input_events if event.spec.time > start),

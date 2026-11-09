@@ -15,6 +15,7 @@ from grassmoth.public import (
     DataRef,
     DynamicalModelSpec,
     ExtractionSpec,
+    GitOid,
     IndicatorId,
     QuestionSpec,
     SimulationSpec,
@@ -32,6 +33,10 @@ class EditQuestionInput(Value):
             "intervention queries to assess against candidate models."
         )
     )
+
+    def revision_dependencies(self) -> tuple[tuple[str, GitOid], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return ()
 
 
 class EditModelInput[RevisionT](Value):
@@ -53,6 +58,10 @@ class EditModelInput[RevisionT](Value):
             "delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
         )
     )
+
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (("parent", self.parent_ref),)
 
 
 class PrepareDataInput[RevisionT, SourceT](Value):
@@ -78,6 +87,10 @@ class PrepareDataInput[RevisionT, SourceT](Value):
         default="", description="Additional background for interpreting the uploaded source tables."
     )
 
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (("dynamical_model_spec", self.dynamical_model_spec_ref),)
+
 
 class NewFitTarget[RevisionT](Value):
     """Condition the selected model law on exactly one saved history."""
@@ -86,12 +99,23 @@ class NewFitTarget[RevisionT](Value):
     dynamical_model_spec_ref: RevisionT
     data_ref: DataRef[RevisionT, int]
 
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (
+            ("dynamical_model_spec", self.dynamical_model_spec_ref),
+            ("data", self.data_ref.revision),
+        )
+
 
 class ContinueFitTarget[RevisionT](Value):
     """Continue the original target at the last retained draw of a prior fit."""
 
     kind: Literal["continue"] = "continue"
     fit_ref: RevisionT
+
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (("fit", self.fit_ref),)
 
 
 type FitTarget[RevisionT] = Annotated[
@@ -114,6 +138,10 @@ class FitInput[RevisionT](Value):
         description="Timing repeat identity; identical repeats reuse their saved result.",
     )
 
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return self.target.revision_dependencies()
+
 
 class SimulateInput[RevisionT](Value):
     """Generate histories from a selected model and an explicit simulation design."""
@@ -124,6 +152,10 @@ class SimulateInput[RevisionT](Value):
     simulation: SimulationSpec = Field(description="Requested start, horizon, and interventions.")
     seed: int = Field(default=0, ge=0, description="Generation seed, retained with the histories.")
     num_replicates: int = Field(default=100, ge=1, description="Number of independent histories.")
+
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (("dynamical_model_spec", self.dynamical_model_spec_ref),)
 
 
 class DataDiffInput[RevisionT](Value):
@@ -143,6 +175,14 @@ class DataDiffInput[RevisionT](Value):
         description="References on the right side, using the same selection rule."
     )
 
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return tuple(
+            (argument, ref.revision)
+            for argument, refs in (("left", self.left_ref), ("right", self.right_ref))
+            for ref in refs
+        )
+
 
 class ModelDiffInput[RevisionT](Value):
     """Base and target specs for a directional patch, selected by question or model revisions.
@@ -157,6 +197,10 @@ class ModelDiffInput[RevisionT](Value):
     after_ref: RevisionT = Field(
         description="Question or model revision reconstructed by applying the patch to the base."
     )
+
+    def revision_dependencies(self) -> tuple[tuple[str, RevisionT], ...]:
+        """Project the exact input revisions under their journal argument names."""
+        return (("before", self.before_ref), ("after", self.after_ref))
 
 
 type DataSelection[RevisionT] = Annotated[

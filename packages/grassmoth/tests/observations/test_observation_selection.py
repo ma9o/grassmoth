@@ -17,6 +17,7 @@ from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import one_state_gaussian_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 _ORIGIN = datetime(2024, 1, 1, tzinfo=UTC)
@@ -46,7 +47,7 @@ def _dataset(variable):
 def test_selection_accepts_renames_and_equivalent_windows_but_requires_identity():
     observation = compile_model_fixture(one_state_gaussian_model()).observations[0].observation
     dataset = _dataset(observation)
-    renamed = observation.revised(name="A new display name", observation_window="24h")
+    renamed = revise_fixture(observation, name="A new display name", observation_window="24h")
     selected = dataset.select((renamed,))
     assert isinstance(selected, SelectedObservations)
     assert selected.series[0].observation == observation
@@ -54,7 +55,7 @@ def test_selection_accepts_renames_and_equivalent_windows_but_requires_identity(
     assert selected.time_origin == _ORIGIN
     assert selected.series[0] is dataset.series[observation.id]
     assert ObservationDataset.model_validate(dataset.model_dump()) == dataset
-    missing = dataset.select((renamed.revised(id="indicator:another"),))
+    missing = dataset.select((revise_fixture(renamed, id="indicator:another"),))
     assert isinstance(missing, MissingObservation)
     assert missing.indicator_id == "indicator:another"
     assert isinstance(dataset.select(()), SelectedObservations)
@@ -70,11 +71,11 @@ def test_fit_rejects_changed_definitions_before_projecting_observations(changes,
     compiled_dynamical_model = compile_model_fixture(one_state_gaussian_model())
     required = compiled_dynamical_model.observations[0].observation
     # The recorded panel has a valid, independently declared definition.
-    recorded = required.revised(**changes)
+    recorded = revise_fixture(required, **changes)
     if recorded.support_kind == "interval":
         original = _dataset(required).series[required.id].history
         dataset = ObservationDataset.from_histories(
-            {recorded.id: original.revised(support_start=(-1.0, 0.0))},
+            {recorded.id: revise_fixture(original, support_start=(-1.0, 0.0))},
             (recorded,),
             time_origin=_ORIGIN,
         )
@@ -108,12 +109,12 @@ def test_definition_equality_preserves_ordered_codebooks():
     )
     assert (
         observation.definition
-        == observation.revised(
-            id="indicator:renamed", name="Renamed", observation_window="24h"
+        == revise_fixture(
+            observation, id="indicator:renamed", name="Renamed", observation_window="24h"
         ).definition
     )
-    reordered = observation.revised(
-        measurement=LabeledMeasurement(dtype="categorical", levels=("work", "home"))
+    reordered = revise_fixture(
+        observation, measurement=LabeledMeasurement(dtype="categorical", levels=("work", "home"))
     )
     assert observation.definition != reordered.definition
 
@@ -128,10 +129,9 @@ def test_history_structure_defers_anchor_semantics_to_series_admission(anchors):
     from grassmoth.artifacts.arrays import NumericalArray
 
     observation = compile_model_fixture(one_state_gaussian_model()).observations[0].observation
-    history = (
-        _dataset(observation)
-        .series[observation.id]
-        .history.revised(times=NumericalArray.from_numpy(np.asarray(anchors)))
+    history = revise_fixture(
+        _dataset(observation).series[observation.id].history,
+        times=NumericalArray.from_numpy(np.asarray(anchors)),
     )
     with pytest.raises(ValueError, match="anchors"):
         ObservationDataset.from_histories(
@@ -152,18 +152,15 @@ def test_vector_presence_is_boolean_and_masked_infinities_are_rejected():
             mask=ArrayVector(array=NumericalArray.from_numpy(np.asarray([1, 0])), indices=(None,)),
         )
     observation = compile_model_fixture(one_state_gaussian_model()).observations[0].observation
-    history = (
-        _dataset(observation)
-        .series[observation.id]
-        .history.revised(
-            values=ArrayVector(
-                array=values,
-                indices=(None,),
-                mask=ArrayVector(
-                    array=NumericalArray.from_numpy(np.asarray([True, False])), indices=(None,)
-                ),
-            )
-        )
+    history = revise_fixture(
+        _dataset(observation).series[observation.id].history,
+        values=ArrayVector(
+            array=values,
+            indices=(None,),
+            mask=ArrayVector(
+                array=NumericalArray.from_numpy(np.asarray([True, False])), indices=(None,)
+            ),
+        ),
     )
     with pytest.raises(ValueError, match="Observed values must be finite"):
         ObservationDataset.from_histories(

@@ -57,7 +57,7 @@ def _fit_findings(law: PredictiveLaw) -> tuple[PredictiveAssessment, ...]:
             subject=subject,
             outcome=status,
             evidence=tuple(
-                item.evidence.revised(
+                item.evidence.with_labels(
                     note=f"{item.evidence.criterion} {item.outcome} for {item.evidence.note}: "
                     f"{item.evidence.value:g}",
                     band_label=(

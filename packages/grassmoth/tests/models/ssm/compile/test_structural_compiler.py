@@ -33,6 +33,7 @@ from grassmoth_test_support.inference import (
     particle_posterior,
 )
 from grassmoth_test_support.model import load_model_fixture, without_prior, x_model, x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 
 def _severed_components_do_not_require_priors_or_bind_numerical_parameters_complete_test_model() -> (
@@ -57,8 +58,10 @@ def test_planner_rejects_retained_static_target_edge():
         edges=replace_constructs(
             dynamical_model_spec.edges,
             (
-                x.revised(role=Role.ENDOGENOUS, temporal_status=TemporalStatus.TIME_INVARIANT),
-                baseline.revised(temporal_status=TemporalStatus.TIME_INVARIANT),
+                revise_fixture(
+                    x, role=Role.ENDOGENOUS, temporal_status=TemporalStatus.TIME_INVARIANT
+                ),
+                revise_fixture(baseline, temporal_status=TemporalStatus.TIME_INVARIANT),
                 y,
             ),
         )
@@ -70,7 +73,7 @@ def test_planner_rejects_retained_static_target_edge():
 @pytest.mark.contract
 def test_model_rejects_duplicate_endpoint_pairs():
     dynamical_model_spec = make_model(["X", "Y"], [("X", "Y")])
-    duplicate = dynamical_model_spec.edges[0].revised(id="edge:another")
+    duplicate = revise_fixture(dynamical_model_spec.edges[0], id="edge:another")
     with pytest.raises(ValueError, match="one causal edge per endpoint pair"):
         dynamical_model_spec.with_entities(edges=(*dynamical_model_spec.edges, duplicate))
 
@@ -84,7 +87,8 @@ def test_projected_coefficients_require_literals():
 
     dynamical_model_spec = make_model(["U", "X", "Y"], [("U", "Y"), ("X", "Y")])
     root = next(item for item in dynamical_model_spec.constructs if item.name == "U")
-    root = root.revised(
+    root = revise_fixture(
+        root,
         role=Role.ENDOGENOUS,
         temporal_status=TemporalStatus.TIME_INVARIANT,
         indicators=(),
@@ -101,13 +105,14 @@ def test_projected_coefficients_require_literals():
 
     def _with_loading(weight, parameters):
         edges = tuple(
-            edge.revised(
+            revise_fixture(
+                edge,
                 mechanisms=(
                     DriftMechanismSpec(
                         id="mechanism:fixed-loading",
                         expression=coefficient(weight, "weight") * state(root.id),
                     ),
-                )
+                ),
             )
             if edge.cause.id == root.id
             else edge
@@ -153,7 +158,8 @@ def _model_with_exact_measurement():
         [("X", "Y"), ("Driver", "Y"), ("History", "Y"), ("U", "X"), ("U", "Y")],
     )
     x, y, driver, history, u = dynamical_model_spec.constructs
-    indicator = driver.indicators[0].revised(
+    indicator = revise_fixture(
+        driver.indicators[0],
         reasoning={"text": "Direct exact driver observation"},
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(driver.id)),
@@ -165,9 +171,9 @@ def _model_with_exact_measurement():
             (
                 x,
                 y,
-                driver.revised(role=Role.EXOGENOUS, indicators=(indicator,)),
+                revise_fixture(driver, role=Role.EXOGENOUS, indicators=(indicator,)),
                 history,
-                u.revised(role=Role.ENDOGENOUS, indicators=()),
+                revise_fixture(u, role=Role.ENDOGENOUS, indicators=()),
             ),
         )
     )
@@ -241,7 +247,7 @@ def test_required_unmeasured_mediator_stays_a_latent_state():
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            tuple(nodes[name].revised(indicators=()) for name in ("Mediator", "Leaf")),
+            tuple(revise_fixture(nodes[name], indicators=()) for name in ("Mediator", "Leaf")),
         ),
     )
     for outcome in (nodes["Y"].id, None):
@@ -360,7 +366,7 @@ def test_projected_latent_dependencies_keep_their_connected_states():
         dynamical_model_spec.with_entities(
             edges=replace_constructs(
                 dynamical_model_spec.edges,
-                (nodes["U"].revised(role=Role.ENDOGENOUS, indicators=()),),
+                (revise_fixture(nodes["U"], role=Role.ENDOGENOUS, indicators=()),),
             ),
         ),
         nodes["Y"].id,

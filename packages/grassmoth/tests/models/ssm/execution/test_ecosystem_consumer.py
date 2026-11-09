@@ -18,6 +18,7 @@ from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 from grassmoth_test_support.model import construct_named, load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _nonlinear_model() -> DynamicalModelSpec:
@@ -38,16 +39,19 @@ def test_nonlinear_mixed_missing_irregular_exact_densities(intervals):
     spec = _nonlinear_model()
     if intervals:
         construct = construct_named(spec, "latent_0")
-        revised = construct.revised(
+        revised = revise_fixture(
+            construct,
             indicators=tuple(
-                indicator.revised(
-                    observation=indicator.observation.revised(
+                revise_fixture(
+                    indicator,
+                    observation=revise_fixture(
+                        indicator.observation,
                         aggregation="mean" if index == 0 else "sum",
                         observation_window="72m",
-                    )
+                    ),
                 )
                 for index, indicator in enumerate(construct.indicators)
-            )
+            ),
         )
         spec = spec.with_entities(edges=replace_constructs(spec.edges, (revised,)))
     model = compile_fit_fixture(spec)

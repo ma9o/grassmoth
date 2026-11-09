@@ -63,7 +63,7 @@ def condition_model(
     )
     # Relative input paths acquire the same calendar binding as the conditioned states.
     input_layouts = {
-        key: value.revised(time_origin=time_origin)
+        key: value.with_time_origin(time_origin=time_origin)
         for key, value in dynamical_model_spec.law_layouts.items()
         if value.time_origin == "relative"
         and value.constructs

@@ -17,6 +17,7 @@ from grassmoth_server_test_support.storage import routing_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -87,7 +88,7 @@ def test_model_input_identity_preserves_findings_and_original_pins():
     panel = ArtifactRecord(artifact_id="panel", revision=git_oid(1))
     state = StudyState().with_artifacts([model, panel])
     assert not is_stale(state, "panel")
-    changed = model.revised(revision=git_oid(3))
+    changed = revise_fixture(model, revision=git_oid(3))
     assert not is_stale(state.with_artifacts([changed]), "panel")
 
 
@@ -107,7 +108,9 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
 
     changed = input_fingerprints(
         measured.with_entities(
-            edges=(measured.edges[0].revised(reasoning={"text": "Revised causal assumption"}),)
+            edges=(
+                revise_fixture(measured.edges[0], reasoning={"text": "Revised causal assumption"}),
+            )
         )
     )
     assert changed["observations"] == before["observations"]
@@ -117,7 +120,9 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
     reasoned = input_fingerprints(
         specified.with_entities(
             parameters=tuple(
-                parameter.revised(reasoning={"text": "A literature range for this quantity."})
+                revise_fixture(
+                    parameter, reasoning={"text": "A literature range for this quantity."}
+                )
                 for parameter in specified.parameters
             )
         )
@@ -163,7 +168,9 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
             ts="2026-10-07T12:00:00Z",
             attempt=EditAttempt(
                 action="edit_model",
-                request=request.revised(input=request.input.revised(parent_ref=model)),
+                request=revise_fixture(
+                    request, input=revise_fixture(request.input, parent_ref=model)
+                ),
                 outcome=Raised(error_type="RuntimeError", error_message="Failed"),
             ),
         ),

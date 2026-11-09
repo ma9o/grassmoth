@@ -233,7 +233,7 @@ class StudyWorkflow:
                 action, (EditModelRequest, FitRequest, PrepareDataRequest)
             ) and isinstance(attempt.outcome, Applied):
                 result = attempt.outcome
-                running = running.revised(
+                running = running.with_messages(
                     messages=(
                         *running.messages,
                         ActionMessage(
@@ -277,11 +277,11 @@ class StudyWorkflow:
                         start_to_close_timeout=_CHECK_TIMEOUT,
                         retry_policy=_ACTIVITY_RETRY,
                     )
-                running = running.revised(messages=(*running.messages, *evaluated.messages))
+                running = running.with_messages(messages=(*running.messages, *evaluated.messages))
                 self._report_progress(running)
-                attempt = attempt.revised(
-                    outcome=result.revised(
-                        effects=result.effects.revised(
+                attempt = attempt.with_outcome(
+                    outcome=result.with_effects(
+                        effects=result.effects.with_reports(
                             reports={**result.effects.reports, **evaluated.reports}
                         )
                     )

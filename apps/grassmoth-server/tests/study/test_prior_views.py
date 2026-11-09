@@ -20,6 +20,7 @@ from grassmoth.artifacts.probability.serialization import NumPyroDistribution
 from grassmoth.study.projections.priors import prior_density, quantity_prior_densities
 from grassmoth_server_test_support.model import load_study_model_fixture
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.values import revise_fixture
 
 
 def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_model() -> (
@@ -35,7 +36,9 @@ def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_mode
         for edge in dynamical_model_spec.edges
         if edge.cause.id == x.id and edge.effect.id == y.id
     )
-    return dynamical_model_spec.with_entities(edges=(x_to_y.revised(reasoning={"text": "X"}),))
+    return dynamical_model_spec.with_entities(
+        edges=(revise_fixture(x_to_y, reasoning={"text": "X"}),)
+    )
 
 
 if TYPE_CHECKING:

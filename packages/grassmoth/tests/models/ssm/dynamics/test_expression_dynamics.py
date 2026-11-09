@@ -44,6 +44,7 @@ from grassmoth.models.ssm.dynamics.spec import (
     pack_component_params_from_samples,
 )
 from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
+from grassmoth_test_support.values import revise_fixture
 
 
 def _component(value, role="drift"):
@@ -265,8 +266,8 @@ def test_composition_requires_all_causal_dependencies_and_valid_parameter_refere
     compound = hill(state(ConstructId("construct:x")), emax=1, ec50=1, n=2) * state(
         ConstructId("construct:z")
     )
-    edge = base.edges[0].revised(
-        mechanisms=(DriftMechanismSpec(id="mechanism:effect", expression=compound),)
+    edge = revise_fixture(
+        base.edges[0], mechanisms=(DriftMechanismSpec(id="mechanism:effect", expression=compound),)
     )
     with pytest.raises(ValueError, match="explicit causal edges"):
         base.with_entities(edges=(edge, *base.edges[1:]))
@@ -297,13 +298,14 @@ def test_composition_requires_all_causal_dependencies_and_valid_parameter_refere
             edges=replace_constructs(
                 base.edges,
                 (
-                    base.constructs[0].revised(
+                    revise_fixture(
+                        base.constructs[0],
                         dynamics=(
                             DriftMechanismSpec(
                                 id="mechanism:intrinsic",
                                 expression=state(ConstructId("construct:y")),
                             ),
-                        )
+                        ),
                     ),
                     *base.constructs[1:],
                 ),

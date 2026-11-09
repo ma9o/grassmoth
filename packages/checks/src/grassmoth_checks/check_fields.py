@@ -1021,7 +1021,7 @@ def producer_inventory(
                         parsed.add(owner)
             receiver = None
             if isinstance(node.func, ast.Attribute) and node.func.attr in {
-                "revised",
+                "_revised",
                 "_replace",
                 "model_copy",
                 "update",

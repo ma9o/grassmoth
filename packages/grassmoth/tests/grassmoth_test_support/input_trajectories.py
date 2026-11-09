@@ -8,6 +8,7 @@ from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.probability.joint_layout import JointLawLayout
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 
 def deterministic_input_model(*, measured=False, time_origin="relative"):
@@ -20,13 +21,15 @@ def deterministic_input_model(*, measured=False, time_origin="relative"):
         time_origin=time_origin,
         labels={},
     )
-    source = source.revised(
+    source = revise_fixture(
+        source,
         role="exogenous",
         dynamics=(),
         coefficients=(),
         distribution=layout.distribution_id,
         indicators=(
-            source.indicators[0].revised(
+            revise_fixture(
+                source.indicators[0],
                 reasoning={"text": "Exact known input"},
                 likelihood=LikelihoodSpec(law=DeltaLawSpec(v=state(source.id))),
             ),
@@ -35,11 +38,14 @@ def deterministic_input_model(*, measured=False, time_origin="relative"):
         else (),
     )
     target = dynamical_model_spec.constructs[1]
-    target = target.revised(
+    target = revise_fixture(
+        target,
         indicators=tuple(
-            indicator.revised(observation=indicator.observation.revised(aggregation="last"))
+            revise_fixture(
+                indicator, observation=revise_fixture(indicator.observation, aggregation="last")
+            )
             for indicator in target.indicators
-        )
+        ),
     )
     parameters = tuple(
         p for p in dynamical_model_spec.parameters if p.name not in {"rho_X", "sigma_X"}

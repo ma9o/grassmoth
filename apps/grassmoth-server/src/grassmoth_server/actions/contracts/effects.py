@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field
 
@@ -28,3 +28,7 @@ class ActionEffects(Value):
     produced: tuple[ArtifactRecord, ...] = Field(default_factory=tuple)
     retracted: tuple[RetractedArtifact, ...] = Field(default_factory=tuple)
     reports: Mapping[ActionReportName, GitOid] = Field(default_factory=dict)
+
+    def with_reports(self, *, reports: Mapping[ActionReportName, GitOid]) -> Self:
+        """Return the action effects with their retained reports."""
+        return self._revised(reports=reports)

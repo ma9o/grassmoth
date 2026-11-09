@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import Field
@@ -28,6 +28,10 @@ class StepEvent(Value):
     status: StepStatus
     error: StepError | None = None
 
+    def with_cursor(self, *, cursor: str) -> Self:
+        """Return the event with its assigned stream cursor."""
+        return self._revised(cursor=cursor)
+
 
 class ExtractionPlanEvent(Value):
     """The extraction fan-out plan."""
@@ -37,6 +41,10 @@ class ExtractionPlanEvent(Value):
     event: Literal["grassmoth.extraction.plan"] = "grassmoth.extraction.plan"
     total_workers: int = Field(ge=0)
     max_concurrent_workers: int | None = Field(default=None, gt=0)
+
+    def with_cursor(self, *, cursor: str) -> Self:
+        """Return the event with its assigned stream cursor."""
+        return self._revised(cursor=cursor)
 
 
 class ExtractionWorkerEvent(Value):
@@ -52,6 +60,10 @@ class ExtractionWorkerEvent(Value):
     n_llm_calls: int | None = Field(default=None, ge=0)
     error: str | None = None
 
+    def with_cursor(self, *, cursor: str) -> Self:
+        """Return the event with its assigned stream cursor."""
+        return self._revised(cursor=cursor)
+
 
 class ExtractionSnapshotEvent(Value):
     """Aggregate extraction worker counts."""
@@ -64,6 +76,10 @@ class ExtractionSnapshotEvent(Value):
     running_workers: int = Field(ge=0)
     completed_workers: int = Field(ge=0)
     failed_workers: int = Field(ge=0)
+
+    def with_cursor(self, *, cursor: str) -> Self:
+        """Return the event with its assigned stream cursor."""
+        return self._revised(cursor=cursor)
 
 
 type ProgressEvent = Annotated[

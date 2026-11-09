@@ -20,6 +20,7 @@ from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -65,14 +66,14 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
 
     # Even a selected, unreadable panel has no bearing on a model edit.
     state, (checks, identification) = edit(
-        root.revised(data=DataRef[GitOid, int](revision=git_oid(99), replicate_index=0))
+        revise_fixture(root, data=DataRef[GitOid, int](revision=git_oid(99), replicate_index=0))
     )
     assert checks.specification
     assert identification is not None
     assert checks.question is not None
     assert all(f.code not in {"window", "range"} for f in checks.question.findings)
     _, (reused, _) = edit(
-        state.revised(data=DataRef[GitOid, int](revision=git_oid(100), replicate_index=0))
+        revise_fixture(state, data=DataRef[GitOid, int](revision=git_oid(100), replicate_index=0))
     )
     assert reused.question == checks.question
 

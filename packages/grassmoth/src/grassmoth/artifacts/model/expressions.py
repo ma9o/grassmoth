@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Annotated, Literal, cast
+from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
 from pydantic import ConfigDict, Field, FiniteFloat, model_validator
 from sympy import Add, Basic, Expr, Float, Function, Mul, Pow, Symbol
@@ -288,6 +288,10 @@ class SymbolicExpression(Value):
     root: Expr
     nodes: Mapping[Basic, Expression]
     operands: Mapping[Symbol, StateExpression | CoefficientExpression]
+
+    def with_root(self, *, root: Expr) -> Self:
+        """Return the expression with its transformed root."""
+        return self._revised(root=root)
 
 
 def symbolic_call(name: str, *arguments: Expr) -> Expr:

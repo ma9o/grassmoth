@@ -10,7 +10,7 @@ values are independent of their transport or persistence.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
 from pydantic import (
     ConfigDict,
@@ -185,6 +185,16 @@ class FitOutput(Value):
         return handler(
             transfer_fit(self) if info.context and info.context.get("thin_fit_draws") else self
         )
+
+    def with_inference(
+        self, *, dynamical_model_spec: DynamicalModelSpec | None, inference: InferenceReport
+    ) -> Self:
+        """Return the fit with its conditioned model and inference report."""
+        return self._revised(dynamical_model_spec=dynamical_model_spec, inference=inference)
+
+    def with_profile(self, *, profile: FitProfileReport | None) -> Self:
+        """Return the fit with its profiling report."""
+        return self._revised(profile=profile)
 
 
 # simulate

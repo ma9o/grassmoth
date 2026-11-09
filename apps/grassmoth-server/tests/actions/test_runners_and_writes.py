@@ -29,6 +29,7 @@ from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
 from grassmoth_server_test_support.storage import seed_record, seed_source_table
 from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -65,7 +66,8 @@ def _exact_measurement(model):
     from grassmoth.artifacts.model.likelihood import LikelihoodSpec
 
     owner = model.constructs[0]
-    indicator = owner.indicators[0].revised(
+    indicator = revise_fixture(
+        owner.indicators[0],
         reasoning={"text": "An exact observation of the construct"},
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(owner.id)),
@@ -75,7 +77,7 @@ def _exact_measurement(model):
         edges=replace_constructs(
             model.edges,
             (
-                owner.revised(indicators=(indicator,)),
+                revise_fixture(owner, indicators=(indicator,)),
                 *model.constructs[1:],
             ),
         )
@@ -114,7 +116,7 @@ def test_identification_preserves_negative_findings():
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(indicators=()) if construct.id == perf else construct
+                revise_fixture(construct, indicators=()) if construct.id == perf else construct
                 for construct in dynamical_model_spec.constructs
             ),
         )
@@ -333,10 +335,11 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         state,
         Applied(result=DataPreparationResult(), effects=ActionEffects(produced=[panel])),
     )
-    state = state.with_artifacts([panel]).revised(
-        data=DataRef[GitOid, int](revision=panel.revision, replicate_index=0)
+    state = revise_fixture(
+        state.with_artifacts([panel]),
+        data=DataRef[GitOid, int](revision=panel.revision, replicate_index=0),
     )
-    changed = dynamical_model_spec.revised(measurement_clock="2d")
+    changed = revise_fixture(dynamical_model_spec, measurement_clock="2d")
     effects = edit_and_check(
         workspace,
         EditModelRequest[GitOid].model_validate(

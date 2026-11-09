@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
 import numpy as np
 from pydantic import Field
 
 from grassmoth.artifacts.base import Value
+
+type CompilationCacheStatus = Literal["unobserved", "disabled", "not_consulted", "miss", "hit"]
 
 
 class TimingSpread(Value):
@@ -51,10 +53,14 @@ class ProgramCompileReport(Value):
 
     name: str
     seconds: float = Field(ge=0)
-    persistent_cache: Literal["unobserved", "disabled", "not_consulted", "miss", "hit"] = Field(
+    persistent_cache: CompilationCacheStatus = Field(
         default="unobserved",
         description="The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation.",
     )
+
+    def with_cache_status(self, *, persistent_cache: CompilationCacheStatus) -> Self:
+        """Return the compilation report with the observed cache status."""
+        return self._revised(persistent_cache=persistent_cache)
 
 
 class FitProfileReport(Value):
@@ -89,3 +95,28 @@ class FitProfileReport(Value):
         default=None,
         description="Sum of parameter and path timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.",
     )
+
+    def with_compile_timings(
+        self,
+        *,
+        compile_seconds: float,
+        compilation: tuple[ProgramCompileReport, ...],
+        profiling_compilation: tuple[ProgramCompileReport, ...],
+        device: tuple[str, ...],
+    ) -> Self:
+        """Return the profile with measured compilation timings and devices."""
+        return self._revised(
+            compile_seconds=compile_seconds,
+            compilation=compilation,
+            profiling_compilation=profiling_compilation,
+            device=device,
+        )
+
+    def with_compilation(
+        self,
+        *,
+        compilation: tuple[ProgramCompileReport, ...],
+        profiling_compilation: tuple[ProgramCompileReport, ...],
+    ) -> Self:
+        """Return the profile with compilation reports for both execution phases."""
+        return self._revised(compilation=compilation, profiling_compilation=profiling_compilation)

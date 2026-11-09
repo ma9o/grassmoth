@@ -45,6 +45,7 @@ from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import construct_named, indicator_named, x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 
 def _recorded_replicate_becomes_a_compatible_panel_complete_test_model() -> DynamicalModelSpec:
@@ -53,14 +54,14 @@ def _recorded_replicate_becomes_a_compatible_panel_complete_test_model() -> Dyna
     x_obs = indicator_named(dynamical_model_spec, "X_obs")
     y = construct_named(dynamical_model_spec, "Y")
     y_obs = indicator_named(dynamical_model_spec, "Y_obs")
-    x_obs_revised = x_obs.revised(
-        observation=x_obs.observation.revised(aggregation=SummaryOperator.LAST)
+    x_obs_revised = revise_fixture(
+        x_obs, observation=revise_fixture(x_obs.observation, aggregation=SummaryOperator.LAST)
     )
-    x_revised = x.revised(indicators=(x_obs_revised,))
-    y_obs_revised = y_obs.revised(
-        observation=y_obs.observation.revised(aggregation=SummaryOperator.LAST)
+    x_revised = revise_fixture(x, indicators=(x_obs_revised,))
+    y_obs_revised = revise_fixture(
+        y_obs, observation=revise_fixture(y_obs.observation, aggregation=SummaryOperator.LAST)
     )
-    y_revised = y.revised(indicators=(y_obs_revised,))
+    y_revised = revise_fixture(y, indicators=(y_obs_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
@@ -91,13 +92,17 @@ def _model(**observation_changes):
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(
+                revise_fixture(
+                    construct,
                     indicators=tuple(
-                        indicator.revised(
-                            observation=indicator.observation.revised(**observation_changes)
+                        revise_fixture(
+                            indicator,
+                            observation=revise_fixture(
+                                indicator.observation, **observation_changes
+                            ),
                         )
                         for indicator in construct.indicators
-                    )
+                    ),
                 )
                 for construct in dynamical_model_spec.constructs
             ),
@@ -176,14 +181,18 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     )
     source_commit = history.append(simulation_record).commit_id
     # A later simulation must not replace the explicitly selected source.
-    later = report.revised(
-        evidence=report.evidence.revised(
-            arms=report.evidence.arms.revised(
-                action=report.evidence.arms.action.revised(
-                    observations=NumericalArray.from_numpy(np.zeros_like(draws))
-                )
-            )
-        )
+    later = revise_fixture(
+        report,
+        evidence=revise_fixture(
+            report.evidence,
+            arms=revise_fixture(
+                report.evidence.arms,
+                action=revise_fixture(
+                    report.evidence.arms.action,
+                    observations=NumericalArray.from_numpy(np.zeros_like(draws)),
+                ),
+            ),
+        ),
     )
     history.append(
         applied_record(
@@ -203,7 +212,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
 
     monkeypatch.setattr(store, "read_array", observations_only)
     with pytest.raises(StudyLookupError, match="applied prepare_data or simulate"):
-        read_data_history(store, source.revised(revision=model_commit))
+        read_data_history(store, revise_fixture(source, revision=model_commit))
     selected = read_data_history(store, source)
     assert selected.source == source
     assert selected.metadata is None
@@ -254,7 +263,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
             ),
         )
     )
-    applied = run_async(run_action("TEST", request, state.revised(data=source)))
+    applied = run_async(run_action("TEST", request, revise_fixture(state, data=source)))
     assert isinstance(request.input.target, NewFitTarget)
     assert request.input.target.data_ref == source
     assert {info.artifact_id for info in applied.effects.produced} == {"model"}
@@ -269,12 +278,15 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
             run_async(
                 run_action(
                     "TEST",
-                    request.revised(
-                        input=request.input.revised(
-                            target=request.input.target.revised(
-                                data_ref=source.revised(replicate_index=index)
-                            )
-                        )
+                    revise_fixture(
+                        request,
+                        input=revise_fixture(
+                            request.input,
+                            target=revise_fixture(
+                                request.input.target,
+                                data_ref=revise_fixture(source, replicate_index=index),
+                            ),
+                        ),
                     ),
                     state,
                 )
@@ -378,14 +390,16 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
     with pytest.raises(StudyLookupError, match="replicate"):
         _read_history(DataRef[GitOid, int](revision=git_oid(1), replicate_index=4), output)
     values[0, 1, 0] = np.nan
-    report = report.revised(
-        evidence=report.evidence.revised(
+    report = revise_fixture(
+        report,
+        evidence=revise_fixture(
+            report.evidence,
             arms=SingleArmSimulation(
-                action=report.evidence.arms.action.revised(
-                    observations=NumericalArray.from_numpy(values)
+                action=revise_fixture(
+                    report.evidence.arms.action, observations=NumericalArray.from_numpy(values)
                 )
-            )
-        )
+            ),
+        ),
     )
     with pytest.raises(ValueError, match="Observed values must be finite"):
         simulation_output(report).observations(0)

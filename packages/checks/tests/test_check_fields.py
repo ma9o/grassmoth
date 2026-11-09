@@ -181,7 +181,7 @@ Alias = Closed
 factory = Escaped
 closed = Alias(method=configured_method)
 record = Record(method=configured_method)
-record.revised(count=user_count)
+record._revised(count=user_count)
 TypeAdapter(Record).validate_python(external_input)
 """,
     )

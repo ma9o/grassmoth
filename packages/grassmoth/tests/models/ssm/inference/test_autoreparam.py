@@ -51,6 +51,7 @@ from grassmoth_test_support.model import (
     parameter_laws,
     two_state_gaussian_model,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _particle_runtime_reconstructs_log_normal_hill_sites_with_parameter_distributions() -> (
@@ -67,7 +68,8 @@ def _particle_runtime_reconstructs_log_normal_hill_sites_with_parameter_distribu
     latent_0_latent_1_hill_emax = parameter_for(
         dynamical_model_spec, SiteKind.HILL_EMAX, "latent_0", "latent_1"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             DriftMechanismSpec(
                 id=latent_0_potential.id,
@@ -75,7 +77,7 @@ def _particle_runtime_reconstructs_log_normal_hill_sites_with_parameter_distribu
                     latent_0.id, center=0.0, stiffness=latent_0_dynamics_decay.id, quartic=0.0
                 ),
             ),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,)),

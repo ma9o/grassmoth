@@ -23,6 +23,7 @@ from grassmoth_server.study.records import Applied, Rejected
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.input_trajectories import deterministic_input_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -34,7 +35,9 @@ def test_partial_document_round_trip_and_nested_merge_preserve_omission():
         id="mechanism:xy",
         expression=(coefficient(1, "weight") + 2) * state(source.id),
     )
-    original = original.with_entities(edges=(original.edges[0].revised(mechanisms=(mechanism,)),))
+    original = original.with_entities(
+        edges=(revise_fixture(original.edges[0], mechanisms=(mechanism,)),)
+    )
     indicator = source.indicators[0].observation.id
     payload = {
         "constructs": {

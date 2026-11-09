@@ -28,6 +28,7 @@ from grassmoth_server.actions.fit.remote import (
 )
 from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_VOLUME, AnalysisCall
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 _ANALYSIS_CALL = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
@@ -224,7 +225,7 @@ def test_runtime_records_the_enforced_modal_limit():
 
     sampler = SamplerSpec(hardware="L40S", time_limit_seconds=90)
     assert fit_runtime(sampler).time_limit_seconds == 90
-    assert fit_runtime(sampler.revised(hardware="local")).time_limit_seconds is None
+    assert fit_runtime(revise_fixture(sampler, hardware="local")).time_limit_seconds is None
 
 
 @pytest.mark.parametrize("model", [None, bytes(range(256)) * 1000])

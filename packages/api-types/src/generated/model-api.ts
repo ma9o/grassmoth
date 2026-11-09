@@ -847,6 +847,8 @@ export interface components {
         readonly CoefficientRole: "center" | "decay" | "quartic" | "intercept" | "weight" | "emax" | "ec50" | "exponent" | "loading" | "observation_intercept" | "observation_scale" | "degrees_of_freedom" | "shape" | "dispersion" | "concentration" | "cutpoint_base" | "cutpoint_gaps" | "category_intercepts" | "category_slopes" | "diffusion_scale" | "diffusion_loading" | "process_degrees_of_freedom" | "initial_mean" | "initial_scale" | "initial_correlation";
         /** @enum {string} */
         readonly ComparisonSide: "left" | "right";
+        /** @enum {string} */
+        readonly CompilationCacheStatus: "unobserved" | "disabled" | "not_consulted" | "miss" | "hit";
         /**
          * CompletedExtractionWorker
          * @description Counts of extracted observations and windows retained from a completed worker.
@@ -6752,12 +6754,10 @@ export interface components {
             /** Seconds */
             readonly seconds: number;
             /**
-             * Persistent Cache
              * @description The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation.
              * @default unobserved
-             * @enum {string}
              */
-            readonly persistent_cache: "unobserved" | "disabled" | "not_consulted" | "miss" | "hit";
+            readonly persistent_cache: components["schemas"]["CompilationCacheStatus"];
         };
         /** @description A progress event records one running attempt's step status or extraction telemetry. */
         readonly ProgressEvent: components["schemas"]["StepEvent"] | components["schemas"]["ExtractionPlanEvent"] | components["schemas"]["ExtractionWorkerEvent"] | components["schemas"]["ExtractionSnapshotEvent"];

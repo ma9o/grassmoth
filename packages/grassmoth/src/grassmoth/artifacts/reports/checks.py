@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field
 
@@ -111,6 +111,10 @@ class NumericCriterionEvidence(Value):
             self.value <= self.upper if self.upper_inclusive else self.value < self.upper
         )
         return above and below
+
+    def with_labels(self, *, note: str, band_label: str) -> Self:
+        """Return criterion evidence with its explanatory labels."""
+        return self._revised(note=note, band_label=band_label)
 
 
 class PredictiveSubject(Value):

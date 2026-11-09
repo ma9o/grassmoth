@@ -116,7 +116,7 @@ def admit_sampler(
     if (unsupported := candidate.support_failure) is not None:
         return Rejected(code="UNSUPPORTED_PATH_UPDATE", subject="fit", detail=unsupported.message)
     retained_host_bytes = 0 if previous is None else previous.retained_host_bytes
-    budget = budget.revised(
+    budget = budget.with_occupied(
         occupied=MemoryDemand(
             host_bytes=budget.occupied.host_bytes + retained_host_bytes,
             device_bytes=budget.occupied.device_bytes,

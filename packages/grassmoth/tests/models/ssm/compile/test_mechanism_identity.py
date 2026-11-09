@@ -11,6 +11,7 @@ from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _two_hills_model() -> DynamicalModelSpec:
@@ -32,8 +33,10 @@ def test_independent_hill_coefficients_survive_reorder_rename_and_submission(two
         0
     ]
     revised = model.with_entities(
-        edges=(edge.revised(mechanisms=tuple(reversed(edge.mechanisms))),),
-        parameters=tuple(p.revised(name=f"new label {i}") for i, p in enumerate(model.parameters)),
+        edges=(revise_fixture(edge, mechanisms=tuple(reversed(edge.mechanisms))),),
+        parameters=tuple(
+            revise_fixture(p, name=f"new label {i}") for i, p in enumerate(model.parameters)
+        ),
     )
     compile_model_fixture(revised)
     after = parameter_bindings(compile_model_fixture(revised))[0]
@@ -60,7 +63,7 @@ def test_independent_hill_coefficients_survive_reorder_rename_and_submission(two
     removed_ids = {p.id for p in model.parameters_for(edge.mechanisms[1].id)}
     remaining = tuple(p for p in model.parameters if p.id not in removed_ids)
     edited = model.with_entities(
-        edges=(edge.revised(mechanisms=(edge.mechanisms[0],)),),
+        edges=(revise_fixture(edge, mechanisms=(edge.mechanisms[0],)),),
         parameters=remaining,
         distributions={
             key: law
@@ -79,20 +82,21 @@ def test_term_identity_rejects_ambiguous_or_dangling_revisions(two_hills, change
     edge = model.edges[0]
     first, second = edge.mechanisms
     if change == "duplicate":
-        terms = (first, second.revised(id=first.id))
+        terms = (first, revise_fixture(second, id=first.id))
     elif change == "wrong_coefficient":
         terms = (
             first,
-            second.revised(
+            revise_fixture(
+                second,
                 expression=BinaryExpression.model_validate_json(
                     model_fixture_json(
                         "mechanism_identity/term_identity_rejects_ambiguous_or_dangling_revisions_map_expression.json"
                     )
-                )
+                ),
             ),
         )
     else:
         terms = (first,)
     with pytest.raises(ValueError, match=r"Duplicate mechanism|not referenced by component slots"):
-        model.with_entities(edges=(edge.revised(mechanisms=terms),))
+        model.with_entities(edges=(revise_fixture(edge, mechanisms=terms),))
     assert model.mechanism(second.id) is second

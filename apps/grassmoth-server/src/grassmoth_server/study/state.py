@@ -12,7 +12,7 @@ cross serialization boundaries verbatim: Temporal update/activity payloads
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field
 
@@ -89,7 +89,7 @@ class StudyState(Value):
         merged = dict(self.current)
         for info in infos:
             merged[info.artifact_id] = info
-        return self.revised(current={aid: merged[aid] for aid in ARTIFACT_IDS if aid in merged})
+        return self._revised(current={aid: merged[aid] for aid in ARTIFACT_IDS if aid in merged})
 
     def without(self, artifact_ids: list[ArtifactId]) -> StudyState:
         """Return a new state with the given artifacts removed from ``current``.
@@ -100,9 +100,13 @@ class StudyState(Value):
         silently consume a payload derived from superseded inputs.
         """
         removed = set(artifact_ids)
-        return self.revised(
+        return self._revised(
             current={aid: info for aid, info in self.current.items() if aid not in removed}
         )
+
+    def with_data(self, *, data: DataRef[GitOid, int] | None) -> Self:
+        """Return the study state with its data revisions."""
+        return self._revised(data=data)
 
 
 class RetractedArtifact(Value):

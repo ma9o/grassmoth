@@ -69,6 +69,7 @@ from grassmoth_server_test_support.storage import (
     stage_result,
 )
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -87,7 +88,9 @@ def _publish(repository, *artifacts, retracted=()):
             repository.latest_seq() + 1,
         )
         if not artifacts:
-            request = request.revised(input=request.input.revised(parent_ref=repository.head()))
+            request = revise_fixture(
+                request, input=revise_fixture(request.input, parent_ref=repository.head())
+            )
         stage_result(ArtifactStore(repository.workspace_id), outcome.result, request)
         return repository.append(
             AttemptRecord(
@@ -179,13 +182,13 @@ def study(tmp_path, monkeypatch):
             applied_record(
                 repository.workspace_id,
                 Applied(
-                    result=evidence.revised(seed=seed),
+                    result=revise_fixture(evidence, seed=seed),
                     effects=ActionEffects(
                         reports={
                             "simulation": result_blob(
                                 store,
                                 SimulationReport(
-                                    evidence=evidence.revised(seed=seed),
+                                    evidence=revise_fixture(evidence, seed=seed),
                                     summary=empty_simulation_summary(),
                                     law=AuthoredLawProvenance(),
                                 ),

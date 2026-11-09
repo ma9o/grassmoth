@@ -27,6 +27,7 @@ from grassmoth_server_test_support.helpers import run_async, write_question
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -50,7 +51,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
     complete = x_y_model()
     missing_law = complete.with_entities(
         distributions={},
-        parameters=tuple(p.revised(distribution=None) for p in complete.parameters),
+        parameters=tuple(revise_fixture(p, distribution=None) for p in complete.parameters),
     )
     journal = StudyRepository(workspace)
     from grassmoth.artifacts.model.question import QuestionSpec
@@ -176,7 +177,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     prior = x_y_model()
     fitted = prior
     edited = fitted.with_entities(
-        edges=(fitted.edges[0].revised(reasoning={"text": "X changes Y within a day"}),)
+        edges=(revise_fixture(fitted.edges[0], reasoning={"text": "X changes Y within a day"}),)
     )
     store = ArtifactStore(workspace)
     for revision, (model, producer) in enumerate(
@@ -257,7 +258,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             configured,
             inference=replace(
                 configured.inference,
-                sampler=configured.inference.sampler.revised(hardware=hardware),
+                sampler=revise_fixture(configured.inference.sampler, hardware=hardware),
             ),
         ),
     )

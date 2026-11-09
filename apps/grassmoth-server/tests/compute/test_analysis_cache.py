@@ -18,13 +18,14 @@ from grassmoth_server.compute.analysis_cache import (
     retained_fit_result,
 )
 from grassmoth_server.study.persistence.codec import unpack_result
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
 
 def test_cached_calls_share_exact_content_and_reject_corruption(tmp_path):
     first = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
-    second = first.revised(call_id=CallId("call:" + "b" * 64))
+    second = revise_fixture(first, call_id=CallId("call:" + "b" * 64))
     left = cache_fit_result(tmp_path, first, {"body": b"complete-result"})
     right = cache_fit_result(tmp_path, second, {"body": b"complete-result"})
     assert left.sha256 == right.sha256
@@ -45,7 +46,7 @@ def test_collection_removes_only_expired_temporary_content(tmp_path):
     old_profile.mkdir(parents=True)
     (old_profile / "trace.json").write_text("old trace")
     os.utime(old_profile, (1, 1))
-    current = call.revised(call_id=CallId("call:" + "b" * 64))
+    current = revise_fixture(call, call_id=CallId("call:" + "b" * 64))
     current_entry = cache_fit_result(tmp_path, current, {"body": b"current"})
     current_profile = fit_profile_directory(tmp_path, current)
     current_profile.mkdir(parents=True)

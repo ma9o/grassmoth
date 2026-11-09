@@ -25,6 +25,7 @@ from grassmoth_test_support.inference import (
     nonlinear_fit_fixture,
 )
 from grassmoth_test_support.interval_particle import gaussian_interval_case
+from grassmoth_test_support.values import revise_fixture
 
 """Joint NUTS recovery and production posterior contracts."""
 
@@ -259,10 +260,10 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
         )
 
     full = run(settings)
-    first = run(settings.revised(num_samples_per_chain=4))
+    first = run(revise_fixture(settings, num_samples_per_chain=4))
     assert isinstance(full, NutsDARun)
     assert isinstance(first, NutsDARun)
-    second = run(settings.revised(num_warmup=0, num_samples_per_chain=4), first.checkpoint)
+    second = run(revise_fixture(settings, num_warmup=0, num_samples_per_chain=4), first.checkpoint)
     assert isinstance(second, NutsDARun)
     np.testing.assert_allclose(
         full.positions,
@@ -292,7 +293,9 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
         )
 
     monkeypatch.setattr(nuts, "restore_state", stale_scores)
-    refreshed = run(settings.revised(num_warmup=0, num_samples_per_chain=4), first.checkpoint)
+    refreshed = run(
+        revise_fixture(settings, num_warmup=0, num_samples_per_chain=4), first.checkpoint
+    )
     assert isinstance(refreshed, NutsDARun)
     np.testing.assert_array_equal(refreshed.positions, second.positions)
     for actual, expected in zip(

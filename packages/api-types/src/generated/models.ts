@@ -35,6 +35,7 @@ export type CheckStatus = components["schemas"]["CheckStatus"];
 export type CoefficientExpression = components["schemas"]["CoefficientExpression-Output"];
 export type CoefficientRole = components["schemas"]["CoefficientRole"];
 export type ComparisonSide = components["schemas"]["ComparisonSide"];
+export type CompilationCacheStatus = components["schemas"]["CompilationCacheStatus"];
 export type CompletedExtractionWorker = components["schemas"]["CompletedExtractionWorker"];
 export type ComputedExtractionSpec = components["schemas"]["ComputedExtractionSpec-Output"];
 export type ConditionalParameterProposalSpec = components["schemas"]["ConditionalParameterProposalSpec"];

@@ -35,6 +35,7 @@ from grassmoth_test_support.model import (
     replace_parameters,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _scientific_roundtrip_preserves_distinct_native_coordinate_laws_with_parameter_distributions() -> (
@@ -59,7 +60,8 @@ def _scientific_roundtrip_preserves_distinct_native_coordinate_laws_with_paramet
     )
     latent_0_t0_means = parameter_for(dynamical_model_spec, SiteKind.T0_MEANS, "latent_0")
     latent_1_t0_means = parameter_for(dynamical_model_spec, SiteKind.T0_MEANS, "latent_1")
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             DriftMechanismSpec(
                 id=latent_0_potential.id,
@@ -67,7 +69,7 @@ def _scientific_roundtrip_preserves_distinct_native_coordinate_laws_with_paramet
                     latent_0.id, center=0.0, stiffness=latent_0_dynamics_decay.id, quartic=0.0
                 ),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec,
@@ -119,7 +121,9 @@ def _compiler_and_dynestyx_parameter_trace_use_the_exact_persistence_law_with_pa
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            rho_mood.revised(transform=rho_mood.transform.revised(interval_days=7.0)),
+            revise_fixture(
+                rho_mood, transform=revise_fixture(rho_mood.transform, interval_days=7.0)
+            ),
         ),
         distributions=parameter_laws(
             dynamical_model_spec,

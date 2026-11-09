@@ -47,6 +47,7 @@ from grassmoth_test_support.model import (
     two_state_gaussian_model,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _mood_model() -> DynamicalModelSpec:
@@ -93,18 +94,20 @@ def _partial_manifest_variance_model() -> DynamicalModelSpec:
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
     )
-    manifest_0_revised = manifest_0.revised(
-        likelihood=manifest_0_likelihood.revised(
+    manifest_0_revised = revise_fixture(
+        manifest_0,
+        likelihood=revise_fixture(
+            manifest_0_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(0.0, "observation_intercept")
                     + (coefficient(1.0, "loading") * state(latent_0.id))
                 ),
                 scale=coefficient(0.4000000059604645, "observation_scale"),
-            )
-        )
+            ),
+        ),
     )
-    latent_0_revised = latent_0.revised(indicators=(manifest_0_revised,))
+    latent_0_revised = revise_fixture(latent_0, indicators=(manifest_0_revised,))
     parameters, distributions = without_parameters(
         dynamical_model_spec, latent_0_manifest_0_manifest_var_diag
     )
@@ -136,7 +139,8 @@ def _student_innovation_model() -> DynamicalModelSpec:
     latent_0_latent_1_t0_var_lower = parameter_for(
         dynamical_model_spec, SiteKind.T0_VAR_LOWER, "latent_0", "latent_1"
     )
-    latent_1_revised = latent_1.revised(
+    latent_1_revised = revise_fixture(
+        latent_1,
         coefficients=(
             coefficient(latent_1_diffusion_diag.id, "diffusion_scale"),
             coefficient(latent_1_t0_means.id, "initial_mean"),

@@ -64,7 +64,7 @@ def segment_diagnostics(
         ),
     )
     diagnostics = posterior.get_inference_diagnostics(references)
-    return diagnostics.revised(
+    return diagnostics.with_latent_diagnostics(
         per_latent=tuple(
             entry
             for identity in layout.constructs

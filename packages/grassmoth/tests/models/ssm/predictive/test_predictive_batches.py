@@ -38,6 +38,7 @@ from grassmoth_test_support.model import (
     replace_parameters,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _diagnostic_noise_matches_point_and_interval_execution_model_fixture_families0_false_1_0001e_08() -> (
@@ -69,13 +70,14 @@ def _diagnostic_noise_matches_point_and_interval_execution_model_fixture_familie
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             DriftMechanismSpec(
                 id=_LATENT_0_DRIFT_MECHANISM_ID,
                 expression=restoring_force(latent_0.id, center=0.0, stiffness=1.0, quartic=0.0),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(dynamical_model_spec, latent_0_dynamics_decay)
     distributions = {
@@ -93,11 +95,16 @@ def _diagnostic_noise_matches_point_and_interval_execution_model_fixture_familie
         edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,)),
         parameters=replace_parameters(
             parameters,
-            latent_0_diffusion_diag.revised(distribution=_LATENT_0_DIFFUSION_DIAG_DISTRIBUTION_ID),
-            latent_0_t0_means.revised(distribution=_LATENT_0_T0_MEANS_DISTRIBUTION_ID),
-            latent_0_t0_var_diag.revised(distribution=_LATENT_0_T0_VAR_DIAG_DISTRIBUTION_ID),
-            latent_0_manifest_0_manifest_var_diag.revised(
-                distribution=_LATENT_0_MANIFEST_0_MANIFEST_VAR_DIAG_DISTRIBUTION_ID
+            revise_fixture(
+                latent_0_diffusion_diag, distribution=_LATENT_0_DIFFUSION_DIAG_DISTRIBUTION_ID
+            ),
+            revise_fixture(latent_0_t0_means, distribution=_LATENT_0_T0_MEANS_DISTRIBUTION_ID),
+            revise_fixture(
+                latent_0_t0_var_diag, distribution=_LATENT_0_T0_VAR_DIAG_DISTRIBUTION_ID
+            ),
+            revise_fixture(
+                latent_0_manifest_0_manifest_var_diag,
+                distribution=_LATENT_0_MANIFEST_0_MANIFEST_VAR_DIAG_DISTRIBUTION_ID,
             ),
         ),
         distributions={
@@ -130,8 +137,10 @@ def _student_t_model() -> DynamicalModelSpec:
     latent_0_manifest_0_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "manifest_0"
     )
-    manifest_0_revised = manifest_0.revised(
-        likelihood=manifest_0_likelihood.revised(
+    manifest_0_revised = revise_fixture(
+        manifest_0,
+        likelihood=revise_fixture(
+            manifest_0_likelihood,
             law=StudentTLawSpec[Expression](
                 df=coefficient(
                     _INDICATOR_A6C99A629D09C47F8B69_DEGREES_OF_FREEDOM_PARAMETER_ID,
@@ -142,10 +151,10 @@ def _student_t_model() -> DynamicalModelSpec:
                     + (coefficient(1.0, "loading") * state(latent_0.id))
                 ),
                 scale=coefficient(latent_0_manifest_0_manifest_var_diag.id, "observation_scale"),
-            )
-        )
+            ),
+        ),
     )
-    latent_0_revised = latent_0.revised(indicators=(manifest_0_revised,))
+    latent_0_revised = revise_fixture(latent_0, indicators=(manifest_0_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,)),
         parameters=(

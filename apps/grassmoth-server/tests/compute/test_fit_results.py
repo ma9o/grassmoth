@@ -22,6 +22,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -45,10 +46,11 @@ def retained_case(tmp_path, monkeypatch):
             preflight=(),
             question=QuestionCheckReport(findings=()),
         ),
-        inference=report.revised(
-            evidence=report.evidence.revised(
-                phase_extra_fields={"initialization": {"position": values}}
-            )
+        inference=revise_fixture(
+            report,
+            evidence=revise_fixture(
+                report.evidence, phase_extra_fields={"initialization": {"position": values}}
+            ),
         ),
     )
     request = FitRequest(
@@ -176,7 +178,8 @@ def test_gpu_commits_full_and_transfer_bodies_before_returning_pointers(
             times=jnp.array([0.0, 1.0]),
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         )
-        metadata = result.inference.core.inference_metadata.revised(
+        metadata = revise_fixture(
+            result.inference.core.inference_metadata,
             distribution=identity,
             num_samples_total=52,
             draws_sampled_per_chain=13,
@@ -193,10 +196,12 @@ def test_gpu_commits_full_and_transfer_bodies_before_returning_pointers(
                 ),
             ),
         )
-        result = result.revised(
+        result = revise_fixture(
+            result,
             dynamical_model_spec=conditioned,
-            inference=result.inference.revised(
-                core=result.inference.core.revised(inference_metadata=metadata)
+            inference=revise_fixture(
+                result.inference,
+                core=revise_fixture(result.inference.core, inference_metadata=metadata),
             ),
         )
         body = pack_result(result)
@@ -284,7 +289,9 @@ def test_continuation_reads_only_saved_metadata(retained_case, monkeypatch, tmp_
     path = tmp_path / "served.msgpack"
     path.write_bytes(body)
     settings = SamplerSpec(hardware="L40S", num_chains=3, num_samples_per_chain=7)
-    retained = completion.full_fit.revised(settings=settings if mode == "continue" else None)
+    retained = revise_fixture(
+        completion.full_fit, settings=settings if mode == "continue" else None
+    )
     result = store.import_result(
         call_id=call_identity(request),
         path=path,
@@ -422,7 +429,7 @@ def test_dispatch_rejects_pointers_for_another_call(retained_case, monkeypatch):
                 sampler=SamplerSpec(hardware="L40S"),
                 compute_loo_diagnostics=False,
             ),
-            analysis_call=completion.full_fit.entry.call.revised(
-                call_id=CallId("call:" + "f" * 64)
+            analysis_call=revise_fixture(
+                completion.full_fit.entry.call, call_id=CallId("call:" + "f" * 64)
             ),
         )

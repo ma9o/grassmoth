@@ -15,6 +15,7 @@ from grassmoth.artifacts.simulation import SimulationObservationLayout
 from grassmoth_server.actions.contracts.preparation import FileSourceRef
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def metadata_for_model(model):
@@ -64,13 +65,14 @@ def preparation_input(store, preparation):
 
     variables = preparation.definition.variables
     dynamical_model_spec = make_model([item.observation.name for item in variables])
-    dynamical_model_spec = dynamical_model_spec.revised(
-        measurement_clock=preparation.definition.default_window
+    dynamical_model_spec = revise_fixture(
+        dynamical_model_spec, measurement_clock=preparation.definition.default_window
     ).with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(
+                revise_fixture(
+                    construct,
                     indicators=(
                         IndicatorSpec(
                             reasoning=ReasoningSpec(
@@ -79,7 +81,7 @@ def preparation_input(store, preparation):
                             observation=item.observation,
                             construct_polarity="positive",
                         ),
-                    )
+                    ),
                 )
                 for construct in dynamical_model_spec.constructs
                 for item in variables

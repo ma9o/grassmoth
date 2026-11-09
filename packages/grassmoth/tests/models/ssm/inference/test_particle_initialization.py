@@ -24,6 +24,7 @@ from grassmoth_test_support.inference import (
     compile_fit_fixture,
     nonlinear_fit_fixture,
 )
+from grassmoth_test_support.values import revise_fixture
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
 
 """The exact centred initialization chart and its handoff to production sampling."""
@@ -35,15 +36,19 @@ pytestmark = pytest.mark.inference(concern="warmup")
 def test_initialization_chart_excludes_fixed_states_and_replays_static_and_accumulated_states():
     model = _model()
     driver_spec = next(item for item in model.constructs if item.name == "driver")
-    driver_spec = driver_spec.revised(
+    driver_spec = revise_fixture(
+        driver_spec,
         indicators=tuple(
-            indicator.revised(
-                likelihood=indicator.likelihood.revised(
-                    law=DeltaLawSpec(v=state(driver_spec.id)), standardized=False
-                )
+            revise_fixture(
+                indicator,
+                likelihood=revise_fixture(
+                    indicator.likelihood,
+                    law=DeltaLawSpec(v=state(driver_spec.id)),
+                    standardized=False,
+                ),
             )
             for indicator in driver_spec.indicators
-        )
+        ),
     )
     model = model.with_entities(edges=replace_constructs(model.edges, (driver_spec,)))
     compiled = compile_fit_fixture(model).compiled_dynamical_model

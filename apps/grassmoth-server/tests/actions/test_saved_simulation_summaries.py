@@ -37,6 +37,7 @@ from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.inference(concern="simulation")
 
@@ -56,16 +57,19 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         "category": LabeledMeasurement(dtype="categorical", levels=("a", "b")),
     }
     constructs = tuple(
-        c.revised(
+        revise_fixture(
+            c,
             indicators=tuple(
-                i.revised(
-                    observation=i.observation.revised(
+                revise_fixture(
+                    i,
+                    observation=revise_fixture(
+                        i.observation,
                         aggregation="last",
                         measurement=measurements[c.name],
-                    )
+                    ),
                 )
                 for i in c.indicators
-            )
+            ),
         )
         for c in dynamical_model_spec.constructs
     )
@@ -161,7 +165,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
         ),
     )
-    report = report.revised(summary=simulation_summary(report.evidence))
+    report = revise_fixture(report, summary=simulation_summary(report.evidence))
     published = history.append(
         applied_record(
             store.workspace_id,
@@ -253,13 +257,16 @@ def test_authored_law_advances_from_zero_before_a_later_requested_start():
     payload.update(parameters={}, distributions={})
     dynamical_model_spec = DynamicalModelSpec.model_validate(payload).materialized()
     constructs = tuple(
-        c.revised(
+        revise_fixture(
+            c,
             coefficients=tuple(
-                coefficient.revised(value=10.0 if coefficient.role == "initial_mean" else 1e-8)
+                revise_fixture(
+                    coefficient, value=10.0 if coefficient.role == "initial_mean" else 1e-8
+                )
                 if coefficient.role in {"initial_mean", "initial_scale"}
                 else coefficient
                 for coefficient in c.coefficients
-            )
+            ),
         )
         for c in dynamical_model_spec.constructs
     )

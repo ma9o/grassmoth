@@ -32,6 +32,7 @@ from grassmoth_server.storage import paths as data_module
 from grassmoth_server.storage.traces import collect_run_traces
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import ActionMessage, AttemptRecord, EditAttempt, Raised
+from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from grassmoth.json_types import JsonObject
@@ -148,7 +149,9 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
         detail="An execution message retained before the action finishes.",
     )
     emit_message("ws-trace", call_identity(request), execution_message)
-    emit_message("ws-trace", "another-call", execution_message.revised(detail="Another call."))
+    emit_message(
+        "ws-trace", "another-call", revise_fixture(execution_message, detail="Another call.")
+    )
     live = collect_call_log(
         "ws-trace",
         RunningCall(attempt_id=attempt_id, seq=1, request=request, messages=messages),

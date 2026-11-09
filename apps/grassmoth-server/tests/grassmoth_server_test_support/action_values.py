@@ -19,6 +19,7 @@ from grassmoth.public import (
     PrepareDataOutput,
     SimulateOutput,
 )
+from grassmoth_test_support.values import revise_fixture
 
 BASELINE = "construct:00000000000000000001"
 TREATMENT = "construct:00000000000000000002"
@@ -334,10 +335,11 @@ def fit() -> FitOutput:
         "time_origin": "relative",
         "labels": {key.replace("parameter:", "element:"): name for key, name, _ in parameters},
     }
-    conditioned = authored.revised(
+    conditioned = revise_fixture(
+        authored,
         parameter_definitions={
-            parameter.id: parameter.revised(
-                distribution=identity, transform={"kind": "identity"}
+            parameter.id: revise_fixture(
+                parameter, distribution=identity, transform={"kind": "identity"}
             ).model_dump(mode="json", exclude={"id"})
             for parameter in authored.parameters
         },

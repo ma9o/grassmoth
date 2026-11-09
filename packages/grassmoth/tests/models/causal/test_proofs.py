@@ -24,6 +24,7 @@ from grassmoth.models.causal.proofs import (
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _treatment_outcome() -> DynamicalModelSpec:
@@ -223,10 +224,12 @@ def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
     report = _report(model).core
     assert report.inference_diagnostics is not None
     convergence = chain_convergence(
-        report.inference_diagnostics.revised(
+        revise_fixture(
+            report.inference_diagnostics,
             per_parameter=tuple(
-                row.revised(ess_bulk=264.0) for row in report.inference_diagnostics.per_parameter
-            )
+                revise_fixture(row, ess_bulk=264.0)
+                for row in report.inference_diagnostics.per_parameter
+            ),
         )
     )
     assert convergence.status == "failed"
@@ -243,7 +246,7 @@ def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
             law=AuthoredLawProvenance(),
             fitted=(
                 GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json"),
-                report.revised(convergence=convergence),
+                revise_fixture(report, convergence=convergence),
             ),
         ),
         action=SimulationArm(
@@ -272,7 +275,7 @@ def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
                 fitted_model_revision=git_oid(2),
                 interpretation="posterior_predictive",
             ),
-            report=report.revised(convergence=convergence),
+            report=revise_fixture(report, convergence=convergence),
         )
     )
     assert finding.kind == "evaluated"

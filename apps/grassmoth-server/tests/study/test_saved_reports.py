@@ -74,6 +74,7 @@ from grassmoth_server_test_support.action import (
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata, seed_model
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -114,7 +115,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             reports["data-profile"] = result_blob(store, data_profile)
         record = applied_record(
             workspace,
-            applied.revised(effects=applied.effects.revised(reports=reports)),
+            revise_fixture(applied, effects=revise_fixture(applied.effects, reports=reports)),
             seq=repository.latest_seq() + 1,
             request=request,
         )
@@ -380,10 +381,12 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         "inference",
         "profile",
     }
-    assert fitted_response.body.revised(dynamical_model_spec=None).dynamical_model_spec is None
+    assert (
+        revise_fixture(fitted_response.body, dynamical_model_spec=None).dynamical_model_spec is None
+    )
     for field in ("checks", "inference"):
         with pytest.raises(ValidationError):
-            fitted_response.body.revised(**{field: None})
+            revise_fixture(fitted_response.body, **{field: None})
     assert (
         fitted_law_report(store, repository.records(simulated.commit_id), fitted.revision)
         == inference.core

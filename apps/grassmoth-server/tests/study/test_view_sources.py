@@ -12,6 +12,7 @@ from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 
 @pytest.mark.contract
@@ -56,7 +57,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     identity, layout = next(iter(dynamical_model_spec.law_layouts.items()))
     labels = {element: f"Production label {index}" for index, element in enumerate(layout.labels)}
     dynamical_model_spec = dynamical_model_spec.with_entities(
-        law_layouts={identity: layout.revised(labels=labels)}
+        law_layouts={identity: revise_fixture(layout, labels=labels)}
     )
     prior = seed_record(
         store,
@@ -174,7 +175,7 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
         "prior_density_points" not in parameter.model_dump()
         for parameter in dynamical_model_spec.parameters
     )
-    changed = dynamical_model_spec.revised(measurement_clock="2d")
+    changed = revise_fixture(dynamical_model_spec, measurement_clock="2d")
     revision = seed_record(
         store,
         "model",

@@ -49,6 +49,7 @@ from grassmoth_test_support.model import (
     x_y_model,
 )
 from grassmoth_test_support.observation import observation_kernel
+from grassmoth_test_support.values import revise_fixture
 
 
 def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_complete_test_model() -> (
@@ -69,9 +70,11 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
     beta_x_y = parameter_named(dynamical_model_spec, "beta_X_Y")
     sigma_x = parameter_named(dynamical_model_spec, "sigma_X")
     sigma_y = parameter_named(dynamical_model_spec, "sigma_Y")
-    x_obs_revised = x_obs.revised(
+    x_obs_revised = revise_fixture(
+        x_obs,
         reasoning={"text": "Partial"},
-        likelihood=x_obs_likelihood.revised(
+        likelihood=revise_fixture(
+            x_obs_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(_MANIFEST_MEAN_X_OBS_PARAMETER_ID, "observation_intercept")
@@ -82,7 +85,7 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
             standardized=False,
         ),
     )
-    x_revised = x.revised(indicators=(x_obs_revised,))
+    x_revised = revise_fixture(x, indicators=(x_obs_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (x_revised,)),
         parameters=(
@@ -453,7 +456,7 @@ def test_completion_binding_and_serialization_follow_the_same_cross_loading():
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            (owner.revised(indicators=(indicator.revised(likelihood=revised),)),),
+            (revise_fixture(owner, indicators=(revise_fixture(indicator, likelihood=revised),)),),
         )
     )
     compile_model_fixture(dynamical_model_spec)
@@ -474,7 +477,9 @@ def test_completion_binding_and_serialization_follow_the_same_cross_loading():
         == dynamical_model_spec
     )
     renamed = dynamical_model_spec.with_entities(
-        edges=replace_constructs(dynamical_model_spec.edges, (other.revised(name="Renamed"),))
+        edges=replace_constructs(
+            dynamical_model_spec.edges, (revise_fixture(other, name="Renamed"),)
+        )
     )
     assert {p.id for p in renamed.parameters} == {p.id for p in dynamical_model_spec.parameters}
 
@@ -514,7 +519,7 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
         return dynamical_model_spec.with_entities(
             edges=replace_constructs(
                 dynamical_model_spec.edges,
-                (owner.revised(indicators=(indicator.revised(likelihood=law),)),),
+                (revise_fixture(owner, indicators=(revise_fixture(indicator, likelihood=law),)),),
             )
         )
 

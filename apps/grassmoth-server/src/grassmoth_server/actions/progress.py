@@ -30,6 +30,6 @@ def read_events(
 ) -> list[ProgressEvent]:
     """One attempt's retained events in emission order; ``after`` is the last seen cursor."""
     return [
-        _PROGRESS_EVENT_ADAPTER.validate_json(payload).revised(cursor=cursor)
+        _PROGRESS_EVENT_ADAPTER.validate_json(payload).with_cursor(cursor=cursor)
         for cursor, payload in read_records(events_dir(workspace_id, call_id), after=after)
     ]

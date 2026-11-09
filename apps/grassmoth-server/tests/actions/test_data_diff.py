@@ -43,6 +43,7 @@ from grassmoth_server_test_support.git import artifact_revisions
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import observation_dataset
+from grassmoth_test_support.values import revise_fixture
 
 
 def _dataset(
@@ -170,10 +171,12 @@ def test_predictive_support_follows_the_model_observation_semantics(aggregation)
             )
         }
     )
-    observed = observed.revised(
-        observations=observed.observations.revised(
-            series={variable.id: series.revised(history=history.revised(**bounds))}
-        )
+    observed = revise_fixture(
+        observed,
+        observations=revise_fixture(
+            observed.observations,
+            series={variable.id: revise_fixture(series, history=revise_fixture(history, **bounds))},
+        ),
     )
     replicas = tuple(
         _dataset([1, 2, 3], number=n, variable=variable, times=[1, 2, 3]) for n in (2, 3)
@@ -215,19 +218,20 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
     assert missing.findings == ()
     original = next(iter(observed.observations.series.values())).observation
     replicas = [
-        _dataset([1, 2, 3], number=n, variable=original.revised(aggregation="mean")) for n in (2, 3)
+        _dataset([1, 2, 3], number=n, variable=revise_fixture(original, aggregation="mean"))
+        for n in (2, 3)
     ]
     mismatch = compare_data_variables((observed,), replicas)[0]
     assert mismatch.predictive is None
     assert "measurement_definition" in {finding.code for finding in mismatch.findings}
     renamed = _dataset(
-        [1, 2, 3], variable=original.revised(name="Renamed", observation_window="24h")
+        [1, 2, 3], variable=revise_fixture(original, name="Renamed", observation_window="24h")
     )
     assert not compare_data_variables((observed,), (renamed,))[0].findings
-    first = _dataset([1, 2, 3], variable=original.revised(aggregation="first"))
+    first = _dataset([1, 2, 3], variable=revise_fixture(original, aggregation="first"))
     assert compare_data_variables((first,), (first,))[0].changes == ()
     with pytest.raises(ValidationError):
-        observed.observations.revised(time_origin=None)
+        revise_fixture(observed.observations, time_origin=None)
 
 
 @pytest.mark.inference(concern="predictive")
@@ -392,23 +396,28 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
     assert sorted(store.repo.references) == refs_before
     assert artifact_revisions(store, "model") == [model.revision]
     assert len(request.input.left_ref) == 1
-    one = request.revised(
-        input=request.input.revised(
-            left_ref=(request.input.left_ref[0].revised(replicate_index=1),)
-        )
+    one = revise_fixture(
+        request,
+        input=revise_fixture(
+            request.input, left_ref=(revise_fixture(request.input.left_ref[0], replicate_index=1),)
+        ),
     )
     assert read_data_diff("DIFF", one).report.variables[0].changes == ()
-    bad = request.revised(
-        input=request.input.revised(
-            left_ref=(DataRef[GitOid, int | None](revision=commit, replicate_index=3),)
-        )
+    bad = revise_fixture(
+        request,
+        input=revise_fixture(
+            request.input,
+            left_ref=(DataRef[GitOid, int | None](revision=commit, replicate_index=3),),
+        ),
     )
     with pytest.raises(StudyLookupError, match="replicate"):
         read_data_diff("DIFF", bad)
-    bad = request.revised(
-        input=request.input.revised(
-            right_ref=(DataRef[GitOid, int](replicate_index=0, revision=git_oid(98)),)
-        )
+    bad = revise_fixture(
+        request,
+        input=revise_fixture(
+            request.input,
+            right_ref=(DataRef[GitOid, int](replicate_index=0, revision=git_oid(98)),),
+        ),
     )
     with pytest.raises(StudyLookupError):
         read_data_diff("DIFF", bad)
@@ -420,10 +429,12 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
     commits = []
     for start in (5, 6):
         times = np.arange(start, start + 3.0)
-        saved = report.evidence.revised(
+        saved = revise_fixture(
+            report.evidence,
             time_origin=origin,
             times=tuple(times),
-            observation_layout=report.evidence.observation_layout.revised(
+            observation_layout=revise_fixture(
+                report.evidence.observation_layout,
                 support_start_times=NumericalArray.from_numpy(times[:, None]),
                 support_end_times=NumericalArray.from_numpy(times[:, None]),
             ),
@@ -436,7 +447,9 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                         result=saved,
                         effects=ActionEffects(
                             reports={
-                                "simulation": result_blob(store, report.revised(evidence=saved))
+                                "simulation": result_blob(
+                                    store, revise_fixture(report, evidence=saved)
+                                )
                             }
                         ),
                     ),
@@ -472,6 +485,6 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         (origin + timedelta(days=7), "revised"),
         (origin + timedelta(days=8), "added"),
     ]
-    materialized = simulation_output(report.revised(evidence=saved)).observations(1)
+    materialized = simulation_output(revise_fixture(report, evidence=saved)).observations(1)
     assert materialized.time_origin == origin
     assert materialized.series["indicator:y"].history.times.values[0] == 6

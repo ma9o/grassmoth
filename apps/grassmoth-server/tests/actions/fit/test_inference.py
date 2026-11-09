@@ -32,6 +32,7 @@ from grassmoth_test_support.inference import (
     compile_fit_fixture,
     make_observation_support_runtime,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _sleep_state_model() -> DynamicalModelSpec:
@@ -42,13 +43,15 @@ def _sleep_state_model() -> DynamicalModelSpec:
         edges=replace_constructs(
             dynamical_model_spec.edges,
             (
-                first.revised(
+                revise_fixture(
+                    first,
                     indicators=(
-                        indicator.revised(
-                            observation=indicator.observation.revised(aggregation="mean")
+                        revise_fixture(
+                            indicator,
+                            observation=revise_fixture(indicator.observation, aggregation="mean"),
                         ),
                         *first.indicators[1:],
-                    )
+                    ),
                 ),
             ),
         )
@@ -213,7 +216,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             + offset
         )
         checkpoint = SamplerCheckpoint(
-            settings=settings.revised(num_samples_per_chain=count),
+            settings=revise_fixture(settings, num_samples_per_chain=count),
             parameters=NumericalArray.from_numpy(np.zeros((2, 1))),
             paths=NumericalArray.from_numpy(np.asarray(paths.reshape(2, count, 2, -1)[:, -1])),
             random_key=NumericalArray.from_numpy(np.array([0, offset], dtype=np.uint32)),
@@ -256,7 +259,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                 selection=StructuralSelection(model, None),
                 question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
                 data_for_model=dataset,
-                sampler=settings.revised(num_samples_per_chain=count),
+                sampler=revise_fixture(settings, num_samples_per_chain=count),
                 compute_loo_diagnostics=True,
                 previous=previous,
             ),
@@ -314,10 +317,11 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
     first = replace(
         first,
-        evidence=first.evidence.revised(
+        evidence=revise_fixture(
+            first.evidence,
             phase_extra_fields={
                 "initialization": {"position": NumericalArray.from_numpy(np.array([1.0, 2.0]))}
-            }
+            },
         ),
     )
     standalone = execute(posterior(1, 5), 1)
@@ -392,7 +396,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                 selection=StructuralSelection(model, None),
                 question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
                 data_for_model=dataset,
-                sampler=settings.revised(
+                sampler=revise_fixture(
+                    settings,
                     hardware=InferenceHardware.L40S,
                     num_samples_per_chain=count,
                 ),
@@ -425,7 +430,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from jax.stages import Compiled
 
     zero = execute(
-        UnretainedRun.completed(settings.revised(num_samples_per_chain=0), Mock(spec=Compiled), {}),
+        UnretainedRun.completed(
+            revise_fixture(settings, num_samples_per_chain=0), Mock(spec=Compiled), {}
+        ),
         0,
         output(combined),
     )
@@ -486,17 +493,23 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             value.values, full.inference.evidence.chain_extra_fields[name].values[:, ::8]
         )
     assert transferred(small) == small
-    disabled = full.revised(
-        inference=full.inference.revised(
-            core=full.inference.core.revised(
-                inference_metadata=full.inference.core.inference_metadata.revised(
+    disabled = revise_fixture(
+        full,
+        inference=revise_fixture(
+            full.inference,
+            core=revise_fixture(
+                full.inference.core,
+                inference_metadata=revise_fixture(
+                    full.inference.core.inference_metadata,
                     segments=tuple(
-                        segment.revised(settings=segment.settings.revised(thinning=False))
+                        revise_fixture(
+                            segment, settings=revise_fixture(segment.settings, thinning=False)
+                        )
                         for segment in full.inference.core.inference_metadata.segments
-                    )
-                )
-            )
-        )
+                    ),
+                ),
+            ),
+        ),
     )
     assert transferred(disabled) == disabled
     extended = output(execute(posterior(38, 4), 38, full), render=True)

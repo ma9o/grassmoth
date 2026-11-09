@@ -32,6 +32,7 @@ from grassmoth_test_support.inference import (
     parameter_draws,
     particle_posterior,
 )
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -135,7 +136,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
     assert isinstance(request.input.target, NewFitTarget)
     expected_checks = model_findings(
         integration_workspace,
-        state.with_artifacts([question]).revised(data=request.input.target.data_ref),
+        revise_fixture(state.with_artifacts([question]), data=request.input.target.data_ref),
         action="fit",
     )
     history_reader = Mock(wraps=data.read_data_history)

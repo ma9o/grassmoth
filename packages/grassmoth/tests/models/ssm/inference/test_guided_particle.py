@@ -62,6 +62,7 @@ from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
 from grassmoth_test_support.model import one_state_gaussian_model, without_parameters
+from grassmoth_test_support.values import revise_fixture
 from packages.grassmoth.tests.models.ssm.inference.test_guided_recurrences import (
     _recurrence_posterior,
 )
@@ -390,14 +391,16 @@ def test_auxiliary_kalman_preserves_complete_parameter_mixture(
         (indicator,) = construct.indicators
         assert indicator.likelihood is not None
         updated = (
-            construct.revised(
+            revise_fixture(
+                construct,
                 indicators=(
-                    indicator.revised(
-                        likelihood=indicator.likelihood.revised(
-                            law=DeltaLawSpec(v=state(construct.id))
-                        )
+                    revise_fixture(
+                        indicator,
+                        likelihood=revise_fixture(
+                            indicator.likelihood, law=DeltaLawSpec(v=state(construct.id))
+                        ),
                     ),
-                )
+                ),
             ),
         )
         parameters, distributions = without_parameters(

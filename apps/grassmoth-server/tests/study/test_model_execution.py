@@ -23,6 +23,7 @@ from grassmoth_server_test_support.fixtures import study_fixture_json
 from grassmoth_server_test_support.model import load_study_model_fixture
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture, model_draws, particle_posterior
+from grassmoth_test_support.values import revise_fixture
 
 
 def _conditioning_revises_the_same_type_and_retains_joint_uncertainty_complete_test_model() -> (
@@ -64,9 +65,11 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
     if categorical:
         dynamical_model_spec = make_model(["A", "B"], [("A", "B")])
         construct = dynamical_model_spec.constructs[1]
-        indicator = construct.indicators[0].revised(
+        indicator = revise_fixture(
+            construct.indicators[0],
             reasoning={"text": "Joint law with category-specific parameter elements"},
-            observation=construct.indicators[0].observation.revised(
+            observation=revise_fixture(
+                construct.indicators[0].observation,
                 measurement=LabeledMeasurement(
                     dtype="categorical", levels=("low", "medium", "high")
                 ),
@@ -169,7 +172,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         StructuralSelection(
             loaded.with_entities(
                 law_layouts={
-                    identity: loaded.law_layouts[identity].revised(time_points=(0.0, 1.0, 2.0, 5.0))
+                    identity: revise_fixture(
+                        loaded.law_layouts[identity], time_points=(0.0, 1.0, 2.0, 5.0)
+                    )
                 }
             ),
             None,
@@ -181,16 +186,19 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
             edges=replace_constructs(
                 loaded.edges,
                 (
-                    construct.revised(
+                    revise_fixture(
+                        construct,
                         indicators=(
-                            indicator.revised(
-                                observation=indicator.observation.revised(
+                            revise_fixture(
+                                indicator,
+                                observation=revise_fixture(
+                                    indicator.observation,
                                     measurement=LabeledMeasurement(
                                         dtype="categorical", levels=("medium", "low", "high")
-                                    )
-                                )
+                                    ),
+                                ),
                             ),
-                        )
+                        ),
                     ),
                 ),
             )

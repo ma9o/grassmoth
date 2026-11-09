@@ -23,6 +23,7 @@ from grassmoth_server.compute.compilation_cache import (
     persist_cache,
     stage_cache,
 )
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
@@ -203,7 +204,7 @@ def _bundle(path, entries, content=b"abc"):
 @pytest.mark.parametrize("defect", ["path", "size", "digest", "files", "archive"])
 def test_invalid_bundles_fail_before_use_without_fallback(tmp_path, defect):
     archive = tmp_path / "bundle.tar"
-    policy = FIT_CACHE_POLICY.revised(executables=CacheLimit(files=1, bytes=4))
+    policy = revise_fixture(FIT_CACHE_POLICY, executables=CacheLimit(files=1, bytes=4))
     entry = {
         "path": "one-cache",
         "size": 3,

@@ -5,6 +5,7 @@ from grassmoth.artifacts.model.expressions import coefficient, state
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth_server_test_support.fixtures import study_fixture_json
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.values import revise_fixture
 
 
 def load_study_model_fixture(name: str) -> DynamicalModelSpec:
@@ -23,7 +24,8 @@ def stress_sleep_causal_model() -> DynamicalModelSpec:
     stress = construct_named(dynamical_model_spec, "Stress")
     return dynamical_model_spec.with_entities(
         edges=(
-            dynamical_model_spec.edges[0].revised(
+            revise_fixture(
+                dynamical_model_spec.edges[0],
                 effect=construct_named(dynamical_model_spec, "Sleep"),
                 mechanisms=(
                     DriftMechanismSpec(

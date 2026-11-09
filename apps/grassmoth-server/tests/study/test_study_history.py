@@ -51,6 +51,7 @@ from grassmoth_server_test_support.action import (
     fixture_request,
 )
 from grassmoth_server_test_support.storage import seed_record, stage_result
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -104,7 +105,7 @@ def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(
     saved = persisted.saved_call(accepted.attempt.request)
     assert saved is not None
     assert saved.commit_id == head
-    assert repository.append(accepted.revised(seq=2)).commit_id == head
+    assert repository.append(revise_fixture(accepted, seq=2)).commit_id == head
     assert len(repository.attempts()) == 1
     failed = repository.append(
         _record(2, outcome=Raised(error_type="SavedError", error_message="failure")),
@@ -126,15 +127,17 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
     for seq, model, clock in ((2, earlier, "1d"), (3, later, "2d")):
         record = _record(seq, produced=(model,))
         records.append(
-            record.revised(
-                attempt=record.attempt.revised(
+            revise_fixture(
+                record,
+                attempt=revise_fixture(
+                    record.attempt,
                     request=EditModelRequest[GitOid](
                         input=EditModelInput[GitOid](
                             parent_ref=repository.question().revision,
                             dynamical_model_spec=DynamicalModelSpec(measurement_clock=clock),
                         )
-                    )
-                )
+                    ),
+                ),
             )
         )
     first, second = records
@@ -417,7 +420,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         assert len(restarted.attempts()) == 3
         repeated = run_async(
             study_workflow.StudyWorkflow.execute_action(
-                worker, ActionRequest(request=request.revised(reasoning=None))
+                worker, ActionRequest(request=revise_fixture(request, reasoning=None))
             )
         )
         assert repeated.commit_id == leaf.commit_id

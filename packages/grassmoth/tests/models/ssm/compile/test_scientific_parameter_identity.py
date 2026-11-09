@@ -34,6 +34,7 @@ from grassmoth_test_support.model import (
     parameter_named,
     replace_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> DynamicalModelSpec:
@@ -47,9 +48,11 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> D
     a = construct_named(dynamical_model_spec, "A")
     a_obs = indicator_named(dynamical_model_spec, "A_obs")
     a_obs_likelihood = likelihood_named(dynamical_model_spec, "A_obs")
-    a_obs_revised = a_obs.revised(
+    a_obs_revised = revise_fixture(
+        a_obs,
         reasoning={"text": "Test tails"},
-        likelihood=a_obs_likelihood.revised(
+        likelihood=revise_fixture(
+            a_obs_likelihood,
             law=StudentTLawSpec[Expression](
                 df=coefficient(_OBS_DF_PARAMETER_ID, "degrees_of_freedom"),
                 loc=(
@@ -60,7 +63,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> D
             ),
         ),
     )
-    a_revised = a.revised(indicators=(a_obs_revised,))
+    a_revised = revise_fixture(a, indicators=(a_obs_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (a_revised,)),
         parameters=(
@@ -87,9 +90,11 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model_2() ->
     b_obs = indicator_named(dynamical_model_spec, "B_obs")
     b_obs_likelihood = likelihood_named(dynamical_model_spec, "B_obs")
     obs_df = parameter_named(dynamical_model_spec, "obs_df")
-    b_obs_revised = b_obs.revised(
+    b_obs_revised = revise_fixture(
+        b_obs,
         reasoning={"text": "Test tails"},
-        likelihood=b_obs_likelihood.revised(
+        likelihood=revise_fixture(
+            b_obs_likelihood,
             law=StudentTLawSpec[Expression](
                 df=coefficient(obs_df.id, "degrees_of_freedom"),
                 loc=(
@@ -100,7 +105,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model_2() ->
             ),
         ),
     )
-    b_revised = b.revised(indicators=(b_obs_revised,))
+    b_revised = revise_fixture(b, indicators=(b_obs_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (b_revised,))
     )
@@ -118,7 +123,8 @@ def _student_innovation_model() -> DynamicalModelSpec:
     sigma_a = parameter_named(dynamical_model_spec, "sigma_A")
     b = construct_named(dynamical_model_spec, "B")
     sigma_b = parameter_named(dynamical_model_spec, "sigma_B")
-    a_revised = a.revised(
+    a_revised = revise_fixture(
+        a,
         coefficients=(
             coefficient(sigma_a.id, "diffusion_scale"),
             coefficient(0.0, "initial_mean"),
@@ -127,7 +133,8 @@ def _student_innovation_model() -> DynamicalModelSpec:
         ),
         innovation_family=DistributionFamily.STUDENT_T,
     )
-    b_revised = b.revised(
+    b_revised = revise_fixture(
+        b,
         coefficients=(
             coefficient(sigma_b.id, "diffusion_scale"),
             coefficient(0.0, "initial_mean"),
@@ -173,14 +180,14 @@ def _rename_preserves_parameter_and_element_identity__compile_2() -> DynamicalMo
     beta_a_b = parameter_named(dynamical_model_spec, "beta_A_B")
     sigma_a = parameter_named(dynamical_model_spec, "sigma_A")
     sigma_b = parameter_named(dynamical_model_spec, "sigma_B")
-    a_obs_revised = a_obs.revised(
-        observation=a_obs.observation.revised(name="renamed measurement 0")
+    a_obs_revised = revise_fixture(
+        a_obs, observation=revise_fixture(a_obs.observation, name="renamed measurement 0")
     )
-    a_revised = a.revised(name="renamed construct 0", indicators=(a_obs_revised,))
-    b_obs_revised = b_obs.revised(
-        observation=b_obs.observation.revised(name="renamed measurement 1")
+    a_revised = revise_fixture(a, name="renamed construct 0", indicators=(a_obs_revised,))
+    b_obs_revised = revise_fixture(
+        b_obs, observation=revise_fixture(b_obs.observation, name="renamed measurement 1")
     )
-    b_revised = b.revised(name="renamed construct 1", indicators=(b_obs_revised,))
+    b_revised = revise_fixture(b, name="renamed construct 1", indicators=(b_obs_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
@@ -191,23 +198,28 @@ def _rename_preserves_parameter_and_element_identity__compile_2() -> DynamicalMo
         ),
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            rho_a.revised(
+            revise_fixture(
+                rho_a,
                 name="rho_renamed construct 0",
                 reasoning={"text": "stiffness of rho_renamed construct 0"},
             ),
-            rho_b.revised(
+            revise_fixture(
+                rho_b,
                 name="rho_renamed construct 1",
                 reasoning={"text": "stiffness of rho_renamed construct 1"},
             ),
-            beta_a_b.revised(
+            revise_fixture(
+                beta_a_b,
                 name="beta_renamed construct 0_renamed construct 1",
                 reasoning={"text": "weight of beta_renamed construct 0_renamed construct 1"},
             ),
-            sigma_a.revised(
+            revise_fixture(
+                sigma_a,
                 name="sigma_renamed construct 0",
                 reasoning={"text": "innovation.scale for sigma_renamed construct 0"},
             ),
-            sigma_b.revised(
+            revise_fixture(
+                sigma_b,
                 name="sigma_renamed construct 1",
                 reasoning={"text": "innovation.scale for sigma_renamed construct 1"},
             ),
@@ -243,19 +255,21 @@ def _initial_state_defaults_are_authored_before_compilation_complete_model_initi
     sigma_a = parameter_named(dynamical_model_spec, "sigma_A")
     b = construct_named(dynamical_model_spec, "B")
     sigma_b = parameter_named(dynamical_model_spec, "sigma_B")
-    a_revised = a.revised(
+    a_revised = revise_fixture(
+        a,
         coefficients=(
             coefficient(sigma_a.id, "diffusion_scale"),
             coefficient(0.0, "initial_mean"),
             coefficient(_T0_SD_A_PARAMETER_ID, "initial_scale"),
-        )
+        ),
     )
-    b_revised = b.revised(
+    b_revised = revise_fixture(
+        b,
         coefficients=(
             coefficient(sigma_b.id, "diffusion_scale"),
             coefficient(0.0, "initial_mean"),
             coefficient(_T0_SD_B_PARAMETER_ID, "initial_scale"),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -312,19 +326,21 @@ def _initial_state_defaults_are_authored_before_compilation_complete_model_initi
     sigma_a = parameter_named(dynamical_model_spec, "sigma_A")
     b = construct_named(dynamical_model_spec, "B")
     sigma_b = parameter_named(dynamical_model_spec, "sigma_B")
-    a_revised = a.revised(
+    a_revised = revise_fixture(
+        a,
         coefficients=(
             coefficient(sigma_a.id, "diffusion_scale"),
             coefficient(1.0, "initial_scale"),
             coefficient(_T0_MEAN_A_PARAMETER_ID, "initial_mean"),
-        )
+        ),
     )
-    b_revised = b.revised(
+    b_revised = revise_fixture(
+        b,
         coefficients=(
             coefficient(sigma_b.id, "diffusion_scale"),
             coefficient(1.0, "initial_scale"),
             coefficient(_T0_MEAN_B_PARAMETER_ID, "initial_mean"),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -528,7 +544,9 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
         ),
         standardized=True,
     )
-    first = first.revised(indicators=(first.indicators[0].revised(likelihood=student),))
+    first = revise_fixture(
+        first, indicators=(revise_fixture(first.indicators[0], likelihood=student),)
+    )
     dynamical_model_spec = _shared_likelihood_parameter_owns_only_active_channels_complete_model()
     shared = next(
         p
@@ -539,9 +557,11 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
         first.id,
         first.indicators[0].observation.id,
     }
-    second = second.revised(
+    second = revise_fixture(
+        second,
         indicators=(
-            second.indicators[0].revised(
+            revise_fixture(
+                second.indicators[0],
                 reasoning={"text": "Test tails"},
                 likelihood=LikelihoodSpec(
                     law=TypeAdapter(ObservationLawSpec).validate_json(
@@ -552,7 +572,7 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
                     standardized=True,
                 ),
             ),
-        )
+        ),
     )
     expanded = _shared_likelihood_parameter_owns_only_active_channels_complete_model_2()
     newer = next(
@@ -584,12 +604,13 @@ def test_student_innovation_tail_is_explicit_and_shared_through_completion():
         edges=replace_constructs(
             dynamical_model_spec.edges,
             (
-                first.revised(
+                revise_fixture(
+                    first,
                     coefficients=tuple(
                         operand
                         for operand in first.coefficients
                         if operand.role != "process_degrees_of_freedom"
-                    )
+                    ),
                 ),
                 second,
             ),
@@ -635,12 +656,13 @@ def test_initial_state_defaults_are_authored_before_compilation(
         edges=replace_constructs(
             model.edges,
             tuple(
-                c.revised(
+                revise_fixture(
+                    c,
                     coefficients=tuple(
                         operand
                         for operand in c.coefficients
                         if not operand.role.startswith("initial_") or operand.role == retained_role
-                    )
+                    ),
                 )
                 for c in model.constructs
             ),
@@ -673,7 +695,8 @@ def test_parameter_labels_do_not_change_mechanisms_bindings_or_prior_laws():
     dynamical_model_spec = additive_a_b_model()
     renamed = dynamical_model_spec.with_entities(
         parameters=tuple(
-            p.revised(name=f"display {n}") for n, p in enumerate(dynamical_model_spec.parameters)
+            revise_fixture(p, name=f"display {n}")
+            for n, p in enumerate(dynamical_model_spec.parameters)
         )
     )
     compile_model_fixture(renamed)
@@ -695,7 +718,9 @@ def test_additive_hill_and_linear_terms_survive_parameter_renaming():
     )
     compile_model_fixture(additive)
     renamed = additive.with_entities(
-        parameters=tuple(p.revised(name=f"opaque {n}") for n, p in enumerate(additive.parameters))
+        parameters=tuple(
+            revise_fixture(p, name=f"opaque {n}") for n, p in enumerate(additive.parameters)
+        )
     )
     compile_model_fixture(renamed)
     _assert_same_prior_laws(additive, renamed)

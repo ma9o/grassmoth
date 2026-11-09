@@ -34,6 +34,7 @@ from grassmoth_server.config import (
 )
 from grassmoth_server.llm.specs import EmbeddedLLMSpec
 from grassmoth_server.study.records import Rejected
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -127,7 +128,11 @@ class TestSamplerSpec:
         assert _resolved_sampler(FitSettingsSpec()) == configured
         assert _resolved_sampler(
             FitSettingsSpec(algorithm=MarginalParticleGibbsLaunchSpec(adaptation_scheme="simple"))
-        ) == (configured.revised(algorithm=MarginalParticleGibbsSpec(adaptation_scheme="simple")))
+        ) == (
+            revise_fixture(
+                configured, algorithm=MarginalParticleGibbsSpec(adaptation_scheme="simple")
+            )
+        )
         assert configured.time_limit_seconds == 14400
         assert _resolved_sampler(FitSettingsSpec(), resolved).time_limit_seconds == 90
         assert (
@@ -144,13 +149,14 @@ class TestSamplerSpec:
                 )
             )
         )
-        assert pseudo_langevin == configured.revised(
+        assert pseudo_langevin == revise_fixture(
+            configured,
             algorithm=MarginalParticleGibbsSpec(
                 path_update=PathUpdateSpec(
                     method=GuidedMethodSpec(kappa=0),
                 ),
                 parameter_proposal="pseudo_langevin",
-            )
+            ),
         )
         with pytest.raises(ValidationError, match="path_update"):
             FitSettingsSpec.model_validate(

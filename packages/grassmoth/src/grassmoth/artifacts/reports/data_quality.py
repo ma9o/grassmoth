@@ -32,7 +32,7 @@ class IndicatorAudit(Value):
 
     def with_finding(self, finding: DataFinding) -> Self:
         """Append a finding as a new audit, preserving the old value."""
-        return self.revised(findings=(*self.findings, finding))
+        return self._revised(findings=(*self.findings, finding))
 
 
 class DataProfileReport(Value):

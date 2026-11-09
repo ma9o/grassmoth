@@ -24,6 +24,7 @@ from grassmoth.models.structure import (
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import additive_a_b_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -31,7 +32,7 @@ pytestmark = pytest.mark.contract
 def test_static_target_is_retained_and_reported_as_unsupported():
     draft = make_model(["A", "B"], [("A", "B")])
     static_constructs = tuple(
-        node.revised(temporal_status="time_invariant") for node in draft.constructs
+        revise_fixture(node, temporal_status="time_invariant") for node in draft.constructs
     )
     dynamical_model_spec = draft.with_entities(
         edges=replace_constructs(draft.edges, static_constructs)
@@ -49,16 +50,18 @@ def test_static_target_is_retained_and_reported_as_unsupported():
 def test_exact_observations_preserve_state_and_parameter_identity():
     draft = additive_a_b_model()
     source = draft.edges[0].cause
-    observed = source.revised(
+    observed = revise_fixture(
+        source,
         indicators=(
-            source.indicators[0].revised(
+            revise_fixture(
+                source.indicators[0],
                 reasoning={"text": "The source is observed exactly."},
                 likelihood=LikelihoodSpec(
                     law=DeltaLawSpec(v=expr_state(source.id)),
                     standardized=False,
                 ),
             ),
-        )
+        ),
     )
     dynamical_model_spec = draft.with_entities(edges=replace_constructs(draft.edges, (observed,)))
     selection = StructuralSelection(dynamical_model_spec, None)
@@ -83,12 +86,13 @@ def test_edge_off_targets_every_additive_contribution_without_running_a_simulati
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=(
-            edge.revised(
+            revise_fixture(
+                edge,
                 mechanisms=(
                     *edge.mechanisms,
                     fixed_hill,
-                    fixed_hill.revised(id="mechanism:fixed-hill-b"),
-                )
+                    revise_fixture(fixed_hill, id="mechanism:fixed-hill-b"),
+                ),
             ),
         )
     )
@@ -129,7 +133,7 @@ def test_predictive_edge_findings_exclude_the_response_state(monkeypatch):
         * expr_state(edge.effect.id),
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
-        edges=(edge.revised(mechanisms=(*edge.mechanisms, mechanism)),)
+        edges=(revise_fixture(edge, mechanisms=(*edge.mechanisms, mechanism)),)
     )
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     received: list[ConstructSimulationTarget] = []

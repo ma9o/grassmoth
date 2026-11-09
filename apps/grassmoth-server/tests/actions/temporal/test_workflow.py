@@ -50,6 +50,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import ActionMessage, Rejected
 from grassmoth_test_support.helpers import graph_constructs
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
 _QUESTION = "does exercise improve sleep?"
@@ -309,7 +310,9 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 measured = read_model(store, model_revision)
                 revised = measured.with_entities(
                     edges=(
-                        measured.edges[0].revised(reasoning={"text": "Sleep shapes the response"}),
+                        revise_fixture(
+                            measured.edges[0], reasoning={"text": "Sleep shapes the response"}
+                        ),
                     )
                 )
                 rewritten = await execute(

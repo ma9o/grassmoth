@@ -24,6 +24,7 @@ from grassmoth_test_support.model import (
     without_prior,
     x_model,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _parameter_changes_distribution_without_keeping_authoring_history_model_with_prior_payloads() -> (
@@ -34,7 +35,7 @@ def _parameter_changes_distribution_without_keeping_authoring_history_model_with
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            rho_x.revised(transform=rho_x.transform.revised(interval_days=7.0)),
+            revise_fixture(rho_x, transform=revise_fixture(rho_x.transform, interval_days=7.0)),
         ),
         distributions=parameter_laws(
             dynamical_model_spec,
@@ -140,14 +141,15 @@ def test_parameter_changes_distribution_without_keeping_authoring_history():
     assert float(before_law.loc) == pytest.approx(0.4)
     assert float(after_law.loc) == pytest.approx(0.3)
     with pytest.raises(ValidationError):
-        parameter.revised(distribution=dist.Normal(0, 1))
+        revise_fixture(parameter, distribution=dist.Normal(0, 1))
 
 
 @pytest.mark.contract
 def test_parameter_tool_boundary_validates_the_reference_interval():
     dynamical_model_spec = x_model()
     with pytest.raises(ValidationError):
-        dynamical_model_spec.parameters[0].revised(
+        revise_fixture(
+            dynamical_model_spec.parameters[0],
             transform={"kind": "dt_persistence_to_ct_decay", "interval_days": -7.0},
         )
 
@@ -188,7 +190,7 @@ def test_law_memberships_reject_dangling_unused_and_accidentally_shared_scalar_l
     with pytest.raises(ValidationError, match="exactly one parameter"):
         dynamical_model_spec.with_entities(
             parameters=tuple(
-                p.revised(distribution=first.distribution) if p.id == second.id else p
+                revise_fixture(p, distribution=first.distribution) if p.id == second.id else p
                 for p in dynamical_model_spec.parameters
             ),
             distributions={

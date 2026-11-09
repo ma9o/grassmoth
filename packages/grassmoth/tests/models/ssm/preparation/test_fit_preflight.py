@@ -39,6 +39,7 @@ from grassmoth_test_support.model import (
     parameter_laws,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _fixed_manifest_means_are_not_judged__model() -> DynamicalModelSpec:
@@ -78,8 +79,10 @@ def _raw_channels_model() -> DynamicalModelSpec:
     latent_0_small_channel_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "small_channel"
     )
-    raw_channel_revised = raw_channel.revised(
-        likelihood=raw_channel_likelihood.revised(
+    raw_channel_revised = revise_fixture(
+        raw_channel,
+        likelihood=revise_fixture(
+            raw_channel_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(
@@ -90,13 +93,14 @@ def _raw_channels_model() -> DynamicalModelSpec:
                 scale=coefficient(latent_0_raw_channel_manifest_var_diag.id, "observation_scale"),
             ),
             standardized=False,
-        )
+        ),
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         indicators=(
             raw_channel_revised,
             small_channel,
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,)),
@@ -173,9 +177,13 @@ def _non_identity_links_are_not_judged__model() -> DynamicalModelSpec:
     latent_0_raw_channel_manifest_var_diag = parameter_for(
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "raw_channel"
     )
-    raw_channel_revised = raw_channel.revised(
-        observation=raw_channel.observation.revised(measurement=NumericMeasurement(dtype="count")),
-        likelihood=raw_channel_likelihood.revised(
+    raw_channel_revised = revise_fixture(
+        raw_channel,
+        observation=revise_fixture(
+            raw_channel.observation, measurement=NumericMeasurement(dtype="count")
+        ),
+        likelihood=revise_fixture(
+            raw_channel_likelihood,
             law=NegativeBinomial2LawSpec[Expression](
                 mean=CallExpression(
                     function="exp",
@@ -189,14 +197,15 @@ def _non_identity_links_are_not_judged__model() -> DynamicalModelSpec:
                     ),
                 ),
                 concentration=coefficient(_OBS_R_PARAMETER_ID, "dispersion"),
-            )
+            ),
         ),
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         indicators=(
             raw_channel_revised,
             small_channel,
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec, latent_0_raw_channel_manifest_var_diag

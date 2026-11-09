@@ -41,6 +41,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.values import revise_fixture
 
 """Declared deterministic state semantics survive compilation and posterior sampling."""
 
@@ -127,7 +128,8 @@ def _model():
         [("baseline", "driver"), ("driver", "total"), ("total", "outcome")],
     )
     constructs = tuple(
-        c.revised(
+        revise_fixture(
+            c,
             temporal_status="time_invariant" if c.name == "baseline" else "time_varying",
             dynamics=()
             if c.name == "baseline"
@@ -145,9 +147,10 @@ def _model():
                 ),
             ),
             indicators=tuple(
-                i.revised(
+                revise_fixture(
+                    i,
                     reasoning={"text": "Known Gaussian instrument"},
-                    observation=i.observation.revised(aggregation="last"),
+                    observation=revise_fixture(i.observation, aggregation="last"),
                     likelihood=LikelihoodSpec(
                         law=NormalLawSpec(
                             loc=state(c.id), scale=coefficient(0.3, role="observation_scale")
@@ -161,12 +164,13 @@ def _model():
         for c in model.constructs
     )
     edges = tuple(
-        e.revised(
+        revise_fixture(
+            e,
             mechanisms=(
                 DriftMechanismSpec(
                     id=MechanismId("mechanism:" + e.cause.name), expression=state(e.cause.id)
                 ),
-            )
+            ),
         )
         for e in replace_constructs(model.edges, constructs)
     )
@@ -287,11 +291,12 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
 
 def test_parameter_free_model_moves_paths_and_replays_static_and_accumulated_states():
     model = _model()
-    baseline = next(c for c in model.constructs if c.name == "baseline").revised(
+    baseline = revise_fixture(
+        next(c for c in model.constructs if c.name == "baseline"),
         coefficients=tuple(
             coefficient(0.0, role=role)
             for role in ("initial_mean", "initial_scale", "diffusion_scale")
-        )
+        ),
     )
     compiled, problem = _problem(
         model.with_entities(edges=replace_constructs(model.edges, (baseline,)))
@@ -355,11 +360,12 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
 def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_mean):
     model = _model()
     baseline = next(c for c in model.constructs if c.name == "baseline")
-    baseline = baseline.revised(
+    baseline = revise_fixture(
+        baseline,
         indicators=tuple(
-            i.revised(likelihood=i.likelihood.revised(standardized=False))
+            revise_fixture(i, likelihood=revise_fixture(i.likelihood, standardized=False))
             for i in baseline.indicators
-        )
+        ),
     )
     readings = jnp.array([[1.0], [1.1], [0.7], [1.2]])
     model = model.with_entities(constructs=(baseline,), edges=())
@@ -369,13 +375,14 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
 
         identity = ParameterId("parameter:" + "3" * 64)
         law = DistributionId("distribution:" + "3" * 64)
-        baseline = baseline.revised(
+        baseline = revise_fixture(
+            baseline,
             coefficients=(
                 coefficient(identity, role="initial_mean"),
                 coefficient(0.0, role="initial_scale"),
             ),
             indicators=tuple(
-                i.revised(likelihood=i.likelihood.revised(standardized=True))
+                revise_fixture(i, likelihood=revise_fixture(i.likelihood, standardized=True))
                 for i in baseline.indicators
             ),
         )
@@ -423,11 +430,12 @@ def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate
     model = _model()
     baseline = next(c for c in model.constructs if c.name == "baseline")
     driver = next(c for c in model.constructs if c.name == "driver")
-    driver = driver.revised(
+    driver = revise_fixture(
+        driver,
         coefficients=(
             *driver.coefficients,
             coefficient(0.4, "initial_correlation", construct_ids=(baseline.id,)),
-        )
+        ),
     )
     common = ConstructSpec(
         id=ConstructId("construct:initial_common_cause"),
@@ -470,22 +478,24 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     model = _model()
     assert isinstance(_problem(model)[0].state_space.recurrence[0], AdditiveRecurrences)
     driver = next(c for c in model.constructs if c.name == "driver")
-    driver = driver.revised(
+    driver = revise_fixture(
+        driver,
         dynamics=(
             DriftMechanismSpec(
                 id=MechanismId("mechanism:nonlinear_driver"), expression=-(state(driver.id) ** 3)
             ),
-        )
+        ),
     )
     model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
     assert isinstance(_problem(model)[0].state_space.recurrence[0], AdditiveRecurrences)
     total = next(c for c in model.constructs if c.name == "total")
-    potential = total.revised(
+    potential = revise_fixture(
+        total,
         dynamics=(
             PotentialMechanismSpec(
                 id=MechanismId("mechanism:quadratic_total"), expression=state(total.id) ** 2 * 0.2
             ),
-        )
+        ),
     )
     compiled, problem = _problem(
         model.with_entities(edges=replace_constructs(model.edges, (potential,)))
@@ -500,12 +510,13 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     target = problem.runtime
     path = target.replay_path(target.context(target.initial_position, target.times), coordinates)
     np.testing.assert_allclose(path[:, indices["total"]], [0.0, 0.5, 0.1, 0.86], atol=1e-6)
-    total = total.revised(
+    total = revise_fixture(
+        total,
         dynamics=(
             DriftMechanismSpec(
                 id=MechanismId("mechanism:nonlinear_total"), expression=state(total.id) ** 2
             ),
-        )
+        ),
     )
     compiled = compile_fit_fixture(
         model.with_entities(edges=replace_constructs(model.edges, (total,)))
@@ -540,7 +551,8 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
     rate = ParameterId("parameter:" + "4" * 64)
     law = DistributionId("distribution:" + "4" * 64)
     driver = next(c for c in model.constructs if c.name == "driver")
-    driver = driver.revised(
+    driver = revise_fixture(
+        driver,
         coefficients=tuple(
             coefficient(0.0, "diffusion_scale") if c.role == "diffusion_scale" else c
             for c in driver.coefficients
@@ -553,13 +565,14 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
         ),
     )
     edges = tuple(
-        e.revised(
+        revise_fixture(
+            e,
             mechanisms=(
                 DriftMechanismSpec(
                     id=MechanismId("mechanism:exp_driver"),
                     expression=CallExpression(function="exp", arguments=(state(driver.id),)),
                 ),
-            )
+            ),
         )
         if e.cause.id == driver.id
         else e
@@ -681,13 +694,15 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(kappa
 def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     model = _model()
     total = next(c for c in model.constructs if c.name == "total")
-    total = total.revised(
+    total = revise_fixture(
+        total,
         coefficients=tuple(
             coefficient(1.0, "initial_scale") if c.role == "initial_scale" else c
             for c in total.coefficients
         ),
         indicators=tuple(
-            indicator.revised(
+            revise_fixture(
+                indicator,
                 reasoning={"text": "An exact initial accumulator reading"},
                 likelihood=LikelihoodSpec(
                     law=DeltaLawSpec(v=state(total.id)),
@@ -736,9 +751,11 @@ def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_
 
     model = _model()
     revised = tuple(
-        c.revised(
+        revise_fixture(
+            c,
             indicators=tuple(
-                i.revised(
+                revise_fixture(
+                    i,
                     reasoning={"text": "Exact coordinate"},
                     likelihood=LikelihoodSpec(
                         law=DeltaLawSpec(v=state(c.id)),
@@ -746,7 +763,7 @@ def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_
                     ),
                 )
                 for i in c.indicators
-            )
+            ),
         )
         for c in model.constructs
         if c.name in {"baseline", "total"}

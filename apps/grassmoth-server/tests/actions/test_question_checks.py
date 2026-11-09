@@ -14,6 +14,7 @@ from grassmoth.models.causal.question_checks import question_edit_reason, questi
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_test_support.helpers import make_model, observation_dataset
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -24,13 +25,15 @@ def _model():
     """A given dose read exactly each day, and the mood it may change."""
     dynamical_model_spec = make_model(["Dose", "Mood"], [("Dose", "Mood")])
     dose = dynamical_model_spec.constructs[0]
-    reading = dose.indicators[0].revised(
+    reading = revise_fixture(
+        dose.indicators[0],
         reasoning={"text": "The dose is read exactly."},
         likelihood=LikelihoodSpec(law=DeltaLawSpec(v=state(dose.id))),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
-            dynamical_model_spec.edges, (dose.revised(role="exogenous", indicators=(reading,)),)
+            dynamical_model_spec.edges,
+            (revise_fixture(dose, role="exogenous", indicators=(reading,)),),
         )
     )
 
@@ -158,11 +161,12 @@ def test_an_edit_defines_the_question_and_models_its_outcome():
 )
 def test_an_edit_allows_connected_branches_without_a_path_to_the_outcome(extra_edges, outside):
     dynamical_model_spec = make_model(["Dose", "Mood", *outside], [("Dose", "Mood"), *extra_edges])
-    draft = dynamical_model_spec.revised(measurement_clock=None).with_entities(
+    draft = revise_fixture(dynamical_model_spec, measurement_clock=None).with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(indicators=()) for construct in dynamical_model_spec.constructs
+                revise_fixture(construct, indicators=())
+                for construct in dynamical_model_spec.constructs
             ),
         ),
     )
@@ -170,22 +174,27 @@ def test_an_edit_allows_connected_branches_without_a_path_to_the_outcome(extra_e
 
 
 def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_the_outcome():
-    dynamical_model_spec = make_model(
-        ["U", "Dose", "Mediator", "Mood", "Moderator"],
-        [
-            ("U", "Dose"),
-            ("U", "Mood"),
-            ("Dose", "Mediator"),
-            ("Mediator", "Mood"),
-            ("Mood", "Mediator"),
-            ("Moderator", "Mood"),
-        ],
-    ).revised(measurement_clock=None)
+    dynamical_model_spec = revise_fixture(
+        make_model(
+            ["U", "Dose", "Mediator", "Mood", "Moderator"],
+            [
+                ("U", "Dose"),
+                ("U", "Mood"),
+                ("Dose", "Mediator"),
+                ("Mediator", "Mood"),
+                ("Mood", "Mediator"),
+                ("Moderator", "Mood"),
+            ],
+        ),
+        measurement_clock=None,
+    )
     confounder = next(
         construct for construct in dynamical_model_spec.constructs if construct.name == "U"
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
-        edges=replace_constructs(dynamical_model_spec.edges, (confounder.revised(indicators=()),))
+        edges=replace_constructs(
+            dynamical_model_spec.edges, (revise_fixture(confounder, indicators=()),)
+        )
     )
     assert question_edit_reason(dynamical_model_spec, _question(_model())) is None
 
@@ -237,7 +246,7 @@ def test_unobserved_outcome_explanation_is_an_identification_finding():
     model = _model()
     dose, mood = model.constructs
     model = model.with_entities(
-        edges=replace_constructs(model.edges, (mood.revised(indicators=()),))
+        edges=replace_constructs(model.edges, (revise_fixture(mood, indicators=()),))
     )
     question = _question(model)
     findings = question_findings(question, StructuralSelection(model, mood.id), history=None)

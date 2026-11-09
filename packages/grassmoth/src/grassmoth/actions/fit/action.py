@@ -118,12 +118,12 @@ def _fit(
             return FitResult(
                 profile=profiling,
                 dynamical_model_spec=None,
-                metadata=prior.core.inference_metadata.revised(
+                metadata=prior.core.inference_metadata.with_run(
                     duration_seconds=fitted.duration_seconds,
                     segments=(*prior.core.inference_metadata.segments, segment(None)),
                 ),
                 evidence=(
-                    prior.evidence.revised(phase_extra_fields=phase_fields)
+                    prior.evidence.with_phases(phase_extra_fields=phase_fields)
                 ).with_previous_phases(prior.evidence),
             )
         return FitResult(
@@ -237,7 +237,7 @@ def _fit(
         prior_evidence = previous.inference.evidence
         # A different kernel may expose different transition diagnostics. Only common
         # fields describe the full chain; each segment retains its native telemetry.
-        evidence = evidence.revised(
+        evidence = evidence.with_retained_buffers(
             chain_extra_fields={
                 name: NumericalArray.from_numpy(
                     np.concatenate(
@@ -445,7 +445,7 @@ def inference_report(
             ),
             detail=InferenceReportDetail(
                 trace_data=tuple(
-                    trace.revised(
+                    trace.with_chains(
                         chains=tuple(
                             ArrayVector(
                                 array=atoms_value,
@@ -539,9 +539,9 @@ def fit(
     conditioned = result.dynamical_model_spec
     with inference_phase("fit", "report_rendering", execution_context=execution_context):
         report = (
-            previous.inference.revised(
+            previous.inference.with_run(
                 evidence=result.evidence,
-                core=previous.inference.core.revised(inference_metadata=result.metadata),
+                core=previous.inference.core.with_metadata(inference_metadata=result.metadata),
             )
             if conditioned is None and previous is not None
             else inference_report(
@@ -561,7 +561,7 @@ def fit(
     profiling = (
         None
         if result.profile is None
-        else result.profile.revised(
+        else result.profile.with_compile_timings(
             compile_seconds=compilation_seconds(
                 tuple(
                     (start, stop)

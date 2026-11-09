@@ -54,8 +54,8 @@ class Value(BaseModel):
         """Convert frozen collections to serialization containers before invoking Pydantic's handler."""
         return handler(_serialization_collections(value))
 
-    def revised(self, **changes: object) -> Self:
-        """Validate a new value at its concrete owner, retaining no derived caches."""
+    def _revised(self, **changes: object) -> Self:
+        """Implement typed owner transitions, retaining no derived caches."""
         return self.model_validate(
             {**{name: getattr(self, name) for name in type(self).model_fields}, **changes}
         )

@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, ConfigDict, Field, FiniteFloat, computed_field, model_validator
 
@@ -41,6 +41,10 @@ class TraceSeries(Value):
 
     subject: ParameterRef
     chains: tuple[ScalarValues, ...]
+
+    def with_chains(self, *, chains: tuple[ScalarValues, ...]) -> Self:
+        """Return the trace series with its retained chain buffers."""
+        return self._revised(chains=chains)
 
 
 class RankHistogram(Value):
@@ -86,6 +90,10 @@ class ChainDiagnostics(Value):
     per_latent: tuple[LatentDiagnostics, ...] | None = None
     latent_accept_prob_mean: float | None = None
     parameter_accept_prob_mean: float | None = None
+
+    def with_latent_diagnostics(self, *, per_latent: tuple[LatentDiagnostics, ...] | None) -> Self:
+        """Return chain diagnostics with the selected latent-coordinate diagnostics."""
+        return self._revised(per_latent=per_latent)
 
 
 type ConvergenceAssessmentSubject = (

@@ -37,6 +37,7 @@ from grassmoth_test_support.inference import (
     particle_posterior,
 )
 from grassmoth_test_support.input_trajectories import deterministic_input_model
+from grassmoth_test_support.values import revise_fixture
 
 _ORIGIN = datetime(2026, 1, 1, tzinfo=UTC)
 
@@ -72,7 +73,8 @@ def test_inputs_require_deterministic_laws_and_keep_independent_coordinates():
     with pytest.raises(ValidationError, match="must be constant"):
         _ = dynamical_model_spec.with_entities(
             edges=replace_constructs(
-                dynamical_model_spec.edges, (source.revised(temporal_status="time_invariant"),)
+                dynamical_model_spec.edges,
+                (revise_fixture(source, temporal_status="time_invariant"),),
             )
         ).constructs
     draft = dynamical_model_spec.with_entities(

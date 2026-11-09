@@ -22,7 +22,7 @@ class PriorValidationResult(Value):
 
     def with_parameter_provenance(self, parameters: tuple[str, ...]) -> Self:
         """Attach resolved writer identities without mutating a diagnostic."""
-        return self.revised(related_parameters=parameters)
+        return self._revised(related_parameters=parameters)
 
 
 __all__ = [

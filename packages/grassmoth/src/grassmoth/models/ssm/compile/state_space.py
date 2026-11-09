@@ -203,4 +203,4 @@ def _effective_drift(component: ExpressionComponentSpec) -> SymbolicExpression:
             None,
         )
         expression = Integer(0) if own is None else -expression.diff(own)
-    return symbolic.revised(root=expression)
+    return symbolic.with_root(root=expression)

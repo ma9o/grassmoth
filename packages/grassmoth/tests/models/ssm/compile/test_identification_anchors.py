@@ -54,6 +54,7 @@ from grassmoth_test_support.model import (
     without_parameters,
     without_prior,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _categorical_loading_pinned_in_mixed_construct__with_likelihoods() -> DynamicalModelSpec:
@@ -81,7 +82,7 @@ def _all_categorical_construct_gets_anchor_slope__with_likelihoods() -> Dynamica
     mood = construct_named(dynamical_model_spec, "mood")
     mood_kind = indicator_named(dynamical_model_spec, "mood_kind")
     obs_sd_mood_rating = parameter_named(dynamical_model_spec, "obs_sd_mood_rating")
-    mood_revised = mood.revised(indicators=(mood_kind,))
+    mood_revised = revise_fixture(mood, indicators=(mood_kind,))
     parameters, distributions = without_parameters(dynamical_model_spec, obs_sd_mood_rating)
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
@@ -104,7 +105,8 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
     obs_cat_intercepts = parameter_named(dynamical_model_spec, "obs_cat_intercepts")
     obs_cat_slopes = parameter_named(dynamical_model_spec, "obs_cat_slopes")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_revised = mood.revised(
+    mood_revised = revise_fixture(
+        mood,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(
@@ -124,10 +126,11 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
             ),
         ),
         dynamics=(
-            mood_potential.revised(
+            revise_fixture(
+                mood_potential,
                 expression=restoring_potential(
                     mood.id, center=_CINT_MOOD_PARAMETER_ID, stiffness=rho_mood.id, quartic=0.0
-                )
+                ),
             ),
         ),
     )
@@ -166,12 +169,15 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
     )
     mood = construct_named(dynamical_model_spec, "mood")
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
-    mood_rating_revised = mood_rating.revised(
-        observation=mood_rating.observation.revised(
-            measurement=NumericMeasurement(dtype="continuous"), aggregation=SummaryOperator.SUM
-        )
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        observation=revise_fixture(
+            mood_rating.observation,
+            measurement=NumericMeasurement(dtype="continuous"),
+            aggregation=SummaryOperator.SUM,
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,))
     )
@@ -185,10 +191,11 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
     )
     mood = construct_named(dynamical_model_spec, "mood")
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
-    mood_rating_revised = mood_rating.revised(
-        observation=mood_rating.observation.revised(aggregation=SummaryOperator.LAST)
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        observation=revise_fixture(mood_rating.observation, aggregation=SummaryOperator.LAST),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,))
     )
@@ -203,7 +210,8 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
         _exact_state_anchors_location_for_every_summary_complete_component_slots_2_false_sum()
     )
     mood = construct_named(dynamical_model_spec, "mood")
-    mood_revised = mood.revised(
+    mood_revised = revise_fixture(
+        mood,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(text="test"),
@@ -226,7 +234,7 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
@@ -256,17 +264,19 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_tru
     cint_mood = parameter_named(dynamical_model_spec, "cint_mood")
     rho_mood = parameter_named(dynamical_model_spec, "rho_mood")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_rating_revised = mood_rating.revised(
-        likelihood=mood_rating_likelihood.revised(
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        likelihood=revise_fixture(
+            mood_rating_likelihood,
             law=DeltaLawSpec[Expression](
                 v=(
                     coefficient(_MANIFEST_MEAN_MOOD_RATING_PARAMETER_ID, "observation_intercept")
                     + (coefficient(1.0, "loading") * state(mood.id))
                 )
-            )
-        )
+            ),
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
         parameters=(
@@ -290,10 +300,11 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_tru
     )
     mood = construct_named(dynamical_model_spec, "mood")
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
-    mood_rating_revised = mood_rating.revised(
-        observation=mood_rating.observation.revised(aggregation=SummaryOperator.LAST)
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        observation=revise_fixture(mood_rating.observation, aggregation=SummaryOperator.LAST),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,))
     )
@@ -307,12 +318,15 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_tru
     )
     mood = construct_named(dynamical_model_spec, "mood")
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
-    mood_rating_revised = mood_rating.revised(
-        observation=mood_rating.observation.revised(
-            measurement=NumericMeasurement(dtype="count"), aggregation=SummaryOperator.COUNT
-        )
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        observation=revise_fixture(
+            mood_rating.observation,
+            measurement=NumericMeasurement(dtype="count"),
+            aggregation=SummaryOperator.COUNT,
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,))
     )
@@ -335,8 +349,10 @@ def _manifest_intercept_is_rejected_for_categorical_channel__with_likelihoods() 
     obs_cat_slopes = parameter_named(dynamical_model_spec, "obs_cat_slopes")
     rho_mood = parameter_named(dynamical_model_spec, "rho_mood")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_kind_revised = mood_kind.revised(
-        likelihood=mood_kind_likelihood.revised(
+    mood_kind_revised = revise_fixture(
+        mood_kind,
+        likelihood=revise_fixture(
+            mood_kind_likelihood,
             law=CategoricalLawSpec[Expression](
                 logits=CallExpression(
                     function="category_logits",
@@ -351,10 +367,10 @@ def _manifest_intercept_is_rejected_for_categorical_channel__with_likelihoods() 
                         coefficient(obs_cat_slopes.id, "category_slopes"),
                     ),
                 )
-            )
-        )
+            ),
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_kind_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_kind_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
         parameters=(
@@ -392,7 +408,8 @@ def _static_t0_mean_gated_without_standardized_channel__with_likelihoods() -> Dy
     trait = construct_named(dynamical_model_spec, "trait")
     t0_sd_trait = parameter_named(dynamical_model_spec, "t0_sd_trait")
     t0_mean_trait = parameter_named(dynamical_model_spec, "t0_mean_trait")
-    trait_revised = trait.revised(
+    trait_revised = revise_fixture(
+        trait,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(text="test"),
@@ -458,7 +475,8 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
     obs_cat_slopes = parameter_named(dynamical_model_spec, "obs_cat_slopes")
     rho_mood = parameter_named(dynamical_model_spec, "rho_mood")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_revised = mood.revised(
+    mood_revised = revise_fixture(
+        mood,
         indicators=(
             IndicatorSpec(
                 reasoning=ReasoningSpec(text="test"),
@@ -481,7 +499,7 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
-        )
+        ),
     )
     _parameters, distributions = without_parameters(
         dynamical_model_spec, obs_cat_intercepts, obs_cat_slopes
@@ -527,18 +545,20 @@ def _manifest_intercept_is_rejected_for_standardized_channel__with_likelihoods()
     obs_cat_slopes = parameter_named(dynamical_model_spec, "obs_cat_slopes")
     rho_mood = parameter_named(dynamical_model_spec, "rho_mood")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_rating_revised = mood_rating.revised(
-        likelihood=mood_rating_likelihood.revised(
+    mood_rating_revised = revise_fixture(
+        mood_rating,
+        likelihood=revise_fixture(
+            mood_rating_likelihood,
             law=NormalLawSpec[Expression](
                 loc=(
                     coefficient(_MANIFEST_MEAN_MOOD_RATING_PARAMETER_ID, "observation_intercept")
                     + (coefficient(1.0, "loading") * state(mood.id))
                 ),
                 scale=coefficient(0.0, "observation_scale"),
-            )
-        )
+            ),
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_rating_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_rating_revised,))
     _parameters, distributions = without_parameters(
         dynamical_model_spec, obs_sd_mood_rating, obs_cat_intercepts, obs_cat_slopes
     )
@@ -596,8 +616,10 @@ def _manifest_intercept_is_rejected_for_threshold_channel__with_likelihoods() ->
     )
     rho_mood = parameter_named(dynamical_model_spec, "rho_mood")
     sigma_mood = parameter_named(dynamical_model_spec, "sigma_mood")
-    mood_level_revised = mood_level.revised(
-        likelihood=mood_level_likelihood.revised(
+    mood_level_revised = revise_fixture(
+        mood_level,
+        likelihood=revise_fixture(
+            mood_level_likelihood,
             law=OrderedLogisticLawSpec[Expression](
                 predictor=(
                     coefficient(_MANIFEST_MEAN_MOOD_LEVEL_PARAMETER_ID, "observation_intercept")
@@ -610,10 +632,10 @@ def _manifest_intercept_is_rejected_for_threshold_channel__with_likelihoods() ->
                         coefficient(obs_ordered_gaps_mood_level.id, "cutpoint_gaps"),
                     ),
                 ),
-            )
-        )
+            ),
+        ),
     )
-    mood_revised = mood.revised(indicators=(mood_level_revised,))
+    mood_revised = revise_fixture(mood, indicators=(mood_level_revised,))
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
         parameters=(
@@ -695,7 +717,8 @@ def _structure(
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(
+                revise_fixture(
+                    construct,
                     temporal_status="time_invariant"
                     if construct.name in (time_invariant or set())
                     else "time_varying",

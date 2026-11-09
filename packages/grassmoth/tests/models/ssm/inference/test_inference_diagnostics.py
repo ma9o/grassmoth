@@ -15,6 +15,7 @@ from grassmoth.models.ssm.inference.diagnostics.plots import (
     compute_posterior_marginals,
 )
 from grassmoth.models.ssm.inference.types import ProductionDiagnostics
+from grassmoth_test_support.values import revise_fixture
 
 
 def references(coordinates):
@@ -292,7 +293,9 @@ def test_production_gate_detects_stationary_sd_chain_shift():
                 mcmc=result, observation_log_probs=jnp.empty((4, values.shape[1], 0))
             ),
         )
-        diagnostics = posterior.get_mcmc_diagnostics(references([("x", ())])).revised(per_latent=())
+        diagnostics = revise_fixture(
+            posterior.get_mcmc_diagnostics(references([("x", ())])), per_latent=()
+        )
         return chain_convergence(diagnostics)
 
     assert gate(chains).status == "passed"

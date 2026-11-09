@@ -39,6 +39,7 @@ from grassmoth_test_support.inference import (
     particle_posterior,
 )
 from grassmoth_test_support.model import x_model, x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from grassmoth_server.actions.contracts.identity import ArtifactId
@@ -273,8 +274,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         json_files={
             "model.json": dynamical_model_spec.with_entities(
                 edges=(
-                    dynamical_model_spec.edges[0].revised(
-                        reasoning={"text": "Revised justification"}
+                    revise_fixture(
+                        dynamical_model_spec.edges[0], reasoning={"text": "Revised justification"}
                     ),
                     *dynamical_model_spec.edges[1:],
                 )
@@ -472,7 +473,9 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     np.testing.assert_array_equal(result.differences.values, expected)
     assert result.summary.mean == pytest.approx(float(expected[:, -1].mean()))
     assert result.reference_mean == pytest.approx(float(reference[:, -1, outcome_index].mean()))
-    report = generated.revised(evidence=evidence.revised(arms=arms.revised(causal=result)))
+    report = revise_fixture(
+        generated, evidence=revise_fixture(evidence, arms=revise_fixture(arms, causal=result))
+    )
     from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
     assert SimulationReport.model_validate(unpack_result(pack_result(report))) == report
@@ -505,19 +508,23 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     diagnostics = fit_report.inference_diagnostics
     assert diagnostics is not None
     for chains in (
-        diagnostics.revised(
-            per_parameter=tuple(row.revised(r_hat=1.02) for row in diagnostics.per_parameter)
-        ),
-        diagnostics.revised(
+        revise_fixture(
+            diagnostics,
             per_parameter=tuple(
-                row.revised(r_hat=1.05, ess_bulk=264.0, ess_tail=90.0)
+                revise_fixture(row, r_hat=1.02) for row in diagnostics.per_parameter
+            ),
+        ),
+        revise_fixture(
+            diagnostics,
+            per_parameter=tuple(
+                revise_fixture(row, r_hat=1.05, ess_bulk=264.0, ess_tail=90.0)
                 for row in diagnostics.per_parameter
-            )
+            ),
         ),
         None,
     ):
         convergence = chain_convergence(chains)
-        fitted = (model_ref, fit_report.revised(convergence=convergence))
+        fitted = (model_ref, revise_fixture(fit_report, convergence=convergence))
         warned = summarize()
         assert isinstance(warned, CausalEffectResult)
         np.testing.assert_array_equal(warned.differences.values, expected)
@@ -525,7 +532,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         from grassmoth.actions.simulate.findings import simulation_context_findings
         from grassmoth.artifacts.reports.predictive_provenance import FittedLawProvenance
 
-        warned_evidence = evidence.revised(arms=arms.revised(causal=warned))
+        warned_evidence = revise_fixture(evidence, arms=revise_fixture(arms, causal=warned))
         findings = simulation_context_findings(
             warned_evidence,
             FittedLaw(
@@ -537,7 +544,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
                 report=fitted[1],
             ),
         )
-        warned_report = report.revised(evidence=warned_evidence, findings=findings)
+        warned_report = revise_fixture(report, evidence=warned_evidence, findings=findings)
         messages = simulation_messages(warned_report, datetime(2024, 1, 1, tzinfo=UTC))
         assert messages
         assert {message.code for message in messages} == {
@@ -549,7 +556,9 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         assert all(message.severity == "warning" for message in messages)
         if convergence.status == "passed":
             fit_messages = inference_messages(
-                inference_report.revised(core=fit_report.revised(convergence=convergence)),
+                revise_fixture(
+                    inference_report, core=revise_fixture(fit_report, convergence=convergence)
+                ),
                 datetime(2024, 1, 1, tzinfo=UTC),
             )
             assert fit_messages
@@ -562,13 +571,15 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 
     missing_observations = np.array(arms.action.observations.values, copy=True)
     missing_observations[:, -1, 0] = np.nan
-    missing_evidence = evidence.revised(
-        arms=arms.revised(
+    missing_evidence = revise_fixture(
+        evidence,
+        arms=revise_fixture(
+            arms,
             causal=result,
-            action=arms.action.revised(
-                observations=NumericalArray.from_numpy(missing_observations)
+            action=revise_fixture(
+                arms.action, observations=NumericalArray.from_numpy(missing_observations)
             ),
-        )
+        ),
     )
     (contrast_finding,) = simulation_context_findings(missing_evidence, AuthoredLawProvenance())
     assert contrast_finding.kind == "not_evaluated"
@@ -577,7 +588,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         id=evidence.observation_layout.indicator_ids[0]
     )
     (contrast_message,) = simulation_messages(
-        report.revised(evidence=missing_evidence, findings=(contrast_finding,)),
+        revise_fixture(report, evidence=missing_evidence, findings=(contrast_finding,)),
         datetime(2024, 1, 1, tzinfo=UTC),
     )
     assert contrast_message.severity == "warning"
@@ -609,7 +620,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     revised_model = stress_sleep_model()
     revised_model = revised_model.with_entities(
         edges=(
-            revised_model.edges[0].revised(reasoning={"text": "Another scientific goal"}),
+            revise_fixture(revised_model.edges[0], reasoning={"text": "Another scientific goal"}),
             *revised_model.edges[1:],
         )
     )
@@ -717,7 +728,8 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
     source = make_model(["X", "Y", "Side", "Tail"], [("X", "Y"), ("X", "Side"), ("Y", "Tail")])
     parameter_id = scientific_id("parameter", "branch weight")
     constructs = tuple(
-        node.revised(
+        revise_fixture(
+            node,
             coefficients=(
                 coefficient(0.0, "initial_mean"),
                 coefficient(0.0, "initial_scale"),
@@ -732,8 +744,9 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
                 ),
             ),
             indicators=tuple(
-                indicator.revised(
-                    observation=indicator.observation.revised(aggregation="last"),
+                revise_fixture(
+                    indicator,
+                    observation=revise_fixture(indicator.observation, aggregation="last"),
                     likelihood=LikelihoodSpec(
                         law=NormalLawSpec(
                             loc=coefficient(0.0, "observation_intercept")
@@ -751,7 +764,8 @@ def test_edited_downstream_branches_compile_and_remain_in_paired_causal_historie
     source = source.with_entities(
         constructs=constructs,
         edges=tuple(
-            edge.revised(
+            revise_fixture(
+                edge,
                 cause=nodes[edge.cause.name],
                 effect=nodes[edge.effect.name],
                 mechanisms=(

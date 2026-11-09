@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Self
 
 import numpy as np
 from pydantic import AwareDatetime, Field, FiniteFloat, model_validator
@@ -137,3 +137,7 @@ class JointLawLayout(Value):
             {identity: draws[:, column] for identity, column in self.parameter_columns.items()},
             {identity: draws[:, span] for identity, span in self.trajectory_slices.items()},
         )
+
+    def with_time_origin(self, *, time_origin: AwareDatetime | Literal["relative"]) -> Self:
+        """Return the joint layout at the selected model-time origin."""
+        return self._revised(time_origin=time_origin)

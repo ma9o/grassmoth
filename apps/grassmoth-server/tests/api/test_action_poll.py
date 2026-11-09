@@ -58,6 +58,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import Applied, Rejected
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -128,7 +129,7 @@ async def _execute_action(
 )
 def test_action_reasoning_round_trips_without_changing_call_identity(action_request):
     intent = "Check the revised assumptions.\nGoal: decide which model to fit."
-    explained = action_request.revised(reasoning=intent)
+    explained = revise_fixture(action_request, reasoning=intent)
     adapter = TypeAdapter(
         ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
     )
@@ -136,7 +137,7 @@ def test_action_reasoning_round_trips_without_changing_call_identity(action_requ
     assert adapter.validate_json(explained.model_dump_json(round_trip=True)) == explained
     assert explained.reasoning == intent
     assert call_identity(action_request) == call_identity(explained)
-    assert call_identity(explained.revised(reasoning="A new explanation")) == call_identity(
+    assert call_identity(revise_fixture(explained, reasoning="A new explanation")) == call_identity(
         action_request
     )
 
@@ -184,7 +185,8 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
         duplicate = await _execute_action(
             machine,
             ActionRequest(
-                request=request.revised(reasoning="Polling progress"), attempt_id=UUID(int=2)
+                request=revise_fixture(request, reasoning="Polling progress"),
+                attempt_id=UUID(int=2),
             ),
         )
         assert isinstance(duplicate, RunningCall)
@@ -205,7 +207,7 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
         restarted = study_workflow.StudyWorkflow(StudyInit(workspace_id="CALLS", initial_seq=1))
         restored = await _execute_action(
             restarted,
-            ActionRequest(request=request.revised(reasoning=None), attempt_id=UUID(int=4)),
+            ActionRequest(request=revise_fixture(request, reasoning=None), attempt_id=UUID(int=4)),
         )
         assert isinstance(restored, CompletedCall)
         assert restored.commit_id == applied.commit_id
@@ -239,7 +241,7 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     first = client.post("/api/studies/CALLS/edit_question", json=request.model_dump(mode="json"))
     second = client.post(
         "/api/studies/CALLS/edit_question",
-        json=request.revised(reasoning=None).model_dump(mode="json"),
+        json=revise_fixture(request, reasoning=None).model_dump(mode="json"),
     )
     assert first.status_code == second.status_code == 200
     assert first.content == second.content

@@ -19,6 +19,7 @@ from grassmoth_server.study.records import Applied, AttemptRecord, Raised, actio
 from grassmoth_server.study.sweep import collect_completed_runs
 from grassmoth_server_test_support.action import applied_record, question_root
 from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -34,8 +35,8 @@ def _edit(workspace, clock, seq):
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
             parent_ref=repository.question().revision,
-            dynamical_model_spec=make_model(["unmeasured_outcome"]).revised(
-                measurement_clock=clock
+            dynamical_model_spec=revise_fixture(
+                make_model(["unmeasured_outcome"]), measurement_clock=clock
             ),
         )
     )
@@ -84,10 +85,12 @@ def test_out_of_order_publication_and_first_saved_call_wins_after_cleanup(worksp
     assert repository.latest_seq() == 10
     assert repository.head() == last_saved.commit_id
     assert repository.state().current["model"] == last.attempt.outcome.effects.produced[0]
-    failed_request = last.attempt.request.revised(
-        input=last.attempt.request.input.revised(
-            dynamical_model_spec=DynamicalModelSpec(measurement_clock="11d")
-        )
+    failed_request = revise_fixture(
+        last.attempt.request,
+        input=revise_fixture(
+            last.attempt.request.input,
+            dynamical_model_spec=DynamicalModelSpec(measurement_clock="11d"),
+        ),
     )
     repository.append(
         AttemptRecord(
@@ -101,7 +104,9 @@ def test_out_of_order_publication_and_first_saved_call_wins_after_cleanup(worksp
     assert repository.latest_seq() == 11
     collect_completed_runs(workspace)
     assert not Path(paths.call_dir(workspace, call_identity(first.attempt.request))).exists()
-    assert repository.append(first.revised(seq=100, ts="2026-03-01T00:00:00Z")) == first_saved
+    assert (
+        repository.append(revise_fixture(first, seq=100, ts="2026-03-01T00:00:00Z")) == first_saved
+    )
     assert repository.latest_seq() == 11
 
 
@@ -160,10 +165,11 @@ def test_concurrent_publication_indexes_only_law_arrays_and_keeps_first_owner(
             )
         )
         revision = store.write_result(
-            output.revised(
-                dynamical_model_spec=output.dynamical_model_spec.revised(
-                    measurement_clock=f"{seq}d"
-                )
+            revise_fixture(
+                output,
+                dynamical_model_spec=revise_fixture(
+                    output.dynamical_model_spec, measurement_clock=f"{seq}d"
+                ),
             ),
             call_id=call_identity(request),
         )

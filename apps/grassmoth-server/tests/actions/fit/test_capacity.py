@@ -25,6 +25,7 @@ from grassmoth_server.actions.fit.selection import FitContinuation
 from grassmoth_server.compute.analysis_cache import AnalysisCacheEntry, AnalysisCall
 from grassmoth_server.compute.resources import fit_compute_budget
 from grassmoth_server.study.records import Rejected
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -102,7 +103,7 @@ def test_initialization_peak_does_not_control_static_or_automatic_admission(shap
     def with_large_initialization(model, sampler):
         result = estimate_particle_mgrad_memory(model, sampler)
         assert isinstance(result, ParticleMgradMemoryReport)
-        return result.revised(initialization=initialization, peak=initialization)
+        return revise_fixture(result, initialization=initialization, peak=initialization)
 
     monkeypatch.setattr(capacity, "estimate_particle_mgrad_memory", with_large_initialization)
     for configured in (SamplerLaunchSpec.from_resolved(expected), launch):
@@ -137,14 +138,16 @@ def test_continuation_keeps_chain_random_stream_and_kernel_rules(shape):
     inherited = SamplerLaunchSpec.from_resolved(previous)
     assert isinstance(inherited, SamplerLaunchSpec)
     for changes in ({"num_chains": "auto"}, {"num_chains": 4}, {"seed": 8}):
-        launch = inherited.revised(**changes)
+        launch = revise_fixture(inherited, **changes)
         result = _admit(launch, budget=_budget(), previous=previous)
         assert isinstance(result, Rejected)
         assert result.code == "INCOMPATIBLE_CONTINUATION"
-    launch = inherited.revised(algorithm=inherited.algorithm.revised(n_parameter_particles="auto"))
+    launch = revise_fixture(
+        inherited, algorithm=revise_fixture(inherited.algorithm, n_parameter_particles="auto")
+    )
     assert isinstance(_admit(launch, budget=_budget(), previous=previous), capacity.FitAdmission)
-    changed = launch.revised(
-        algorithm=launch.algorithm.revised(parameter_proposal="pseudo_langevin")
+    changed = revise_fixture(
+        launch, algorithm=revise_fixture(launch.algorithm, parameter_proposal="pseudo_langevin")
     )
     rejected = _admit(changed, budget=_budget(), previous=previous)
     assert isinstance(rejected, Rejected)
@@ -166,7 +169,9 @@ def test_previous_cached_bytes_reserve_host_memory_independent_of_new_diagnostic
     previous = SamplerSpec()
     launch = SamplerLaunchSpec.from_resolved(previous)
     assert isinstance(launch, SamplerLaunchSpec)
-    launch = launch.revised(algorithm=launch.algorithm.revised(diagnostic_metrics=metrics))
+    launch = revise_fixture(
+        launch, algorithm=revise_fixture(launch.algorithm, diagnostic_metrics=metrics)
+    )
     report = estimate_particle_mgrad_memory(shape, launch.resolve(2))
     assert isinstance(report, ParticleMgradMemoryReport)
     cached_bytes = 10**6
@@ -249,7 +254,7 @@ def test_capacity_log_and_errors_use_remaining_budget_after_occupied_memory(shap
     assert "N=64, M=8, C=5" in admitted.detail
     assert admitted.detail.count("100.00%") == (1 if shared else 2)
     assert ("shared host/device=" in admitted.detail) is shared
-    rejected = _admit(launch.revised(num_chains=6), budget=budget)
+    rejected = _admit(revise_fixture(launch, num_chains=6), budget=budget)
     assert isinstance(rejected, Rejected)
     assert "120.00%" in rejected.detail
     assert "required /" in rejected.detail

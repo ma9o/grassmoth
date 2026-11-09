@@ -20,6 +20,7 @@ from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.observations.preparation import DataPreparationSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -1058,8 +1059,9 @@ def test_fill_null_uses_polars_after_window_aggregation(fields, aggregation, exp
     assert result["value"].cast(pl.Float64).to_list() == expected
     # Conversions precede filling, which also covers explicit null readings.
     if fields == {"fill_null": "forward"} and aggregation == "last":
-        converted = indicator.revised(
-            extraction=indicator.extraction.revised(computed_rule="last(reading) / 2")
+        converted = revise_fixture(
+            indicator,
+            extraction=revise_fixture(indicator.extraction, computed_rule="last(reading) / 2"),
         )
         result = compute_indicators(raw, [converted.model_dump(mode="json")], "1d")
         assert result["value"].cast(pl.Float64).to_list() == [None, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0]

@@ -49,6 +49,7 @@ from grassmoth_test_support.model import (
     three_state_gaussian_model,
     without_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _static_baseline_stress_sleep() -> DynamicalModelSpec:
@@ -73,12 +74,14 @@ def _hill_edge_emitted_for_saturating_edge_complete_test_model() -> DynamicalMod
     (y_potential,) = y.dynamics
     rho_y = parameter_named(dynamical_model_spec, "rho_Y")
     self_limit_y = parameter_named(dynamical_model_spec, "self_limit_Y")
-    y_revised = y.revised(
+    y_revised = revise_fixture(
+        y,
         dynamics=(
-            y_potential.revised(
-                expression=restoring_potential(y.id, center=0.0, stiffness=rho_y.id, quartic=0.0)
+            revise_fixture(
+                y_potential,
+                expression=restoring_potential(y.id, center=0.0, stiffness=rho_y.id, quartic=0.0),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(dynamical_model_spec, self_limit_y)
     return dynamical_model_spec.with_entities(
@@ -130,13 +133,14 @@ def _x_z_measurements() -> DynamicalModelSpec:
     )
     return dynamical_model_spec.with_entities(
         edges=(
-            x_to_y.revised(
+            revise_fixture(
+                x_to_y,
                 mechanisms=(
                     DriftMechanismSpec(
                         id=_X_TO_Y_DRIFT_MECHANISM_ID,
                         expression=(coefficient(_BETA_X_Y_PARAMETER_ID, "weight") * state(x.id)),
                     ),
-                )
+                ),
             ),
             y_to_z,
         ),
@@ -181,13 +185,14 @@ def _translate_spec_rejects_initial_state_correlation_parameters_with_scientific
     z = construct_named(dynamical_model_spec, "Z")
     sigma_z = parameter_named(dynamical_model_spec, "sigma_Z")
     x = construct_named(dynamical_model_spec, "X")
-    z_revised = z.revised(
+    z_revised = revise_fixture(
+        z,
         coefficients=(
             coefficient(sigma_z.id, "diffusion_scale"),
             coefficient(0.0, "initial_mean"),
             coefficient(1.0, "initial_scale"),
             coefficient(_COR0_PARAMETER_ID, "initial_correlation", construct_ids=(x.id,)),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (z_revised,)),
@@ -231,14 +236,16 @@ def _quartic_freed_only_for_self_limiting_construct_complete_test_model() -> Dyn
     obs_sd_x2 = parameter_named(dynamical_model_spec, "obs_sd_x2")
     sigma_y = parameter_named(dynamical_model_spec, "sigma_Y")
     sigma_z = parameter_named(dynamical_model_spec, "sigma_Z")
-    y_revised = y.revised(
+    y_revised = revise_fixture(
+        y,
         dynamics=(
-            y_potential.revised(
+            revise_fixture(
+                y_potential,
                 expression=restoring_potential(
                     y.id, center=0.0, stiffness=rho_y.id, quartic=_SELF_LIMIT_Y_PARAMETER_ID
-                )
+                ),
             ),
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (y_revised,)),
@@ -632,13 +639,15 @@ class TestRuntimeStructuralSupport:
         model = complete_test_model_payload()
         if source_count == 2:
             source = model.get_construct(ConstructId("construct:766f6091724c163a3404"))
-            second = source.revised(id="construct:second-common-cause", name="second_common_cause")
+            second = revise_fixture(
+                source, id="construct:second-common-cause", name="second_common_cause"
+            )
             model = model.with_entities(
                 edges=replace_constructs(
                     (
                         *model.edges,
                         *(
-                            edge.revised(id=f"{edge.id}-second", cause=second)
+                            revise_fixture(edge, id=f"{edge.id}-second", cause=second)
                             for edge in model.edges
                         ),
                     ),
@@ -724,7 +733,8 @@ class TestRuntimeStructuralSupport:
         )
 
         with pytest.raises(ValueError, match="Joint coefficients require one other construct"):
-            dynamical_model_spec.constructs[0].revised(
+            revise_fixture(
+                dynamical_model_spec.constructs[0],
                 coefficients=(
                     *dynamical_model_spec.constructs[0].coefficients,
                     coefficient(
@@ -732,7 +742,7 @@ class TestRuntimeStructuralSupport:
                         "initial_correlation",
                         construct_ids=(dynamical_model_spec.constructs[0].id,),
                     ),
-                )
+                ),
             )
 
     def test_model_build_end_to_end(self):

@@ -21,6 +21,7 @@ from grassmoth.models.ssm.execution.dynamical_model import continuous_state_evol
 from grassmoth.models.structure import StructuralSelection, selected_edges
 from grassmoth_test_support.dynamics import linear_term, potential_term
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _directed_edges_cannot_be_reinterpreted_as_potentials_model_fixture() -> DynamicalModelSpec:
@@ -121,9 +122,10 @@ def test_directed_edges_cannot_be_reinterpreted_as_potentials():
     dynamical_model_spec = _directed_edges_cannot_be_reinterpreted_as_potentials_model_fixture()
     edge = selected_edges(StructuralSelection(dynamical_model_spec, None))[0]
     with pytest.raises(ValueError, match="literal_error"):
-        edge.revised(
+        revise_fixture(
+            edge,
             mechanisms=tuple(
                 {"id": term.id, "kind": "potential", "expression": term.expression}
                 for term in edge.mechanisms
-            )
+            ),
         )

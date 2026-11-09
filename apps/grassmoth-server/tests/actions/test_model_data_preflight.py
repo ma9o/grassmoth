@@ -30,6 +30,7 @@ from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.model import construct_named
+from grassmoth_test_support.values import revise_fixture
 
 """Model-panel limitations are checked when fitting, independently of model edits."""
 
@@ -107,9 +108,10 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")
     full = panel_metadata()
-    metadata = full.revised(
+    metadata = revise_fixture(
+        full,
         variables=full.variables[:1],
-        preparation=full.preparation.revised(variables=full.preparation.variables[:1]),
+        preparation=revise_fixture(full.preparation, variables=full.preparation.variables[:1]),
     )
     panel = panel_frame(n_days=4).filter(pl.col("indicator_id") == metadata.variables[0].id)
     record = seed_record(

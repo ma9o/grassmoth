@@ -8,6 +8,7 @@ from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.compilation_errors import IncompleteModelError
 from grassmoth_test_support.helpers import graph_constructs, invalid_dict_payload, make_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -67,10 +68,11 @@ def test_dependent_alternatives_reject_impossible_fields_at_the_schema_boundary(
     dynamical_model_spec = make_model(["x", "y"], [("x", "y")])
     edge = dynamical_model_spec.edges[0]
     with pytest.raises(ValidationError, match="drift"):
-        edge.revised(
+        revise_fixture(
+            edge,
             mechanisms=[
                 {"id": "mechanism:potential", "kind": "potential", "expression": expression}
-            ]
+            ],
         )
 
 
@@ -81,10 +83,10 @@ def test_valid_partial_model_can_be_enriched_for_measurement():
     ).materialized()
     candidate.require_measurements()
     assert candidate == dynamical_model_spec
-    partial = dynamical_model_spec.revised(measurement_clock=None).with_entities(
+    partial = revise_fixture(dynamical_model_spec, measurement_clock=None).with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            tuple(c.revised(indicators=()) for c in dynamical_model_spec.constructs),
+            tuple(revise_fixture(c, indicators=()) for c in dynamical_model_spec.constructs),
         ),
     )
     reloaded = DynamicalModelSpec.model_validate(partial.model_dump(mode="json")).materialized()
@@ -221,7 +223,7 @@ def test_owned_mappings_detach_nested_inputs_defaults_and_revisions() -> None:
     assert isinstance(Contract().groups, MappingProxyType)
 
     changes = {"second": {"values": (3,)}}
-    revised = value.revised(groups=changes)
+    revised = revise_fixture(value, groups=changes)
     changes["second"]["values"] = (4,)
     assert revised.groups["second"]["values"] == (3,)
     assert revised.model_dump(mode="json") == {"groups": {"second": {"values": [3]}}}
@@ -251,3 +253,16 @@ def test_sampler_acceptance_targets_require_finite_open_probabilities(probabilit
         with pytest.raises(ValidationError):
             owner.model_validate({field: probability})
         assert getattr(owner.model_validate({field: 0.4}), field) == 0.4
+
+
+def test_typed_owner_updates_preserve_identity_and_validate_new_values():
+    from pydantic import ValidationError
+
+    from grassmoth.artifacts.scenarios import StateAssignment
+
+    original = StateAssignment(target="construct:x", time=0.0, value=2.0)
+    moved = original.at_time(time=3.0)
+    assert (moved.target, moved.value, moved.time) == (original.target, original.value, 3.0)
+    assert original.time == 0.0
+    with pytest.raises(ValidationError):
+        original.at_time(time=float("nan"))

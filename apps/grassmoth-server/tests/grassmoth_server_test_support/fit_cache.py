@@ -29,6 +29,7 @@ from grassmoth.models.ssm.compile.inputs import compile_executable_model
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_test_support.helpers import observation_dataset
+from grassmoth_test_support.values import revise_fixture
 
 ROOT = Path(__file__).resolve().parents[4]
 ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
@@ -104,7 +105,7 @@ def run(phase, output):
 
     def execute(label, template, *, prior=1.0, offset=0.0, seed=19, previous=None):
         question, selection, data = fixture(prior, offset)
-        sampler = template.revised(seed=seed)
+        sampler = revise_fixture(template, seed=seed)
         events.clear()
         traces.clear()
         compiled.clear()

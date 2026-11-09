@@ -83,7 +83,7 @@ class ConstructSpec(Value):
 
     def with_distribution(self, identity: DistributionId | None) -> ConstructSpec:
         """Return a new construct selecting the supplied trajectory distribution, or none."""
-        return self.revised(distribution=identity)
+        return self._revised(distribution=identity)
 
     @property
     def is_dynamic(self) -> bool:

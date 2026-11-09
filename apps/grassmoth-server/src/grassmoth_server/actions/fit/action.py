@@ -134,17 +134,17 @@ def run_fit(inputs: FitInputs, *, profile_dir: Path | None = None) -> FitOutput:
     if isinstance(result, ModelFitFailure):
         raise ModelFitError(result.error, diagnostics={"duration_seconds": result.duration_seconds})
     if result.profile is not None:
-        report = result.profile.revised(
+        report = result.profile.with_compilation(
             compilation=tuple(
-                entry.revised(persistent_cache=captured[entry.name].persistent_cache)
+                entry.with_cache_status(persistent_cache=captured[entry.name].persistent_cache)
                 for entry in result.profile.compilation
             ),
             profiling_compilation=tuple(
-                entry.revised(persistent_cache=captured[entry.name].persistent_cache)
+                entry.with_cache_status(persistent_cache=captured[entry.name].persistent_cache)
                 for entry in result.profile.profiling_compilation
             ),
         )
-        result = result.revised(profile=report)
+        result = result.with_profile(profile=report)
         for entry in (*report.compilation, *report.profiling_compilation):
             logger.info("Profile cache %s: %s", entry.name, entry.persistent_cache)
             dump_compiled_analysis(captured[entry.name].executable, profile_dir, entry.name)

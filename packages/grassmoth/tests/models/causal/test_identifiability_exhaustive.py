@@ -42,6 +42,7 @@ from grassmoth.models.causal.identification import (
 from grassmoth.models.structure import StructuralSelection, unsupported_construct_ids
 from grassmoth_test_support.causal_graphs import make_graph
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -1688,7 +1689,8 @@ def test_marginalization(case):
         edges=replace_constructs(
             dynamical_model_spec.edges,
             tuple(
-                construct.revised(
+                revise_fixture(
+                    construct,
                     role="endogenous",
                     temporal_status="time_invariant",
                     indicators=construct.indicators if construct.name in case["observed"] else (),

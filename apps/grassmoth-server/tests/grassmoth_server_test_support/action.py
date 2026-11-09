@@ -4,6 +4,7 @@ from grassmoth_server.actions.contracts.inputs import EditQuestionInput
 from grassmoth_server.actions.edit_model import edit_model
 from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.values import revise_fixture
 
 
 def edit_and_check(workspace_id, request, state):
@@ -94,8 +95,9 @@ def applied_record(
                 if "data-profile" in reports:
                     from grassmoth.artifacts.reports.data_quality import DataProfileReport
 
-                    output = output.revised(
-                        profile=store.read_result(reports["data-profile"], DataProfileReport)
+                    output = revise_fixture(
+                        output,
+                        profile=store.read_result(reports["data-profile"], DataProfileReport),
                     )
                 action = "prepare_data"
             case InferenceEvidence():
@@ -115,7 +117,7 @@ def applied_record(
                     ),
                     inference=store.read_result(reports["inference"], InferenceReport)
                     if "inference" in reports
-                    else _report(model).revised(evidence=result.result),
+                    else revise_fixture(_report(model), evidence=result.result),
                 )
                 action = "fit"
             case SimulationEvidence():
@@ -162,7 +164,7 @@ def applied_record(
         {
             "action": action,
             "request": request,
-            "outcome": Applied(result=identity, effects=result.effects.revised(reports={})),
+            "outcome": Applied(result=identity, effects=revise_fixture(result.effects, reports={})),
         }
     )
     return AttemptRecord(seq=seq, ts=ts, attempt=saved, **metadata)

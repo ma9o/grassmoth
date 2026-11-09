@@ -20,6 +20,7 @@ from grassmoth_server.compute.compilation_cache import compile_program, prepare_
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import nonlinear_fit_fixture
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -75,11 +76,11 @@ def test_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(algor
     full = run(settings)
     assert full.diagnostics.sampler_diagnostics is not None
     assert full.diagnostics.sampler_diagnostics.method == algorithm.method
-    first = run(settings.revised(num_samples_per_chain=2))
+    first = run(revise_fixture(settings, num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))
     )
-    second = run(settings.revised(num_warmup=0, num_samples_per_chain=2), checkpoint)
+    second = run(revise_fixture(settings, num_warmup=0, num_samples_per_chain=2), checkpoint)
 
     def combined(before, after):
         # Public draws flatten chain first, so append within each chain.

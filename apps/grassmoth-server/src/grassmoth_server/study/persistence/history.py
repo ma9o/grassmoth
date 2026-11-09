@@ -92,11 +92,11 @@ class StudyRepository:
             )
             if attempt.action == "fit":
                 assert isinstance(attempt.request, FitRequest)
-                state = state.revised(data=self.fit_source(attempt.request.input.target).data_ref)
+                state = state.with_data(data=self.fit_source(attempt.request.input.target).data_ref)
             elif attempt.action == "prepare_data" and any(
                 info.artifact_id == "panel" for info in attempt.outcome.effects.produced
             ):
-                state = state.revised(
+                state = state.with_data(
                     data=DataRef[GitOid, int](revision=record.commit_id, replicate_index=0)
                 )
         return state
@@ -241,8 +241,8 @@ class StudyRepository:
                         subject="inputs",
                         detail="The question is set by the study's first action",
                     )
-                    record = record.revised(
-                        attempt=record.attempt.revised(outcome=outcome),
+                    record = record.with_attempt(
+                        attempt=record.attempt.with_outcome(outcome=outcome),
                     )
                 else:
                     question_ref = "refs/question"

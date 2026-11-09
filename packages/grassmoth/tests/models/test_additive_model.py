@@ -15,6 +15,7 @@ from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _entities_gain_detail_with_one_owner_and_native_prior_with_parameter_distributions() -> (
@@ -142,7 +143,7 @@ def test_partial_model_is_valid_but_operation_requirements_are_explicit():
         partial.require_measurements()
     with pytest.raises(ValueError, match="prior laws"):
         require_priors(StructuralSelection(partial, None))
-    complete_measurements = partial.revised(measurement_clock="1d")
+    complete_measurements = revise_fixture(partial, measurement_clock="1d")
     complete_measurements.require_measurements()
     assert partial.measurement_clock is None
 
@@ -204,7 +205,7 @@ def test_shared_endpoints_round_trip_once_and_resolve_forward_references():
     changed = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            [dynamical_model_spec.edges[0].effect.revised(name="Renamed Y")],
+            [revise_fixture(dynamical_model_spec.edges[0].effect, name="Renamed Y")],
         )
     )
     assert changed.edges[0].effect is changed.edges[1].effect

@@ -39,6 +39,7 @@ from grassmoth.models.ssm.preparation.binding import BoundPanel
 from grassmoth.models.ssm.preparation.preflight import validate_sampler_support
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.interval_particle import interval_target
+from grassmoth_test_support.values import revise_fixture
 
 """Particle configuration and initialization contracts without compiling a sampler."""
 
@@ -289,10 +290,14 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
     assert isinstance(sampler.algorithm.path_update.method, GuidedMethodSpec)
-    ordinary = sampler.revised(
-        algorithm=sampler.algorithm.revised(
-            path_update=sampler.algorithm.path_update.revised(proposal=ParameterMeanProposalSpec())
-        )
+    ordinary = revise_fixture(
+        sampler,
+        algorithm=revise_fixture(
+            sampler.algorithm,
+            path_update=revise_fixture(
+                sampler.algorithm.path_update, proposal=ParameterMeanProposalSpec()
+            ),
+        ),
     )
     assert sampler.kernel_identity != ordinary.kernel_identity
     assert isinstance(PathUpdateSpec().proposal, ParameterMixtureProposalSpec)
@@ -519,15 +524,17 @@ def test_common_path_schema_preserves_requests_and_reports_support(
 
 def test_continuation_identity_distinguishes_update_and_proposal_laws():
     base = PathUpdateSpec(method=AuxiliaryKalmanMethodSpec())
-    blocked = base.revised(
-        update=BlockedPathUpdateSpec(block_length=17), proposal=ConditionalParameterProposalSpec()
+    blocked = revise_fixture(
+        base,
+        update=BlockedPathUpdateSpec(block_length=17),
+        proposal=ConditionalParameterProposalSpec(),
     )
-    mixture = base.revised(proposal=ParameterMixtureProposalSpec(weights="prior"))
+    mixture = revise_fixture(base, proposal=ParameterMixtureProposalSpec(weights="prior"))
     variants = (
         base,
         blocked,
-        blocked.revised(update=BlockedPathUpdateSpec(block_length=23)),
+        revise_fixture(blocked, update=BlockedPathUpdateSpec(block_length=23)),
         mixture,
-        mixture.revised(proposal=ParameterMixtureProposalSpec(weights="running_prefix")),
+        revise_fixture(mixture, proposal=ParameterMixtureProposalSpec(weights="running_prefix")),
     )
     assert len({variant.kernel_identity for variant in variants}) == len(variants)

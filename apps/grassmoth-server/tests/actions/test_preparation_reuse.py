@@ -39,6 +39,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server_test_support.data import preparation_input
 from grassmoth_server_test_support.helpers import run_async
 from grassmoth_server_test_support.storage import seed_source_table
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -195,10 +196,11 @@ def test_extraction_cache_is_shared_and_only_changed_effective_requests_miss(tmp
 
 def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
     raw = pl.DataFrame({"timestamp": [datetime(2026, 1, 1), datetime(2026, 1, 3)], "x": [9, 2]})
-    variable = _variable("x").revised(
+    variable = revise_fixture(
+        _variable("x"),
         extraction=ComputedExtractionSpec(
             how_to_measure="Read the daily score", source_columns=("x",), fill_null="forward"
-        )
+        ),
     )
     span = FileSourceRef(files=("source.csv",), start=date(2026, 1, 2), end=date(2026, 1, 4))
     bounded = compute_indicators(
@@ -253,8 +255,9 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
     )
     store = ArtifactStore("empty")
     artifact = seed_source_table(store, raw, "seq-000001")
-    variable = _variable("x").revised(
-        observation=_variable("x").observation.revised(aggregation=aggregation)
+    variable = revise_fixture(
+        _variable("x"),
+        observation=revise_fixture(_variable("x").observation, aggregation=aggregation),
     )
     preparation = FilePreparationSpec(
         source={"files": ["scores.csv"], "start": "2026-01-02", "end": "2026-01-10"},

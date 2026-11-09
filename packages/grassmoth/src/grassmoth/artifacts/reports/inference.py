@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field
 
@@ -93,6 +93,20 @@ class InferenceMetadata(Value):
     duration_seconds: float = Field(ge=0)
     sampler_diagnostics: SamplerDiagnostics | None
 
+    def with_transfer_counts(
+        self, *, thinning_factor: int, draws_kept_per_chain: int, num_samples_total: int
+    ) -> Self:
+        """Return metadata describing the thinned transfer buffers."""
+        return self._revised(
+            thinning_factor=thinning_factor,
+            draws_kept_per_chain=draws_kept_per_chain,
+            num_samples_total=num_samples_total,
+        )
+
+    def with_run(self, *, duration_seconds: float, segments: tuple[FitSegment, ...]) -> Self:
+        """Return metadata for the accumulated run duration and segments."""
+        return self._revised(duration_seconds=duration_seconds, segments=segments)
+
 
 class InferenceEvidence(Value):
     """Native telemetry buffers; posterior atoms and coordinates belong to the model."""
@@ -111,7 +125,7 @@ class InferenceEvidence(Value):
 
     def with_previous_phases(self, previous: InferenceEvidence) -> InferenceEvidence:
         """Retain earlier phase buffers under one additional continuation prefix."""
-        return self.revised(
+        return self._revised(
             phase_extra_fields={
                 **{
                     f"previous/{name}": values
@@ -120,6 +134,41 @@ class InferenceEvidence(Value):
                 **self.phase_extra_fields,
             }
         )
+
+    def with_transfer_buffers(
+        self,
+        *,
+        chain_extra_fields: Mapping[str, NumericalArray],
+        observation_log_probs: NumericalArray | None,
+        phase_extra_fields: Mapping[str, Mapping[str, NumericalArray]],
+        warmup_complete_log_posterior_history: NumericalArray | None,
+        all_complete_log_posterior_history: NumericalArray | None,
+    ) -> Self:
+        """Return evidence with the buffers selected for transfer."""
+        return self._revised(
+            chain_extra_fields=chain_extra_fields,
+            observation_log_probs=observation_log_probs,
+            phase_extra_fields=phase_extra_fields,
+            warmup_complete_log_posterior_history=warmup_complete_log_posterior_history,
+            all_complete_log_posterior_history=all_complete_log_posterior_history,
+        )
+
+    def with_retained_buffers(
+        self,
+        *,
+        chain_extra_fields: Mapping[str, NumericalArray],
+        observation_log_probs: NumericalArray | None,
+    ) -> Self:
+        """Return evidence with the retained chain diagnostics and observation scores."""
+        return self._revised(
+            chain_extra_fields=chain_extra_fields, observation_log_probs=observation_log_probs
+        )
+
+    def with_phases(
+        self, *, phase_extra_fields: Mapping[str, Mapping[str, NumericalArray]]
+    ) -> Self:
+        """Return evidence with the accumulated phase buffers."""
+        return self._revised(phase_extra_fields=phase_extra_fields)
 
 
 class InferenceReportCore(Value):
@@ -136,6 +185,10 @@ class InferenceReportCore(Value):
     frequency_refresh: tuple[FrequencyRefresh, ...] = ()
     regional_movement: tuple[RegionalMovement, ...] = ()
 
+    def with_metadata(self, *, inference_metadata: InferenceMetadata) -> Self:
+        """Return the report core with updated run metadata."""
+        return self._revised(inference_metadata=inference_metadata)
+
 
 class InferenceReportDetail(Value):
     """Retained plot series served in full by the action result."""
@@ -145,6 +198,10 @@ class InferenceReportDetail(Value):
     pareto_k: tuple[ParetoKPoint, ...] = ()
     loo_pit: tuple[LOOPITPoint, ...] = ()
 
+    def with_traces(self, *, trace_data: tuple[TraceSeries, ...]) -> Self:
+        """Return the report detail with its retained traces."""
+        return self._revised(trace_data=trace_data)
+
 
 class InferenceReport(Value):
     """One fit's provenance, run metadata, native evidence and computed findings."""
@@ -152,6 +209,20 @@ class InferenceReport(Value):
     evidence: InferenceEvidence
     core: InferenceReportCore
     detail: InferenceReportDetail
+
+    def with_transfer(
+        self,
+        *,
+        evidence: InferenceEvidence,
+        core: InferenceReportCore,
+        detail: InferenceReportDetail,
+    ) -> Self:
+        """Return the report with aligned transfer buffers, metadata, and traces."""
+        return self._revised(evidence=evidence, core=core, detail=detail)
+
+    def with_run(self, *, evidence: InferenceEvidence, core: InferenceReportCore) -> Self:
+        """Return the report with accumulated run evidence and metadata."""
+        return self._revised(evidence=evidence, core=core)
 
 
 class FitCheckReport(Value):

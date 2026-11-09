@@ -18,6 +18,7 @@ from grassmoth_server_test_support.action import empty_simulation_summary
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.inference import compile_model_fixture, particle_posterior
 from grassmoth_test_support.model import x_y_model
+from grassmoth_test_support.values import revise_fixture
 
 pytestmark = pytest.mark.contract
 
@@ -38,9 +39,9 @@ def test_simulation_request_is_a_dated_window_with_optional_interventions():
         "num_replicates",
     }
     with pytest.raises(ValidationError, match="panel_ref"):
-        request.input.revised(panel_ref="b" * 40)
+        revise_fixture(request.input, panel_ref="b" * 40)
     with pytest.raises(ValidationError, match="Extra inputs"):
-        request.revised(comparison_panel_revision="b" * 40)
+        revise_fixture(request, comparison_panel_revision="b" * 40)
 
 
 def test_interventions_are_placed_after_the_start_in_model_days():

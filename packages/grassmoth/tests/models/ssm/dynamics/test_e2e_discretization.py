@@ -31,6 +31,7 @@ from grassmoth_test_support.model import (
     parameter_named,
     replace_parameters,
 )
+from grassmoth_test_support.values import revise_fixture
 
 
 def _teste2espectodiscretization_test_time_invariant_states_drop_static_target_dynamics_and_diffusion_su() -> (
@@ -51,8 +52,9 @@ def _daily_effect_rate() -> DynamicalModelSpec:
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            beta_stress_mood.revised(
-                transform=beta_stress_mood.transform.revised(interval_days=1.0)
+            revise_fixture(
+                beta_stress_mood,
+                transform=revise_fixture(beta_stress_mood.transform, interval_days=1.0),
             ),
         )
     )
@@ -65,8 +67,12 @@ def _equal_intervals_elementwise_priors() -> DynamicalModelSpec:
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            rho_stress.revised(transform=rho_stress.transform.revised(interval_days=7.0)),
-            rho_mood.revised(transform=rho_mood.transform.revised(interval_days=7.0)),
+            revise_fixture(
+                rho_stress, transform=revise_fixture(rho_stress.transform, interval_days=7.0)
+            ),
+            revise_fixture(
+                rho_mood, transform=revise_fixture(rho_mood.transform, interval_days=7.0)
+            ),
         ),
         distributions=parameter_laws(
             dynamical_model_spec,
@@ -89,8 +95,9 @@ def _stress_mood_model() -> DynamicalModelSpec:
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            beta_stress_mood.revised(
-                transform=beta_stress_mood.transform.revised(interval_days="model_clock")
+            revise_fixture(
+                beta_stress_mood,
+                transform=revise_fixture(beta_stress_mood.transform, interval_days="model_clock"),
             ),
         ),
         distributions=parameter_laws(
@@ -118,8 +125,9 @@ def _construct_specific_residual_scales() -> DynamicalModelSpec:
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            beta_stress_mood.revised(
-                transform=beta_stress_mood.transform.revised(interval_days="model_clock")
+            revise_fixture(
+                beta_stress_mood,
+                transform=revise_fixture(beta_stress_mood.transform, interval_days="model_clock"),
             ),
         ),
         distributions=parameter_laws(
@@ -159,7 +167,10 @@ def _weekly_reference_intervals() -> DynamicalModelSpec:
     return dynamical_model_spec.with_entities(
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
-            rho_stress.revised(transform=rho_stress.transform.revised(interval_days="model_clock")),
+            revise_fixture(
+                rho_stress,
+                transform=revise_fixture(rho_stress.transform, interval_days="model_clock"),
+            ),
         ),
         distributions=parameter_laws(
             dynamical_model_spec,
@@ -392,7 +403,8 @@ class TestE2ESpecToDiscretization:
             edges=replace_constructs(
                 model.edges,
                 tuple(
-                    c.revised(name="renamed") if c.name == "mood" else c for c in model.constructs
+                    revise_fixture(c, name="renamed") if c.name == "mood" else c
+                    for c in model.constructs
                 ),
             )
         )

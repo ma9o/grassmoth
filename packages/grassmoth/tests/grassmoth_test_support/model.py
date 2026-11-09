@@ -15,6 +15,7 @@ from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -88,7 +89,7 @@ def replace_parameters(
 
 def without_prior(parameter: ParameterSpec) -> ParameterSpec:
     """Keep the fixture quantity and its reasoning while removing its law."""
-    return parameter.revised(distribution=None)
+    return revise_fixture(parameter, distribution=None)
 
 
 def without_parameters(
@@ -161,13 +162,15 @@ def _exact_model_model() -> DynamicalModelSpec:
     setting_obs = indicator_named(dynamical_model_spec, "setting_obs")
     setting_obs_likelihood = likelihood_named(dynamical_model_spec, "setting_obs")
     manifest_mean_setting_obs = parameter_named(dynamical_model_spec, "manifest_mean_setting_obs")
-    setting_obs_revised = setting_obs.revised(
+    setting_obs_revised = revise_fixture(
+        setting_obs,
         reasoning={"text": "The recorded setting is exact at its observation anchor."},
-        likelihood=setting_obs_likelihood.revised(
+        likelihood=revise_fixture(
+            setting_obs_likelihood,
             law=DeltaLawSpec[Expression](v=state(setting.id)),
         ),
     )
-    setting_revised = setting.revised(indicators=(setting_obs_revised,))
+    setting_revised = revise_fixture(setting, indicators=(setting_obs_revised,))
     parameters, distributions = without_parameters(dynamical_model_spec, manifest_mean_setting_obs)
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(dynamical_model_spec.edges, (setting_revised,)),
@@ -194,7 +197,8 @@ def _two_state_fixed_drift_model() -> DynamicalModelSpec:
     latent_0_latent_1_hill_ec50 = parameter_for(
         dynamical_model_spec, SiteKind.HILL_EC50, "latent_0", "latent_1"
     )
-    latent_0_revised = latent_0.revised(
+    latent_0_revised = revise_fixture(
+        latent_0,
         dynamics=(
             DriftMechanismSpec(
                 id=latent_0_potential.id,
@@ -202,7 +206,7 @@ def _two_state_fixed_drift_model() -> DynamicalModelSpec:
                     latent_0.id, center=0.0, stiffness=latent_0_dynamics_decay.id, quartic=0.0
                 ),
             ),
-        )
+        ),
     )
     parameters, distributions = without_parameters(
         dynamical_model_spec,

@@ -36,6 +36,7 @@ from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -191,11 +192,12 @@ def test_observation_factor_bound_covers_native_mixed_law_arrays(native_target_s
 def test_dense_and_retained_storage_are_distinct_from_particle_banks():
     base = report(sampler())
     dense = estimate_particle_mgrad_memory(
-        shape().revised(initial_covariance="dense", transition_covariance="dense"), sampler()
+        revise_fixture(shape(), initial_covariance="dense", transition_covariance="dense"),
+        sampler(),
     )
     assert isinstance(dense, ParticleMgradMemoryReport)
     assert dense.sampling.device_bytes > base.sampling.device_bytes
-    longer = report(sampler().revised(num_samples_per_chain=10000))
+    longer = report(revise_fixture(sampler(), num_samples_per_chain=10000))
     assert longer.initialization == base.initialization
     assert next(x for x in longer.buffers if x.name == "particle_banks") == next(
         x for x in base.buffers if x.name == "particle_banks"
@@ -213,18 +215,18 @@ def test_stage_maximum_does_not_add_particle_workspace_to_final_upload():
     )
     # Once final device retention dominates, a larger particle bank changes the
     # earlier sweep peak but cannot enlarge the completed-history upload.
-    long = report(sampler().revised(num_samples_per_chain=10000))
-    more_particles = report(sampler(particles=128).revised(num_samples_per_chain=10000))
+    long = report(revise_fixture(sampler(), num_samples_per_chain=10000))
+    more_particles = report(revise_fixture(sampler(particles=128), num_samples_per_chain=10000))
     assert long.sampling.device_bytes == more_particles.sampling.device_bytes
     assert any(item.name == "concatenation_outputs" for item in short.buffers)
 
 
 def test_inline_cuda_rng_is_only_used_for_proven_diagonal_remote_branch():
-    local = sampler().revised(hardware=InferenceHardware.LOCAL)
-    remote = local.revised(hardware=InferenceHardware.L40S)
+    local = revise_fixture(sampler(), hardware=InferenceHardware.LOCAL)
+    remote = revise_fixture(local, hardware=InferenceHardware.L40S)
     cpu_report, cuda_report = report(local), report(remote)
     dense_report = estimate_particle_mgrad_memory(
-        shape().revised(transition_covariance="dense"), remote
+        revise_fixture(shape(), transition_covariance="dense"), remote
     )
     assert isinstance(dense_report, ParticleMgradMemoryReport)
 

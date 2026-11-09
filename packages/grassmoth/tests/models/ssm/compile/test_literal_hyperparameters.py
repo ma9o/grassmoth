@@ -25,6 +25,7 @@ from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import construct_named, load_model_fixture
+from grassmoth_test_support.values import revise_fixture
 
 
 def _fixed_model():
@@ -56,16 +57,20 @@ def test_literal_observation_operand_has_no_prior_and_preserves_native_law(famil
                 mean=function("exp", predictor), concentration=coefficient(fixed, "dispersion")
             )
         )
-        observation = indicator.observation.revised(
-            measurement=NumericMeasurement(dtype="continuous" if family == "StudentT" else "count")
+        observation = revise_fixture(
+            indicator.observation,
+            measurement=NumericMeasurement(dtype="continuous" if family == "StudentT" else "count"),
         )
         constructs.append(
-            construct.revised(
+            revise_fixture(
+                construct,
                 indicators=(
-                    indicator.revised(
-                        observation=observation, likelihood=likelihood.revised(law=law)
+                    revise_fixture(
+                        indicator,
+                        observation=observation,
+                        likelihood=revise_fixture(likelihood, law=law),
                     ),
-                )
+                ),
             )
         )
     model = model.with_entities(edges=replace_constructs(model.edges, tuple(constructs)))
@@ -143,7 +148,8 @@ def test_literal_observation_operand_has_no_prior_and_preserves_native_law(famil
 def test_literal_process_df_compiles_without_a_phantom_site_but_remains_unsupported():
     model = _fixed_model()
     construct = construct_named(model, "latent_0")
-    construct = construct.revised(
+    construct = revise_fixture(
+        construct,
         innovation_family=DistributionFamily.STUDENT_T,
         coefficients=(*construct.coefficients, coefficient(5.0, "process_degrees_of_freedom")),
     )
