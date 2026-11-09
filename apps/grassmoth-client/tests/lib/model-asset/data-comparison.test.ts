@@ -203,3 +203,25 @@ it("plots exact point changes against canonical history coordinates without chan
     null,
   ]);
 });
+
+it("reuses display projections for retained sources and refreshes them when a source changes", () => {
+  const view = dataComparisonView(report, sources);
+  const chart = dataComparisonChart(fixtureValue(view.variables[0]));
+  const reused = dataComparisonView(report, new Map(sources));
+  expect(reused).toBe(view);
+  expect(dataComparisonChart(fixtureValue(reused.variables[0]))).toBe(chart);
+
+  const original = fixtureValue(sources.get(panel));
+  if (original.action !== "prepare_data") throw new Error("Expected prepared data");
+  const replacement: DataSourceResult = {
+    ...original,
+    body: {
+      ...original.body,
+      data: { [observation.id]: { ...history, values: [8, 9, null] } },
+    },
+  };
+  const updated = dataComparisonView(report, new Map([...sources, [panel, replacement]]));
+  const updatedChart = dataComparisonChart(fixtureValue(updated.variables[0]));
+  expect(updatedChart.observed?.values).toEqual([8, 9, null]);
+  expect(chart.observed?.values).toEqual([1, 4, null]);
+});

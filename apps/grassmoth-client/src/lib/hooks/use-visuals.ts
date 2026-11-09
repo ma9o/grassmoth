@@ -1,6 +1,7 @@
 "use client";
 
 import type { IndicatorId, ModelSnapshot } from "@grassmoth/api-types";
+import { useMemo } from "react";
 import {
   historyView,
   pathsView,
@@ -71,26 +72,27 @@ export function useSimulationPaths(
       ? pathsView(query.data.body, modelSnapshot.dynamical_model_spec)
       : null;
   const { start, count } = selection;
-  const page = (series: PathSeriesView): PathSeriesView => ({
-    ...series,
-    action: series.action.slice(start, start + count),
-    reference: series.reference.slice(start, start + count),
-  });
-  const data: SimulationPathsView | null =
-    paths && simulation
-      ? {
-          ...paths,
-          start,
-          count: Math.min(count, paths.total_draws - start),
-          states: Object.fromEntries(
-            presentEntries(paths.states).map(([id, series]) => [id, page(series)]),
-          ),
-          indicators: Object.fromEntries(
-            presentEntries(paths.indicators).map(([id, series]) => [id, page(series)]),
-          ),
-          effect: paths.effect ? page(paths.effect) : null,
-        }
-      : null;
+  const data = useMemo((): SimulationPathsView | null => {
+    if (!paths || !simulation) return null;
+    if (start === 0 && count >= paths.total_draws) return paths;
+    const page = (series: PathSeriesView): PathSeriesView => ({
+      ...series,
+      action: series.action.slice(start, start + count),
+      reference: series.reference.slice(start, start + count),
+    });
+    return {
+      ...paths,
+      start,
+      count: Math.min(count, paths.total_draws - start),
+      states: Object.fromEntries(
+        presentEntries(paths.states).map(([id, series]) => [id, page(series)]),
+      ),
+      indicators: Object.fromEntries(
+        presentEntries(paths.indicators).map(([id, series]) => [id, page(series)]),
+      ),
+      effect: paths.effect ? page(paths.effect) : null,
+    };
+  }, [paths, simulation, start, count]);
   return { ...query, data };
 }
 

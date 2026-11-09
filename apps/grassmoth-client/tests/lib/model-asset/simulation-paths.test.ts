@@ -6,6 +6,7 @@ import { simulatedResult, unavailableEffect } from "@/lib/__fixtures__/action-re
 import { outcome } from "@/lib/__fixtures__/model";
 import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { pathsView } from "@/lib/model-asset/result-values";
+import { pathLayers } from "@/components/charts/series-adapters";
 
 const simulation = simulatedResult;
 
@@ -15,6 +16,14 @@ it("keeps both recorded arms when the causal evaluation is unavailable", () => {
   expect(paths.states[outcome.id]?.action).toHaveLength(2);
   expect(paths.states[outcome.id]?.reference).toHaveLength(2);
   expect(paths.effect).toBeNull();
+  const series = fixtureValue(paths.states[outcome.id]);
+  const both = pathLayers(series, "both", false);
+  expect(pathLayers(series, "both", false)).toBe(both);
+  expect(both.map((layer) => layer.key)).toEqual(["reference", "intervened"]);
+  expect(pathLayers(series, "reference", true).map((layer) => layer.key)).toEqual(["reference"]);
+  expect(pathLayers(series, "reference", true)[0]?.points).toBe(true);
+  expect(pathLayers(series, "intervened", false).map((layer) => layer.key)).toEqual(["intervened"]);
+  expect(both[0]?.points).toBe(false);
 });
 
 function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {

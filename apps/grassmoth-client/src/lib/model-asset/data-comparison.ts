@@ -23,11 +23,26 @@ export type DataComparisonView = Omit<DataComparisonReport, "variables"> & {
   readonly variables: readonly DataVariableView[];
 };
 
+const comparisons = new WeakMap<
+  DataComparisonReport,
+  {
+    readonly sources: ReadonlyMap<GitOid, DataSourceResult>;
+    readonly view: DataComparisonView;
+  }
+>();
+
 /** Attach original histories for display; all comparisons and statistics stay in the saved report. */
 export function dataComparisonView(
   report: DataComparisonReport,
   sources: ReadonlyMap<GitOid, DataSourceResult>,
 ): DataComparisonView {
+  const cached = comparisons.get(report);
+  if (
+    cached &&
+    cached.sources.size === sources.size &&
+    [...sources].every(([revision, source]) => cached.sources.get(revision) === source)
+  )
+    return cached.view;
   const side = (name: "left" | "right", id: DataVariableView["indicator_id"]) =>
     report[name].map((source): DataSeriesView | null => {
       const result = coordinate(sources.get(source.revision));
@@ -52,7 +67,7 @@ export function dataComparisonView(
         history,
       };
     });
-  return {
+  const view: DataComparisonView = {
     ...report,
     variables: report.variables.map((variable) => ({
       ...variable,
@@ -60,6 +75,8 @@ export function dataComparisonView(
       right: side("right", variable.indicator_id),
     })),
   };
+  comparisons.set(report, { sources: new Map(sources), view });
+  return view;
 }
 
 function coordinate<T>(value: T | undefined): T {

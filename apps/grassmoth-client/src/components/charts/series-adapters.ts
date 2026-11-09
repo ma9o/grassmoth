@@ -9,6 +9,10 @@ import { DAY_MS } from "./plot-geometry";
 
 export type ArmChoice = "both" | "reference" | "intervened";
 
+const simulationLayers = new WeakMap<PathSeriesView, Map<`${ArmChoice}:${boolean}`, DrawLayer[]>>();
+const pairedEffectLayers = new WeakMap<PathSeriesView, DrawLayer[]>();
+const comparisonCharts = new WeakMap<DataVariableView, Omit<DrawsChartProps, "height">>();
+
 const pathRows = (paths: PathSeriesView["action"], arm: string): DrawRow[] =>
   paths.map((path) => ({
     key: `${arm}-${path.draw}`,
@@ -18,6 +22,11 @@ const pathRows = (paths: PathSeriesView["action"], arm: string): DrawRow[] =>
 
 /** A saved series by arm: colour names the arm, and matching draw numbers are paired. */
 export function pathLayers(series: PathSeriesView, arms: ArmChoice, points: boolean): DrawLayer[] {
+  const key = `${arms}:${points}` as const;
+  const variants =
+    simulationLayers.get(series) ?? new Map<`${ArmChoice}:${boolean}`, DrawLayer[]>();
+  const cached = variants.get(key);
+  if (cached) return cached;
   const paired = series.reference.length > 0;
   const reference: DrawLayer[] =
     paired && arms !== "intervened"
@@ -43,12 +52,17 @@ export function pathLayers(series: PathSeriesView, arms: ArmChoice, points: bool
           },
         ]
       : [];
-  return [...reference, ...action];
+  const layers = [...reference, ...action];
+  variants.set(key, layers);
+  simulationLayers.set(series, variants);
+  return layers;
 }
 
 /** Paired effects: each draw's intervened path minus the same draw's reference path. */
 export function effectLayers(series: PathSeriesView): DrawLayer[] {
-  return [
+  const cached = pairedEffectLayers.get(series);
+  if (cached) return cached;
+  const layers: DrawLayer[] = [
     {
       key: "effect",
       label: "Paired effect",
@@ -56,6 +70,8 @@ export function effectLayers(series: PathSeriesView): DrawLayer[] {
       rows: pathRows(series.action, "effect"),
     },
   ];
+  pairedEffectLayers.set(series, layers);
+  return layers;
 }
 
 /** Replicates exist only where the indicator was measured; sparse ones are dots, not lines. */
@@ -91,6 +107,8 @@ const CHANGE_COLORS = {
 
 /** Every saved history of one variable on the union of their anchors, with point changes. */
 export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChartProps, "height"> {
+  const cached = comparisonCharts.get(variable);
+  if (cached) return cached;
   const referenceSide = variable.predictive?.reference_side ?? null;
   const histories = [...variable.left, ...variable.right].filter((history) => history !== null);
   const definition = histories.at(0)?.variable;
@@ -196,7 +214,7 @@ export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChart
       ];
     }),
   );
-  return {
+  const chart: Omit<DrawsChartProps, "height"> = {
     label: `${definition?.name ?? variable.indicator_id}: data comparison`,
     times: origin === null ? [] : anchors.map((anchor) => (anchor - origin) / DAY_MS),
     timeOrigin: origin === null ? null : new Date(origin).toISOString(),
@@ -205,4 +223,6 @@ export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChart
     levels: definition && "levels" in definition.measurement ? definition.measurement.levels : null,
     xLabel: "Days from first anchor",
   };
+  comparisonCharts.set(variable, chart);
+  return chart;
 }
