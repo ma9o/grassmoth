@@ -28,6 +28,7 @@ from grassmoth_server.study.persistence.git_objects import (
     write_blob,
     write_directory,
 )
+from grassmoth_server.study.persistence.sources import capture_sources
 from grassmoth_server.study.records import (
     ActionMessage,
     Applied,
@@ -312,11 +313,16 @@ class StudyRepository:
                 write_blob(self.repo, log.model_dump_json(round_trip=True).encode()),
                 pygit2.GIT_FILEMODE_BLOB,
             )
-            for name in ("sources", "profiles"):
-                if (directory / name).exists():
-                    tree.insert(
-                        name, write_directory(self.repo, directory / name), pygit2.GIT_FILEMODE_TREE
-                    )
+            if (directory / "sources").exists():
+                tree.insert(
+                    "sources", capture_sources(self.repo, directory), pygit2.GIT_FILEMODE_TREE
+                )
+            if (directory / "profiles").exists():
+                tree.insert(
+                    "profiles",
+                    write_directory(self.repo, directory / "profiles"),
+                    pygit2.GIT_FILEMODE_TREE,
+                )
             timestamp = int(datetime.fromisoformat(record.ts).timestamp())
             signature = pygit2.Signature("grassmoth", "study@local", timestamp, 0)
             parents = argument_parents(record.attempt, self.attempts())

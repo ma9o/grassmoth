@@ -19,9 +19,9 @@ from grassmoth_server.study.persistence.git_objects import (
     read_blob,
     read_file,
     write_blob,
-    write_directory,
     write_file_blob,
 )
+from grassmoth_server.study.persistence.sources import capture_sources
 from grassmoth_server.study.state import (
     ArtifactFiles,
     ArtifactRecord,
@@ -171,13 +171,13 @@ class ArtifactStore:
 
     def raw_record(self, call_id: str) -> ArtifactRecord:
         """Capture source bytes as the durable raw-data record; parsed rows stay temporary."""
-        sources = Path(paths.call_dir(self.workspace_id, call_id)) / "sources"
+        directory = Path(paths.call_dir(self.workspace_id, call_id))
         return self._record(
             "raw_data",
             derived_from={},
             produced_by="prepare_data",
             source=ArtifactFiles(),
-            entries={"sources": (write_directory(self.repo, sources), pygit2.GIT_FILEMODE_TREE)},
+            entries={"sources": (capture_sources(self.repo, directory), pygit2.GIT_FILEMODE_TREE)},
         )
 
     def _record(

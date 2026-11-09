@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pygit2
 import pytest
 
 from grassmoth.public import DynamicalModelSpec, GitOid
@@ -16,7 +17,8 @@ from grassmoth_test_support.git import git_oid
 pytestmark = pytest.mark.contract
 
 
-def test_collection_uses_refs_and_keeps_unpublished_work(monkeypatch, tmp_path):
+@pytest.mark.parametrize("captured", [False, True])
+def test_collection_uses_refs_and_keeps_unpublished_work(monkeypatch, tmp_path, captured):
     monkeypatch.setattr(paths, "_DATA_URI", str(tmp_path))
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
@@ -41,6 +43,18 @@ def test_collection_uses_refs_and_keeps_unpublished_work(monkeypatch, tmp_path):
     )
     repository = StudyRepository("study")
     import grassmoth_server.study.persistence.history as history
+    from grassmoth_server.study.persistence import git_objects
+    from grassmoth_server.study.persistence.store import ArtifactStore
+
+    capture = git_objects.write_file_blob
+    captures = []
+
+    def capture_once(repo, path):
+        captures.append(path)
+        return capture(repo, path)
+
+    monkeypatch.setattr(git_objects, "write_file_blob", capture_once)
+    raw = ArtifactStore("study").raw_record(call_identity(request)) if captured else None
 
     with monkeypatch.context() as failing:
         failing.setattr(
@@ -56,6 +70,13 @@ def test_collection_uses_refs_and_keeps_unpublished_work(monkeypatch, tmp_path):
         == (sources / "source.csv").read_bytes()
     )
     assert repository.read_file(saved.commit_id, "profiles/fit.json") == b'{"elapsed":1}'
+    assert captures.count(sources / "source.csv") == 1
+    assert captures.count(directory / "profiles" / "fit.json") == 1
+    if raw is not None:
+        assert (
+            repository.repo[raw.revision].peel(pygit2.Tree)["sources"].id
+            == repository.repo[saved.commit_id].tree["sources"].id
+        )
     with monkeypatch.context() as no_parse:
         no_parse.setattr(
             StudyRepository,

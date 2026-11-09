@@ -23,6 +23,7 @@ import os
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import IO, TYPE_CHECKING, Literal, overload
 
 from pydantic import TypeAdapter
@@ -210,14 +211,23 @@ def read_text(path: str) -> str:
 
 
 def write_text(path: str, content: str) -> None:
-    """Write text through the configured backend, creating parent directories for local files."""
+    """Publish complete text atomically, creating parent directories for local files."""
     if is_remote():
         with get_fs().open(path, "w") as f:
             f.write(content)
     else:
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with NamedTemporaryFile(
+            mode="w", dir=target.parent, suffix=".partial", delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            try:
+                stream.write(content)
+                stream.close()
+                temporary.replace(target)
+            finally:
+                temporary.unlink(missing_ok=True)
 
 
 def read_json(path: str) -> JsonObject:

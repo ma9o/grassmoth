@@ -7,9 +7,7 @@ domain-specific payloads do not have to be carried solely by Temporal history.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, overload
-from uuid import uuid4
 
 from pydantic import TypeAdapter
 
@@ -23,15 +21,7 @@ if TYPE_CHECKING:
 
 def write_subroutine_trace(path: str, trace: LLMTrace) -> None:
     """Publish a complete trace snapshot atomically for concurrent call polling."""
-    payload = trace.model_dump_json()
-    if storage.is_remote():
-        storage.write_text(path, payload)
-    else:
-        target = Path(path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        partial = target.with_name(f"{target.name}.{uuid4().hex}.partial")
-        partial.write_text(payload)
-        partial.replace(target)
+    storage.write_text(path, trace.model_dump_json())
 
 
 def subroutine_root(workspace_id: str, run_id: str, subroutine_id: str) -> str:

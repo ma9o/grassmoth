@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-import uuid
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
@@ -17,6 +15,7 @@ from grassmoth_server.actions.contracts.requests import call_identity
 from grassmoth_server.actions.progress import read_events
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage.paths import call_dir
+from grassmoth_server.storage.records import append_record, read_records
 from grassmoth_server.storage.traces import collect_run_traces
 from grassmoth_server.study.persistence.log_codec import assemble_call_log
 from grassmoth_server.study.records import ActionMessage
@@ -57,9 +56,7 @@ class CallLogSnapshot(Value):
 def emit_message(workspace_id: str, call_id: str, message: ActionMessage) -> None:
     """Retain an execution message for live polling and final publication."""
     directory = storage.join(call_dir(workspace_id, call_id), "messages")
-    storage.makedirs(directory)
-    name = f"{time.time_ns():020d}-{uuid.uuid4().hex[:8]}.json"
-    storage.write_text(storage.join(directory, name), message.model_dump_json())
+    append_record(directory, message.model_dump_json())
 
 
 def collect_call_snapshot(workspace_id: str, call_id: str) -> CallLogSnapshot:
@@ -69,9 +66,7 @@ def collect_call_snapshot(workspace_id: str, call_id: str) -> CallLogSnapshot:
         traces=collect_run_traces(workspace_id, call_id),
         events=tuple(read_events(workspace_id, call_id)),
         execution_messages=tuple(
-            ActionMessage.model_validate_json(storage.read_text(entry))
-            for entry in sorted(storage.listdir(directory))
-            if entry.endswith(".json")
+            ActionMessage.model_validate_json(payload) for _, payload in read_records(directory)
         ),
     )
 
