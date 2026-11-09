@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Lock
 from time import perf_counter
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, cast
 
 import jax
@@ -31,14 +32,14 @@ if TYPE_CHECKING:
 
     from jax.stages import Compiled
 
-    from grassmoth.public import MemoryDemand
+    from grassmoth.public import MemoryDemand, ProgramShapes
 
 
-def prepare_program[Result](
-    function: Callable[..., Result],
+def prepare_program(
+    function: Callable[..., object],
     *args: object,
     **kwargs: object,
-) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], ProgramShapes, MemoryDemand]:
     """Trace with JAX, lifting numerical closure values into runtime operands.
 
     JAX alone owns executable identity and persistent cache lookup. Its traced
@@ -48,10 +49,10 @@ def prepare_program[Result](
     traced = jax.jit(function).trace(*args, **kwargs)
     constants, converted = traced.closure_convert()
     arguments = cast("tuple[jax.Array, ...]", tuple(constants))
-    shapes = cast("Result", traced.out_info)
+    shapes = MappingProxyType(dict(jax.tree_util.tree_leaves_with_path(traced.out_info)))
 
-    def invoke(values: tuple[jax.Array, ...], *inputs: object, **options: object) -> Result:
-        return cast("Result", converted(list(values), *inputs, **options))
+    def invoke(values: tuple[jax.Array, ...], *inputs: object, **options: object) -> object:
+        return converted(list(values), *inputs, **options)
 
     program = jax.jit(invoke)
     return (
@@ -62,14 +63,14 @@ def prepare_program[Result](
     )
 
 
-def compile_program[Result](
-    function: Callable[..., Result], *args: object, **kwargs: object
-) -> PreparedProgram[Result]:
+def compile_program[**P, Result](
+    function: Callable[P, Result], *args: P.args, **kwargs: P.kwargs
+) -> PreparedProgram[P, Result]:
     """Bind numerical operands to an executable cached by JAX."""
     compile_function, operands, _, _ = prepare_program(function, *args, **kwargs)
     executable = compile_function()
 
-    def call(*inputs: object, **options: object) -> Result:
+    def call(*inputs: P.args, **options: P.kwargs) -> Result:
         return cast("Result", executable(operands, *inputs, **options))
 
     return PreparedProgram(executable, call)

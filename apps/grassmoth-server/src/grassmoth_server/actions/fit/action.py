@@ -20,6 +20,7 @@ from grassmoth.public import (
     ModelExecutionContext,
     ModelFitFailure,
     PreparedProgram,
+    ProgramShapes,
     fit,
 )
 from grassmoth_server.actions.errors import ModelFitError
@@ -83,9 +84,9 @@ def run_fit(inputs: FitInputs, *, profile_dir: Path | None = None) -> FitOutput:
             return "disabled"
         return "not_consulted"
 
-    def compile_profiled[Result](
-        function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> PreparedProgram[Result]:
+    def compile_profiled[**P, Result](
+        function: Callable[P, Result], *args: P.args, **kwargs: P.kwargs
+    ) -> PreparedProgram[P, Result]:
         with observe_cache() as events:
             program = compile_program(function, *args, **kwargs)
         captured[cast("FunctionType", function).__name__] = CompiledArtifact(
@@ -93,9 +94,9 @@ def run_fit(inputs: FitInputs, *, profile_dir: Path | None = None) -> FitOutput:
         )
         return program
 
-    def prepare_profiled[Result](
-        function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+    def prepare_profiled(
+        function: Callable[..., object], *args: object, **kwargs: object
+    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], ProgramShapes, MemoryDemand]:
         name = cast("FunctionType", function).__name__
         compile_function, operands, result_shape, demand = prepare_program(
             function, *args, **kwargs

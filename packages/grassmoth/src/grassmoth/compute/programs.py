@@ -9,12 +9,15 @@ import jax
 import jax.numpy as jnp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from jax.stages import Compiled
     from jax.typing import DTypeLike
 
     from grassmoth.compute.budget import MemoryDemand
+
+
+type ProgramShapes = Mapping[jax.tree_util.KeyPath, jax.ShapeDtypeStruct]
 
 
 def scalar_operand(*, value: bool | int | float, dtype: DTypeLike | None = None) -> jax.Array:
@@ -28,20 +31,20 @@ def scalar_operand(*, value: bool | int | float, dtype: DTypeLike | None = None)
 
 
 @dataclass(frozen=True)
-class PreparedProgram[Result]:
+class PreparedProgram[**P, Result]:
     """A callable with bound operands and its executable for memory accounting."""
 
     executable: Compiled
-    call: Callable[..., Result]
+    call: Callable[P, Result]
 
 
 @runtime_checkable
 class ProgramCompiler(Protocol):
     """Compile a pure function under an explicitly supplied execution policy."""
 
-    def __call__[Result](
-        self, function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> PreparedProgram[Result]:
+    def __call__[**P, Result](
+        self, function: Callable[P, Result], *args: P.args, **kwargs: P.kwargs
+    ) -> PreparedProgram[P, Result]:
         """Bind one program without executing its numerical computation."""
         ...
 
@@ -50,8 +53,8 @@ class ProgramCompiler(Protocol):
 class ProgramPreparer(Protocol):
     """Prepare a JAX program and expose its sizing evidence."""
 
-    def __call__[Result](
-        self, function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
-        """Prepare operands and shapes without executing the numerical computation."""
+    def __call__(
+        self, function: Callable[..., object], *args: object, **kwargs: object
+    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], ProgramShapes, MemoryDemand]:
+        """Trace abstract or concrete operands and return output leaves keyed by their tree paths."""
         ...

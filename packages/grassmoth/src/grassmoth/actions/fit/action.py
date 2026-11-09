@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.reports.scorecard import MovementWindow
     from grassmoth.compute.budget import MemoryDemand
     from grassmoth.compute.context import ModelExecutionContext
-    from grassmoth.compute.programs import PreparedProgram
+    from grassmoth.compute.programs import PreparedProgram, ProgramShapes
 
 
 @dataclass(frozen=True)
@@ -485,7 +485,7 @@ def fit(
     compilation_intervals: list[tuple[str, float, float]] = []
     program_counts: dict[str, int] = {}
 
-    def named_program[Result](function: Callable[..., Result]) -> Callable[..., Result]:
+    def named_program[**P, Result](function: Callable[P, Result]) -> Callable[P, Result]:
         # Native call sites own descriptive names. This fit owns unique suffixes,
         # passed to the existing compiler dependency as ordinary function names.
         base = cast("FunctionType", function).__name__
@@ -493,24 +493,24 @@ def fit(
         program_counts[base] = number
 
         @wraps(function)
-        def invoke(*args: object, **kwargs: object) -> Result:
+        def invoke(*args: P.args, **kwargs: P.kwargs) -> Result:
             return function(*args, **kwargs)
 
         invoke.__name__ = base if number == 1 else f"{base}.{number}"
         return invoke
 
-    def timed_compile[Result](
-        function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> PreparedProgram[Result]:
+    def timed_compile[**P, Result](
+        function: Callable[P, Result], *args: P.args, **kwargs: P.kwargs
+    ) -> PreparedProgram[P, Result]:
         started = clock()
         named = named_program(function)
         program = execution_context.compiler(named, *args, **kwargs)
         compilation_intervals.append((cast("FunctionType", named).__name__, started, clock()))
         return program
 
-    def timed_prepare[Result](
-        function: Callable[..., Result], *args: object, **kwargs: object
-    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+    def timed_prepare(
+        function: Callable[..., object], *args: object, **kwargs: object
+    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], ProgramShapes, MemoryDemand]:
         started = clock()
         named = named_program(function)
         compile_program, operands, shape, demand = execution_context.prepare_program(

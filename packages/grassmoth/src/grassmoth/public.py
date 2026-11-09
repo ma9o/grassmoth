@@ -390,6 +390,9 @@ from grassmoth.compute.programs import (
 from grassmoth.compute.programs import (
     ProgramPreparer as ProgramPreparer,
 )
+from grassmoth.compute.programs import (
+    ProgramShapes as ProgramShapes,
+)
 from grassmoth.json_types import (
     JsonObject as JsonObject,
 )

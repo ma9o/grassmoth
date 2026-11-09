@@ -92,7 +92,7 @@ def test_jax_persistent_cache_reuses_executable_with_runtime_values_across_proce
         executable = compile_program()
         actual = executable(operands, value if output_only else (template, value))
         assert actual[0].evaluate_fn is template.evaluate_fn
-        print(json.dumps({'value': actual[1].tolist(), 'shape': shapes[1].shape,
+        print(json.dumps({'value': actual[1].tolist(), 'shape': shapes[(jax.tree_util.SequenceKey(1),)].shape,
                           'bytes': memory.device_bytes, 'compiled': len(compiled)}))
         """
     )
@@ -123,7 +123,7 @@ def test_jax_persistent_cache_reuses_executable_with_runtime_values_across_proce
 
 
 def test_jax_compilation_preserves_output_trees_and_weak_scalar_types(tmp_path):
-    from grassmoth_server.compute.compilation_cache import compile_program
+    from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 
     def increment(value):
         return jax.tree.map(lambda leaf: leaf + 1, value)
@@ -131,6 +131,9 @@ def test_jax_compilation_preserves_output_trees_and_weak_scalar_types(tmp_path):
     scalar = jnp.asarray(2.0)
     with local_compilation_cache(tmp_path, commit=lambda: None):
         for value in ({"a": scalar}, {"b": scalar}, (scalar,), scalar):
+            _, _, shapes, _ = prepare_program(increment, value)
+            assert set(shapes) == {path for path, _ in jax.tree_util.tree_leaves_with_path(value)}
+            assert all(isinstance(shape, jax.ShapeDtypeStruct) for shape in shapes.values())
             actual = compile_program(increment, value).call(value)
             assert jax.tree.structure(actual) == jax.tree.structure(value)
             for leaf in jax.tree.leaves(actual):

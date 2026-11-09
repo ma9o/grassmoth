@@ -79,7 +79,7 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
         return PreparedProgram(compile_one(function.__name__), lambda: None)
 
     def prepare_program(function, *_args, **_kwargs):
-        return lambda: compile_one(function.__name__), (), (), NO_MEMORY_DEMAND
+        return lambda: compile_one(function.__name__), (), {}, NO_MEMORY_DEMAND
 
     def run(_inputs, *, execution_context, runtime):
         calls.append("fit")

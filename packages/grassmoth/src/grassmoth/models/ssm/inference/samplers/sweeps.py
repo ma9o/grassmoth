@@ -78,16 +78,19 @@ def compile_sweeps[Carry](
     """
     block_size = SWEEP_BLOCK_SIZE
     num_warmup, num_samples = sampler.num_warmup, sampler.num_samples_per_chain
-    compile_program, arguments, (_, block_shapes), _ = execution_context.prepare_program(
+    compile_program, arguments, output_shapes, _ = execution_context.prepare_program(
         sweep_block(program.step, block_size),
         initial,
         jax.ShapeDtypeStruct((), jnp.int32),
         jax.ShapeDtypeStruct((), jnp.bool_),
     )
     history_shapes = {
-        name: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
-        for name, shape in block_shapes.items()
-        if name not in program.excluded_history
+        path[1].key: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
+        for path, shape in output_shapes.items()
+        if len(path) == 2
+        and path[0] == jax.tree_util.SequenceKey(1)
+        and isinstance(path[1], jax.tree_util.DictKey)
+        and path[1].key not in program.excluded_history
     }
     warmup_shapes = {
         name: shape for name, shape in history_shapes.items() if name not in {"positions", "paths"}
@@ -162,9 +165,10 @@ def compile_projected_sweeps[Carry](
         (block_size, sampler.num_chains, len(target.times), target.independent_mask.shape[-1]),
         target.observations.dtype,
     )
-    compile_program, projection_arguments, shape, estimate = execution_context.prepare_program(
+    compile_program, projection_arguments, shapes, estimate = execution_context.prepare_program(
         jax.vmap(jax.vmap(observation_projection)), positions, paths
     )
+    shape = shapes[()]
     transfer = shape.size * shape.dtype.itemsize
     retained = transfer // block_size * sampler.num_samples_per_chain
     overhead = MemoryDemand(
