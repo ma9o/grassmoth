@@ -10,7 +10,6 @@ and proposals only; auxiliary Kalman moves correct against the exact target.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -29,10 +28,6 @@ from grassmoth.models.ssm.inference.samplers.particle.twist import (
     future_information,
     symmetric,
 )
-
-if TYPE_CHECKING:
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.shapes import Array, Float
 
@@ -69,9 +64,7 @@ def point_predictors(
     target: ParticleTarget, context: ParticleContext, path: jax.Array
 ) -> jax.Array:
     """Evaluate authored predictors, including static parameter coordinates."""
-    observation = cast(
-        "HeterogeneousObservation", target.dynamical_model(context).observation_model
-    )
+    observation = target.dynamical_model(context).observation_model
     return jax.vmap(
         lambda state, index: observation.linear_predictor(
             target.project_state(context, state, index)
@@ -301,9 +294,7 @@ def linearize_path(
         .at[jnp.asarray(target.state_space.static + target.state_space.inputs, dtype=jnp.int32)]
         .set(True)
     )
-    observation = cast(
-        "HeterogeneousObservation", target.dynamical_model(context).observation_model
-    )
+    observation = target.dynamical_model(context).observation_model
     noise = target.prepare_noise_factors(context, target.observations).observations
     readings = target.observations
     if intervals is not None:

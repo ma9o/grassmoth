@@ -1,7 +1,7 @@
 """Independent density, Gaussian and nonlinear posterior oracles for carried stages."""
 
 from dataclasses import replace
-from typing import cast, override
+from typing import override
 
 import dynestyx as dsx
 import jax
@@ -102,7 +102,7 @@ def _target(nonlinear, *, random_initial=False, steps=4):
                     jnp.zeros(3),
                     jnp.eye(3) * 0.45,
                 ),
-                cast("HeterogeneousObservation", original.observation_model).laws,
+                original.observation_model.laws,
                 structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
@@ -394,9 +394,7 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
 
     def declared(bound):
         model = base.dynamical_model(bound)
-        label = cast(
-            "HeterogeneousObservation", model.observation_model
-        ).measurement.manifest_means[0]
+        label = model.observation_model.measurement.manifest_means[0]
         return dsx.DynamicalModel(
             initial_condition=SupportedNormal(
                 jnp.array([0.2 * label]), jnp.zeros((1, 1)), (), covariance_structure="dense"

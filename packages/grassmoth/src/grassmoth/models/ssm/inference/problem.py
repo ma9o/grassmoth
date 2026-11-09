@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
-import dynestyx as dsx
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
@@ -14,7 +13,10 @@ from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.models.ssm.compile.observation_windows import compile_window_memory
 from grassmoth.models.ssm.compile.path_dependencies import compile_output_coordinates
 from grassmoth.models.ssm.compile.point_readings import compile_point_reading_mask
-from grassmoth.models.ssm.execution.dynamical_model import build_dynamical_model
+from grassmoth.models.ssm.execution.dynamical_model import (
+    DynamicalModelRuntime,
+    build_dynamical_model,
+)
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
 from grassmoth.models.ssm.inference.conditioning import (
@@ -27,6 +29,7 @@ from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObs
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 
 if TYPE_CHECKING:
+    import dynestyx as dsx
     import jax
 
     from grassmoth.compute.programs import ProgramCompiler
@@ -81,7 +84,9 @@ def build_particle_problem(
         and (exact_constraints is None or bool(exact_constraints.free_mask[0, index]))
     )
 
-    def continuous_model(position: jax.Array, runtime_times: jax.Array) -> dsx.DynamicalModel:
+    def continuous_model(
+        position: jax.Array, runtime_times: jax.Array
+    ) -> DynamicalModelRuntime[dsx.StochasticContinuousTimeStateEvolution]:
         return build_dynamical_model(
             compiled_dynamical_model,
             scientific_parameters.constrain(position[:parameter_size]),
@@ -119,12 +124,14 @@ def build_particle_problem(
             static_values = jnp.where(
                 exact_constraints.free_mask[0], static_values, exact_constraints.values[0]
             )
-        dynamical_model_arrays: dsx.DynamicalModel = eqx.filter(model, eqx.is_array)
+        dynamical_model_arrays: DynamicalModelRuntime[
+            dsx.StochasticContinuousTimeStateEvolution
+        ] = eqx.filter(model, eqx.is_array)
         return dynamical_model_arrays, runtime_times, static_values
 
-    def declared_model(context: ParticleContext) -> dsx.DynamicalModel:
+    def declared_model(context: ParticleContext) -> DynamicalModelRuntime[SupportedEulerMaruyama]:
         model = eqx.combine(context[0], static_model)
-        return dsx.DynamicalModel(
+        return DynamicalModelRuntime[SupportedEulerMaruyama](
             initial_condition=model.initial_condition,
             state_evolution=SupportedEulerMaruyama(
                 cast("dsx.StochasticContinuousTimeStateEvolution", model.state_evolution),

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import dynestyx as dsx
 import equinox as eqx
@@ -15,7 +15,10 @@ from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.compile.observation_windows import compile_window_memory
 from grassmoth.models.ssm.compile.state_space import StateSpace
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
-from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+from grassmoth.models.ssm.execution.dynamical_model import (
+    DynamicalModelRuntime,
+    HeterogeneousObservation,
+)
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
@@ -28,6 +31,7 @@ from grassmoth_test_support.inference import make_observation_support_runtime
 from grassmoth_test_support.observation import observation_laws
 
 if TYPE_CHECKING:
+    from grassmoth.models.ssm.execution.state_transition import GaussianStateTransition
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
     )
@@ -63,8 +67,8 @@ def interval_target(
     laws = observation_laws(families, parameters={"obs_r": 5.0, "obs_df": 5.0})
     covariance = np.eye(channels) * 0.2 if covariance is None else covariance
 
-    def model(position: jax.Array) -> dsx.DynamicalModel:
-        return dsx.DynamicalModel(
+    def model(position: jax.Array) -> DynamicalModelRuntime[dsx.LinearGaussianStateEvolution]:
+        return DynamicalModelRuntime[dsx.LinearGaussianStateEvolution](
             initial_condition=dist.MultivariateNormal(
                 jnp.zeros(state_dim), covariance_matrix=jnp.eye(state_dim)
             ),
@@ -80,7 +84,7 @@ def interval_target(
                 laws,
                 structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
-            t0=0.0,
+            t0=jnp.asarray(0.0),
         )
 
     _, static = eqx.partition(model(jnp.zeros(1)), eqx.is_array)
@@ -88,8 +92,10 @@ def interval_target(
     def context(position: jax.Array, grid: jax.Array) -> ParticleContext:
         return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim)
 
-    def declared(bound: ParticleContext) -> dsx.DynamicalModel:
-        return eqx.combine(bound[0], static)
+    def declared(bound: ParticleContext) -> DynamicalModelRuntime[GaussianStateTransition]:
+        return cast(
+            "DynamicalModelRuntime[dsx.LinearGaussianStateEvolution]", eqx.combine(bound[0], static)
+        )
 
     transform = ParameterTransform(
         jnp.zeros(1),

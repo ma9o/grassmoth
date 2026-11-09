@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -18,11 +18,10 @@ from grassmoth.models.ssm.execution.observation_operator import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    import dynestyx as dsx
-
     from grassmoth.models.ssm.compile.observation_windows import CompiledWindowMemory
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from grassmoth.models.ssm.execution.dynamical_model import DynamicalModelRuntime
     from grassmoth.models.ssm.execution.observation_operator import ObservationGradient
+    from grassmoth.models.ssm.execution.state_transition import GaussianStateTransition
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext
 
 
@@ -35,7 +34,7 @@ class ParticleIntervalObservations:
     all evaluate the same window values.
     """
 
-    dynamical_model: Callable[[ParticleContext], dsx.DynamicalModel]
+    dynamical_model: Callable[[ParticleContext], DynamicalModelRuntime[GaussianStateTransition]]
     operator: ObservationOperator
     memory: CompiledWindowMemory
     state_projection: Callable[[ParticleContext, jax.Array, jax.Array | int], jax.Array]
@@ -44,9 +43,7 @@ class ParticleIntervalObservations:
         self, context: ParticleContext, state: jax.Array, index: jax.Array | int
     ) -> jax.Array:
         """Evaluate the authored response before temporal aggregation or noise."""
-        observation = cast(
-            "HeterogeneousObservation", self.dynamical_model(context).observation_model
-        )
+        observation = self.dynamical_model(context).observation_model
         return observation(self.state_projection(context, state, index), None, 0).response
 
     def _moments(self, response: jax.Array) -> jax.Array:
@@ -152,9 +149,7 @@ class ParticleIntervalObservations:
         gradient: ObservationGradient = "full",
     ) -> jax.Array:
         """Report each exact emission at its recorded anchor, including missing rows."""
-        observation = cast(
-            "HeterogeneousObservation", self.dynamical_model(context).observation_model
-        )
+        observation = self.dynamical_model(context).observation_model
         measurement = observation.measurement
         compiled = compile_observation_model(
             observation.laws,

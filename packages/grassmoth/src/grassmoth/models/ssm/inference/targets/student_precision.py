@@ -18,7 +18,6 @@ from grassmoth.models.ssm.execution.observation_model import grouped_response
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 
 if TYPE_CHECKING:
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.ssm.execution.observation_groups import LawGroup
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 
@@ -42,7 +41,7 @@ class StudentTPrecisions:
 
     def log_prior(self, target: ParticleTarget, context: ParticleContext) -> jax.Array:
         """Gamma(ν/2, rate ν/2), once per observed factor, including its normalizer."""
-        model = cast("HeterogeneousObservation", target.dynamical_model(context).observation_model)
+        model = target.dynamical_model(context).observation_model
         total = jnp.zeros((), dtype=self.log_values.dtype)
         for group in model.density_groups():
             if isinstance(group.laws[0], StudentTLawSpec):
@@ -81,9 +80,7 @@ class StudentTPrecisions:
             return jnp.full((target.times.size, 1), jnp.inf)
 
         def curvature(context: ParticleContext) -> jax.Array:
-            model = cast(
-                "HeterogeneousObservation", target.dynamical_model(context).observation_model
-            )
+            model = target.dynamical_model(context).observation_model
             information = jnp.zeros(
                 (target.times.size, target.state_space.size, target.state_space.size)
             )
@@ -131,7 +128,7 @@ def draw_student_precisions(
     key: jax.Array,
 ) -> StudentTPrecisions | None:
     """Draw Γ((ν+1)/2, (ν+r²)/2) after exact recurrence and window aggregation."""
-    model = cast("HeterogeneousObservation", target.dynamical_model(context).observation_model)
+    model = target.dynamical_model(context).observation_model
     groups = tuple(
         group for group in model.density_groups() if isinstance(group.laws[0], StudentTLawSpec)
     )

@@ -8,13 +8,14 @@ can be carried through JAX transformations without closing over traced arrays.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Generic, TypeVar, override
 
 import dynestyx as dsx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
+from dynestyx.models.core import StateEvolutionLike
 
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.dynamics.intervention import Intervention
@@ -61,7 +62,7 @@ def continuous_state_evolution(
     )
 
 
-class HeterogeneousObservation(dsx.ObservationModel):
+class HeterogeneousObservation(dsx.ObservationModel):  # noqa: IMM001 -- Dynestyx inherits the frozen Equinox Module.
     """Measurement mapping with the application's family/link and missingness rules."""
 
     measurement: MeasurementParams
@@ -259,13 +260,38 @@ def assemble_likelihood_inputs(
     return evolution, measurement, initial, laws
 
 
+Evolution = TypeVar(
+    "Evolution",
+    bound=StateEvolutionLike,
+    covariant=True,
+)
+
+
+class DynamicalModelRuntime(eqx.Module, Generic[Evolution]):  # noqa: UP046 -- Explicit covariance preserves frozen Equinox fields in both type checkers.
+    """Concrete scientific components retained across model assembly and discretization."""
+
+    initial_condition: MultivariateNormal
+    state_evolution: Evolution
+    observation_model: HeterogeneousObservation
+    t0: jax.Array
+
+    def as_dynestyx(self) -> dsx.DynamicalModel:
+        """Adapt the owned components at the foreign simulator boundary."""
+        return dsx.DynamicalModel(
+            initial_condition=self.initial_condition,
+            state_evolution=self.state_evolution,
+            observation_model=self.observation_model,
+            t0=self.t0,
+        )
+
+
 def build_dynamical_model(
     compiled_dynamical_model: CompiledDynamicalModel,
     values: dict[str, jnp.ndarray],
     *,
     t0: jax.Array,
     dynamics: DynamicsSpec | None = None,
-) -> dsx.DynamicalModel:
+) -> DynamicalModelRuntime[StochasticContinuousTimeStateEvolution]:
     """Construct Dynestyx's model from the compiled model and one parameter draw.
 
     Values include the matrices derived by assemble_model_matrices or by
@@ -275,7 +301,7 @@ def build_dynamical_model(
     evolution, measurement, initial, laws = assemble_likelihood_inputs(
         values, compiled_dynamical_model, dynamics=dynamics
     )
-    return dsx.DynamicalModel(
+    return DynamicalModelRuntime[dsx.StochasticContinuousTimeStateEvolution](
         initial_condition=initial,
         state_evolution=evolution,
         observation_model=HeterogeneousObservation(

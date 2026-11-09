@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NamedTuple, cast
+from typing import TYPE_CHECKING, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -15,7 +15,6 @@ from grassmoth.models.ssm.execution.observation_model import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.ssm.execution.gaussian_noise import PreparedGaussianNoise
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -98,9 +97,7 @@ class PathFactorRuntime:
         )(indices)
         intervals = target.intervals
         if intervals is not None:
-            observation = cast(
-                "HeterogeneousObservation", target.dynamical_model(context).observation_model
-            )
+            observation = target.dynamical_model(context).observation_model
             groups = compile_law_groups(observation.laws, intervals.memory.channels, interval=True)
 
             def window(index: jax.Array) -> jax.Array:
@@ -180,9 +177,7 @@ def prepare_path_factors(
     intervals = target.intervals
     interval_noise = ()
     if intervals is not None:
-        observation = cast(
-            "HeterogeneousObservation", target.dynamical_model(context).observation_model
-        )
+        observation = target.dynamical_model(context).observation_model
         channels = jnp.asarray(intervals.memory.channels, dtype=jnp.int32)
         emitted = (
             jnp.zeros_like(readings, dtype=bool)

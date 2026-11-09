@@ -71,9 +71,11 @@ def runtime(monkeypatch):
 
 
 @pytest.mark.inference(concern="sampling")
-def test_sampler_context_is_a_dynestyx_model_pytree(runtime):
+def test_sampler_context_retains_concrete_model_components(runtime):
     context = runtime.context(runtime.initial_position, runtime.times)
-    assert isinstance(context[0], dsx.DynamicalModel)
+    from grassmoth.models.ssm.execution.dynamical_model import DynamicalModelRuntime
+
+    assert isinstance(context[0], DynamicalModelRuntime)
     assert all(isinstance(leaf, jax.Array) for leaf in jax.tree.leaves(context))
     shapes = jax.eval_shape(
         jax.vmap(runtime.context, in_axes=(0, None)), jnp.zeros((2, 1)), runtime.times

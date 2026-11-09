@@ -1,6 +1,6 @@
 """Dynestyx Euler–Maruyama transitions with compiler-owned Gaussian support."""
 
-from typing import Literal, override
+from typing import Literal, Protocol, override
 
 import dynestyx as dsx
 import equinox as eqx
@@ -13,7 +13,17 @@ from dynestyx.solvers import euler_maruyama_loc_cov
 from grassmoth.models.ssm.execution.supported_normal import SupportedNormal
 
 
-class SupportedEulerMaruyama(DiscreteTimeStateEvolution):
+class GaussianStateTransition(Protocol):
+    """A discrete transition retaining its Gaussian moments and factorization."""
+
+    def __call__(
+        self, x: jax.Array, u: jax.Array | None, t_now: float | jax.Array, t_next: float | jax.Array
+    ) -> dist.MultivariateNormal:
+        """Return the declared state law over one time interval."""
+        ...
+
+
+class SupportedEulerMaruyama(DiscreteTimeStateEvolution):  # noqa: IMM001 -- Dynestyx inherits the frozen Equinox Module.
     """Keep exact deterministic coordinates outside the transition Cholesky factor.
 
     Dynestyx owns the numerical step. Its full-rank Gaussian discretizer cannot

@@ -15,6 +15,7 @@ from grassmoth.models.ssm.compile.state_space import (
     SequentialRecurrences,
 )
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
+from grassmoth.models.ssm.execution.dynamical_model import DynamicalModelRuntime
 from grassmoth.models.ssm.execution.gaussian_noise import (
     DiagonalGaussianNoiseFactors,
     GaussianNoiseFactors,
@@ -30,11 +31,11 @@ from grassmoth.models.ssm.execution.observation_model import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from dynestyx.models.core import DiscreteStateTransition
-
     from grassmoth.models.ssm.compile.state_space import StateSpace
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
+    from grassmoth.models.ssm.execution.state_transition import (
+        GaussianStateTransition,
+        SupportedEulerMaruyama,
+    )
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
     from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
@@ -42,7 +43,11 @@ if TYPE_CHECKING:
 
 # Array leaves of the continuous model and its observation grid. Static model
 # metadata is retained by the discrete-model factory, outside the sampler state.
-type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array]
+type ParticleContext = tuple[
+    DynamicalModelRuntime[dsx.ContinuousTimeStateEvolution | dsx.DiscreteTimeStateEvolution],
+    jax.Array,
+    jax.Array,
+]
 
 
 @jax.tree_util.register_dataclass
@@ -64,7 +69,7 @@ class ParticleTarget:
 
     parameters: ParameterTransform
     context: Callable[[jax.Array, jax.Array], ParticleContext]
-    dynamical_model: Callable[[ParticleContext], dsx.DynamicalModel]
+    dynamical_model: Callable[[ParticleContext], DynamicalModelRuntime[GaussianStateTransition]]
     observations: jax.Array
     times: jax.Array
     state_space: StateSpace
@@ -282,9 +287,7 @@ class ParticleTarget:
         indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
 
         def transition(index: jax.Array) -> PreparedGaussianNoise:
-            distribution = cast(
-                "dist.MultivariateNormal", self._transition_distribution(context, initial, index)
-            )
+            distribution = self._transition_distribution(context, initial, index)
             chol = jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
             if self.state_space.transition_covariance == "diagonal":
                 return DiagonalGaussianNoiseFactors.from_scale(jnp.diag(chol))
@@ -296,7 +299,7 @@ class ParticleTarget:
             lambda value: jnp.concatenate((jnp.zeros((1, *value.shape[1:]), value.dtype), value)),
             transitions,
         )
-        model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
+        model = self.dynamical_model(context).observation_model
         return ParticleNoiseFactors(
             transitions,
             prepare_grouped_density(
@@ -365,7 +368,7 @@ class ParticleTarget:
         log_precision: jax.Array | None = None,
     ) -> jax.Array:
         """Score exact point laws and nonlinear predictors with prepared Gaussian noise."""
-        model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
+        model = self.dynamical_model(context).observation_model
         predictor = model.linear_predictor(self.project_state(context, state, index))
         return grouped_density_with_noise(
             model,
@@ -375,9 +378,11 @@ class ParticleTarget:
             log_precision,
         ).astype(predictor.dtype)
 
-    def _transition_distribution(self, context, previous, index):
+    def _transition_distribution(
+        self, context: ParticleContext, previous: jax.Array, index: jax.Array | int
+    ) -> dist.MultivariateNormal:
         times = context[1]
-        evolution = cast("DiscreteStateTransition", self.dynamical_model(context).state_evolution)
+        evolution = self.dynamical_model(context).state_evolution
         return evolution(
             self.project_state(context, previous, jnp.maximum(jnp.asarray(index) - 1, 0)),
             None,
@@ -398,9 +403,7 @@ class ParticleTarget:
         self, context: ParticleContext, previous: jax.Array, index: jax.Array
     ) -> tuple[jax.Array, jax.Array]:
         """Expose the declared Gaussian law for exact maps and initialization geometry."""
-        distribution = cast(
-            "dist.MultivariateNormal", self._transition_distribution(context, previous, index)
-        )
+        distribution = self._transition_distribution(context, previous, index)
         return (jnp.asarray(distribution.mean)), (jnp.asarray(distribution.covariance_matrix))
 
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):

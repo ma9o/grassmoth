@@ -16,7 +16,6 @@ from grassmoth.models.ssm.execution.observation_model import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.ssm.execution.gaussian_noise import PreparedGaussianNoise
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
     from grassmoth.models.ssm.inference.targets.particle import (
@@ -79,10 +78,7 @@ class WindowMemoryRuntime:
             memory: jax.Array,
             noise: tuple[PreparedGaussianNoise, ...],
         ) -> jax.Array:
-            model = cast(
-                "HeterogeneousObservation",
-                self.intervals.dynamical_model(context).observation_model,
-            )
+            model = self.intervals.dynamical_model(context).observation_model
             groups = compile_law_groups(model.laws, channels, interval=True)
             means, emitted = self.intervals.expected_means(context, memory, state, index)
             score = prepare_mean_density_with_noise(
@@ -113,9 +109,7 @@ def _window_memory(
     readings = jnp.where(observed & jnp.isfinite(observations), observations, jnp.nan)
 
     def noise(context: ParticleContext) -> tuple[PreparedGaussianNoise, ...]:
-        model = cast(
-            "HeterogeneousObservation", intervals.dynamical_model(context).observation_model
-        )
+        model = intervals.dynamical_model(context).observation_model
         return prepare_grouped_noise(
             compile_law_groups(model.laws, memory.channels, interval=True),
             model.measurement.manifest_cov,

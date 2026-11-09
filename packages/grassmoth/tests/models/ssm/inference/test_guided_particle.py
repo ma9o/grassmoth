@@ -1,7 +1,7 @@
 """Independent posterior references for both guided marginalized path updates."""
 
 from dataclasses import replace
-from typing import cast, override
+from typing import override
 
 import dynestyx as dsx
 import equinox as eqx
@@ -568,9 +568,7 @@ def _stock_posterior(count):
     )
 
     def declared(bound):
-        observation = cast(
-            "HeterogeneousObservation", base.dynamical_model(bound).observation_model
-        )
+        observation = base.dynamical_model(bound).observation_model
         return dsx.DynamicalModel(
             initial_condition=SupportedNormal(
                 jnp.zeros(2), jnp.diag(jnp.array([1.0, 0.0])), (0,), covariance_structure="dense"

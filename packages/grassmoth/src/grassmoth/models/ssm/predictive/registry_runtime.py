@@ -85,7 +85,7 @@ def _predictive_models(
     build_draws: Callable[[Mapping[str, jnp.ndarray]], dsx.DynamicalModel] = eqx.filter_vmap(
         lambda draw: build_dynamical_model(
             compiled_dynamical_model, draw, t0=times[0], dynamics=dynamics
-        )
+        ).as_dynestyx()
     )
     return build_draws(samples)
 
