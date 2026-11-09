@@ -1,25 +1,26 @@
+import { recordValue } from "@/lib/model-asset/action-presentation";
+
 export interface NormalizedTraceToolCall {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly input: unknown;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 export function normalizeTraceToolCall(toolCall: unknown): NormalizedTraceToolCall | null {
   const record = recordValue(toolCall);
   if (record === null) return null;
-  const toolCallId = typeof record.id === "string" && record.id.length > 0 ? record.id : null;
-  if (!toolCallId) {
+  const toolCallId = nonEmptyString(record.id);
+  if (toolCallId === null) {
     return null;
   }
 
   const nestedFunction = recordValue(record.function);
-  const toolName =
-    typeof record.name === "string" && record.name.length > 0
-      ? record.name
-      : typeof nestedFunction?.name === "string" && nestedFunction.name.length > 0
-        ? nestedFunction.name
-        : null;
-  if (!toolName) {
+  const toolName = nonEmptyString(record.name) ?? nonEmptyString(nestedFunction?.name);
+  if (toolName === null) {
     return null;
   }
 
@@ -38,8 +39,8 @@ export function normalizeTraceToolCall(toolCall: unknown): NormalizedTraceToolCa
       toolName,
       input: JSON.parse(rawArguments),
     };
-  } catch (err) {
-    console.warn("Failed to parse tool call arguments:", err);
+  } catch {
+    // Models can emit malformed argument JSON; the raw text is what was recorded.
     return {
       toolCallId,
       toolName,
@@ -47,4 +48,3 @@ export function normalizeTraceToolCall(toolCall: unknown): NormalizedTraceToolCa
     };
   }
 }
-import { recordValue } from "@/lib/model-asset/action-presentation";

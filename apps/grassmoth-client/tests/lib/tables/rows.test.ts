@@ -14,7 +14,7 @@ it("keeps sorting, grouped rows and expanded details in one displayed order", ()
     state: { sorting: [{ id: "value", desc: false }] },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    onStateChange: () => {},
+    onStateChange: () => undefined,
     renderFallbackValue: null,
   });
   const rows = table.getRowModel().rows;

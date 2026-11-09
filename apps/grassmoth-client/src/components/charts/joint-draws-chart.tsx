@@ -20,10 +20,10 @@ export function JointDrawsChart({
   flagged,
   height,
 }: {
-  x: Coordinate;
-  y: Coordinate;
-  flagged: readonly boolean[] | null;
-  height: number;
+  readonly x: Coordinate;
+  readonly y: Coordinate;
+  readonly flagged: readonly boolean[] | null;
+  readonly height: number;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -56,14 +56,14 @@ export function JointDrawsChart({
       };
       context.globalAlpha = x.values.length > 2000 ? 0.25 : 0.45;
       context.fillStyle = resolveColor(target, CHART_COLORS.posterior);
-      x.values.forEach((_, index) => {
+      for (const index of x.values.keys()) {
         if (!flagged?.[index]) plot(index);
-      });
+      }
       context.globalAlpha = 0.9;
       context.fillStyle = resolveColor(target, CHART_COLORS.flagged);
-      x.values.forEach((_, index) => {
+      for (const index of x.values.keys()) {
         if (flagged?.[index]) plot(index);
-      });
+      }
     });
   }, [size, geometry, x.values, y.values, flagged]);
 

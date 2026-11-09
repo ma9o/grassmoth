@@ -1,5 +1,6 @@
 import type {
   ConstructId,
+  ConstructSpec,
   DistributionId,
   DynamicalModelSpec,
   Expression,
@@ -11,7 +12,6 @@ import type {
 } from "@grassmoth/api-types";
 import { jStat } from "jstat";
 import { modelConstructs, presentEntries } from "@/lib/model-accessors";
-import { assertNever } from "@/lib/assert-never";
 import {
   type ExpressionInputs,
   evaluateExpression,
@@ -22,9 +22,9 @@ import {
 import {
   atomIndex,
   displayProbability,
+  type JointAtoms,
   jointAtoms,
   scalarQuantile,
-  type JointAtoms,
 } from "./law-draws";
 import { nativeObject, nativeScalar } from "./scalar-law";
 
@@ -42,7 +42,7 @@ function intervalDays(transform: ParameterTransformSpec, model: DynamicalModelSp
   const clock = model.time.step;
   if (!clock) throw new PlotUnavailable("The model clock has not been assigned.");
   const units: Readonly<Record<string, number>> = {
-    s: 1 / 86400,
+    s: 1 / 86_400,
     m: 1 / 1440,
     h: 1 / 24,
     d: 1,
@@ -55,12 +55,13 @@ function intervalDays(transform: ParameterTransformSpec, model: DynamicalModelSp
 
 /** The declared correlation transform truncates its authored support, rather than clipping draws. */
 function correlationLaw(law: NumPyroDistribution): NumPyroDistribution {
-  if (law.distribution === "Normal")
+  if (law.distribution === "Normal") {
     return {
       distribution: "TwoSidedTruncatedDistribution",
       params: { base_dist: law, low: -1, high: 1 },
     };
-  if (law.distribution === "Uniform" || law.distribution === "TwoSidedTruncatedDistribution")
+  }
+  if (law.distribution === "Uniform" || law.distribution === "TwoSidedTruncatedDistribution") {
     return {
       ...law,
       params: {
@@ -69,7 +70,106 @@ function correlationLaw(law: NumPyroDistribution): NumPyroDistribution {
         high: Math.min(1, nativeScalar(law.params.high)),
       },
     };
+  }
   return law;
+}
+
+function drawTimes(
+  trajectory: JointLawLayout | undefined,
+  initialOnly: boolean,
+): readonly number[] {
+  if (initialOnly) return [trajectory?.time_points[0] ?? 0];
+  if (trajectory === undefined || trajectory.time_points.length === 0) return [0];
+  return trajectory.time_points;
+}
+
+function parameterQuantile(
+  law: NumPyroDistribution | undefined,
+  transform: ParameterTransformSpec,
+): (probability: number) => number {
+  if (!law) throw new Error("A saved parameter law is missing.");
+  return scalarQuantile(transform.kind === "initial_state_correlation" ? correlationLaw(law) : law);
+}
+
+function initialCorrelates(construct: ConstructSpec): readonly ConstructId[] {
+  return construct.coefficients.flatMap((operand) => {
+    const other = operand.construct_ids[0];
+    return operand.role === "initial_correlation" && other !== undefined ? [other] : [];
+  });
+}
+
+/** Initial correlations define the connected block whose Gaussian input draw must stay joint. */
+function correlatedBlock(
+  constructs: readonly ConstructSpec[],
+  id: ConstructId,
+): readonly ConstructSpec[] {
+  const related = new Set<ConstructId>([id]);
+  for (const member of related) {
+    for (const construct of constructs) {
+      for (const other of initialCorrelates(construct)) {
+        if (construct.id === member || other === member) {
+          related.add(construct.id);
+          related.add(other);
+        }
+      }
+    }
+  }
+  return constructs.filter((construct) => related.has(construct.id));
+}
+
+function initialLaw(construct: ConstructSpec) {
+  if (construct.distribution) {
+    throw new PlotUnavailable(
+      "Initial and retained state laws cannot be combined into a new correlated block.",
+    );
+  }
+  const mean = construct.coefficients.find((operand) => operand.role === "initial_mean");
+  const scale = construct.coefficients.find((operand) => operand.role === "initial_scale");
+  if (!mean || !scale) {
+    throw new PlotUnavailable(`${construct.name} has no complete initial state law yet.`);
+  }
+  return { mean, scale };
+}
+
+function initialCorrelation(construct: ConstructSpec, other: ConstructSpec) {
+  return (
+    construct.coefficients.find(
+      (operand) => operand.role === "initial_correlation" && operand.construct_ids[0] === other.id,
+    ) ??
+    other.coefficients.find(
+      (operand) =>
+        operand.role === "initial_correlation" && operand.construct_ids[0] === construct.id,
+    )
+  );
+}
+
+/** A covariance entry less its products with the factor's earlier columns, in column order. */
+function remainder(entry: number, row: readonly number[], other: readonly number[]): number {
+  return row.reduce((rest, value, column) => rest - value * (other[column] ?? 0), entry);
+}
+
+/** The next row of the lower Cholesky factor, from its correlations with the rows above. */
+function choleskyRow(
+  lower: readonly (readonly number[])[],
+  correlations: readonly number[],
+): readonly number[] {
+  const current: number[] = [];
+  for (const [column, correlation] of correlations.entries()) {
+    const above = lower[column];
+    const diagonal = above?.[column];
+    if (above === undefined || diagonal === undefined) {
+      throw new Error("Missing initial covariance coordinate.");
+    }
+    current.push(remainder(correlation, current, above) / diagonal);
+  }
+  const variance = remainder(1, current, current);
+  if (variance <= 0) {
+    throw new PlotUnavailable(
+      "These initial correlation draws do not define a positive definite input law.",
+    );
+  }
+  current.push(Math.sqrt(variance));
+  return current;
 }
 
 /**
@@ -102,13 +202,14 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     if (
       law?.distribution !== "MixtureSameFamily" ||
       nativeObject(law.params.component_distribution)?.distribution !== "Delta"
-    )
+    ) {
       return [];
+    }
     const value = jointAtoms(law);
     atoms.set(id, value);
     return [value.count];
   });
-  const count = empirical.length ? Math.max(...empirical) : 256;
+  const count = empirical.length > 0 ? Math.max(...empirical) : 256;
   const trajectory =
     layoutEntries.find(([, layout]) =>
       layout.constructs.some((id) => byId.get(id)?.role === "endogenous"),
@@ -116,11 +217,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
   const initialOnly = constructs.some(
     (construct) => construct.role === "endogenous" && !construct.distribution,
   );
-  const times = initialOnly
-    ? [trajectory?.time_points[0] ?? 0]
-    : trajectory?.time_points.length
-      ? trajectory.time_points
-      : [0];
+  const times = drawTimes(trajectory, initialOnly);
   const timeOrigin = trajectory?.time_origin ?? "relative";
   const jointRows = new Map<DistributionId, readonly number[]>();
   const readJoint = (id: DistributionId, draw: number, column: number): number => {
@@ -145,8 +242,9 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     const row = rows[draw];
     if (row === undefined) throw new Error("Missing saved draw index.");
     const value = lawAtoms.values[row * lawAtoms.width + column];
-    if (column < 0 || column >= lawAtoms.width || value === undefined)
+    if (column < 0 || column >= lawAtoms.width || value === undefined) {
       throw new Error("Missing saved joint coordinate.");
+    }
     return value;
   };
   const quantiles = new Map<ParameterId, (p: number) => number>();
@@ -160,33 +258,31 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     if (layout) {
       const coordinate = parameterColumns.get(identity)?.get(id);
       if (!coordinate) throw new Error("A parameter is absent from its saved law layout.");
-      if (coordinate.width !== 1)
+      if (coordinate.width !== 1) {
         throw new PlotUnavailable(
           "This plot needs named category coordinates for a vector parameter.",
         );
+      }
       value = readJoint(identity, draw, coordinate.column);
     } else {
       let quantile = quantiles.get(id);
       if (!quantile) {
-        const law = model.distributions[identity];
-        if (!law) throw new Error("A saved parameter law is missing.");
-        quantile = scalarQuantile(
-          specification.transform.kind === "initial_state_correlation" ? correlationLaw(law) : law,
-        );
+        quantile = parameterQuantile(model.distributions[identity], specification.transform);
         quantiles.set(id, quantile);
       }
       value = quantile(displayProbability(elementKey, draw));
     }
     switch (specification.transform.kind) {
       case "identity":
-      case "initial_state_correlation":
+      case "initial_state_correlation": {
         return finiteValue(value);
-      case "dt_persistence_to_ct_decay":
+      }
+      case "dt_persistence_to_ct_decay": {
         return finiteValue(-Math.log(value) / intervalDays(specification.transform, model));
-      case "dt_effect_to_ct_rate":
+      }
+      case "dt_effect_to_ct_rate": {
         return finiteValue(value / intervalDays(specification.transform, model));
-      default:
-        return assertNever(specification.transform);
+      }
     }
   };
 
@@ -204,71 +300,29 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
   const initial = (id: ConstructId, draw: number): number => {
     const cached = initialCache.get(`${id}:${draw}`);
     if (cached !== undefined) return cached;
-    const related = new Set<ConstructId>([id]);
-    // Initial correlations define the connected block whose Gaussian input draw must stay joint.
-    for (const member of related) {
-      for (const construct of constructs)
-        for (const operand of construct.coefficients) {
-          if (operand.role !== "initial_correlation") continue;
-          const other = operand.construct_ids[0];
-          if (other !== undefined && (construct.id === member || other === member)) {
-            related.add(construct.id);
-            related.add(other);
-          }
-        }
-    }
-    const members = constructs.filter((construct) => related.has(construct.id));
-    const lower: number[][] = [];
-    const values: Array<readonly [string, number]> = [];
+    const members = correlatedBlock(constructs, id);
+    const lower: (readonly number[])[] = [];
+    const values: (readonly [string, number])[] = [];
     const noise = members.map((construct) =>
       jStat.normal.inv(displayProbability(`initial:${construct.id}`, draw), 0, 1),
     );
-    members.forEach((construct, row) => {
-      if (construct.distribution)
-        throw new PlotUnavailable(
-          "Initial and retained state laws cannot be combined into a new correlated block.",
-        );
-      const mean = construct.coefficients.find((operand) => operand.role === "initial_mean");
-      const scale = construct.coefficients.find((operand) => operand.role === "initial_scale");
-      if (!mean || !scale)
-        throw new PlotUnavailable(`${construct.name} has no complete initial state law yet.`);
-      const current: number[] = [];
-      for (let column = 0; column <= row; column++) {
-        const other = members[column];
-        if (!other) throw new Error("Missing initial state coordinate.");
-        const correlation =
-          construct.coefficients.find(
-            (operand) =>
-              operand.role === "initial_correlation" && operand.construct_ids[0] === other.id,
-          ) ??
-          other.coefficients.find(
-            (operand) =>
-              operand.role === "initial_correlation" && operand.construct_ids[0] === construct.id,
-          );
-        let covariance = row === column ? 1 : correlation ? coefficient(correlation, draw) : 0;
-        for (let k = 0; k < column; k++)
-          covariance -=
-            (current[k] ?? 0) * (row === column ? (current[k] ?? 0) : (lower[column]?.[k] ?? 0));
-        if (row === column) {
-          if (covariance <= 0)
-            throw new PlotUnavailable(
-              "These initial correlation draws do not define a positive definite input law.",
-            );
-          current.push(Math.sqrt(covariance));
-        } else {
-          const diagonal = lower[column]?.[column];
-          if (diagonal === undefined) throw new Error("Missing initial covariance coordinate.");
-          current.push(covariance / diagonal);
-        }
-      }
+    for (const [row, construct] of members.entries()) {
+      const { mean, scale } = initialLaw(construct);
+      const current = choleskyRow(
+        lower,
+        members.slice(0, row).map((other) => {
+          const correlation = initialCorrelation(construct, other);
+          return correlation ? coefficient(correlation, draw) : 0;
+        }),
+      );
       lower.push(current);
       const normal = current.reduce((sum, value, column) => sum + value * (noise[column] ?? 0), 0);
       values.push([
         `${construct.id}:${draw}`,
         finiteValue(coefficient(mean, draw) + coefficient(scale, draw) * normal),
       ]);
-    });
-    values.forEach(([key, value]) => initialCache.set(key, value));
+    }
+    for (const [key, value] of values) initialCache.set(key, value);
     const value = initialCache.get(`${id}:${draw}`);
     if (value === undefined) throw new Error("Missing initial state draw.");
     return value;
@@ -279,10 +333,11 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     const construct = byId.get(id);
     if (!construct) throw new Error("An expression references a missing construct.");
     if (!construct.distribution) {
-      if (time !== times[0])
+      if (time !== times[0]) {
         throw new PlotUnavailable(
           "Generate trajectories with simulate to view this state beyond its initial law.",
         );
+      }
       return initial(id, draw);
     }
     const key = `${id}:${time}`;
@@ -293,7 +348,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     const localTime =
       time +
       (timeOrigin !== "relative" && layout.time_origin !== "relative"
-        ? (Date.parse(timeOrigin) - Date.parse(layout.time_origin)) / 86400000
+        ? (Date.parse(timeOrigin) - Date.parse(layout.time_origin)) / 86_400_000
         : 0);
     const index =
       construct.role === "exogenous"
@@ -301,7 +356,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
         : layout.time_points.indexOf(localTime);
     if (index < 0) throw new PlotUnavailable("No saved state at this time.");
     const member = layout.constructs.indexOf(id);
-    if (member < 0) throw new Error("A construct is absent from its trajectory layout.");
+    if (member === -1) throw new Error("A construct is absent from its trajectory layout.");
     const offset = layout.parameters.reduce((sum, [, elements]) => sum + elements.length, 0);
     const column = offset + member * layout.time_points.length + index;
     stateColumns.set(key, column);
@@ -318,16 +373,19 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
           role !== "cutpoint_gaps" &&
           role !== "category_intercepts" &&
           role !== "category_slopes"
-        )
+        ) {
           return parameter(id, draw);
-        if (!indicator)
+        }
+        if (!indicator) {
           throw new PlotUnavailable(
             "Vector coefficients require their indicator's category coordinates.",
           );
-        if (role === "category_slopes")
+        }
+        if (role === "category_slopes") {
           throw new PlotUnavailable(
             "Category slope plots require the saved anchoring coordinates.",
           );
+        }
         const { measurement } = indicator.observation;
         const codebook = role === "cutpoint_gaps" ? "ordinal" : "categorical";
         const levels =

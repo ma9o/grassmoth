@@ -1,13 +1,13 @@
-import { modelComparison } from "@/lib/__fixtures__/action-results";
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import type { TimelineRevision } from "@grassmoth/api-types";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { ModelComparisonDetails } from "@/components/model/scopes/edit-details";
+import { modelComparison } from "@/lib/__fixtures__/action-results";
 import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
 import { indexModel } from "@/lib/model-asset/entities";
-import type { TimelineRevision } from "@grassmoth/api-types";
 import type { ScopeContext } from "@/lib/model-asset/scope";
-import { ModelComparisonDetails } from "@/components/model/scopes/edit-details";
 import { humanize } from "@/lib/model-asset/selection";
 
 const hooks = vi.hoisted(() => ({ snapshot: vi.fn() }));

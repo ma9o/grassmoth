@@ -2,10 +2,10 @@ import type { CSSProperties } from "react";
 import { DAG_COLORS } from "@/lib/dag/palette";
 
 interface DagZoomControlsProps {
-  zoom: number;
-  onZoomChange: (zoom: number) => void;
+  readonly zoom: number;
+  readonly onZoomChange: (zoom: number) => void;
   /** Return to the zoom that fits the whole graph in its pane. */
-  onFit: () => void;
+  readonly onFit: () => void;
 }
 
 export function DagZoomControls({ zoom, onZoomChange, onFit }: DagZoomControlsProps) {

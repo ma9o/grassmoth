@@ -1,13 +1,13 @@
 import type { Row } from "@tanstack/react-table";
 
 export type FlatItem<TData> =
-  | { kind: "group-header"; groupKey: string; rows: TData[] }
-  | { kind: "row"; row: Row<TData> }
-  | { kind: "expanded-row"; row: Row<TData> };
+  | { readonly kind: "group-header"; readonly groupKey: string; readonly rows: readonly TData[] }
+  | { readonly kind: "row"; readonly row: Row<TData> }
+  | { readonly kind: "expanded-row"; readonly row: Row<TData> };
 
 /** Flatten the displayed order once for rendering, expansion and keyboard navigation. */
 export function tableItems<TData>(
-  rows: Row<TData>[],
+  rows: readonly Row<TData>[],
   groupBy: ((row: TData) => string) | undefined,
   hasGroupHeaders: boolean,
   isRowExpanded: ((row: TData) => boolean) | undefined,
@@ -22,7 +22,7 @@ export function tableItems<TData>(
     }
     return items;
   }
-  const map = new Map<string, typeof rows>();
+  const map = new Map<string, Row<TData>[]>();
   for (const row of rows) {
     const key = groupBy(row.original);
     const list = map.get(key) ?? [];

@@ -2,7 +2,13 @@ import type { ReasoningSpec } from "@grassmoth/api-types";
 import { Hint, Prose } from "../scope-primitives";
 
 /** Render the citation markers already resolved by the reasoning owner. */
-export function ReasoningText({ value, maxLength }: { value: ReasoningSpec; maxLength?: number }) {
+export function ReasoningText({
+  value,
+  maxLength,
+}: {
+  readonly value: ReasoningSpec;
+  readonly maxLength?: number;
+}) {
   const text =
     maxLength !== undefined && value.text.length > maxLength
       ? `${value.text.slice(0, maxLength - 1)}…`
@@ -12,6 +18,7 @@ export function ReasoningText({ value, maxLength }: { value: ReasoningSpec; maxL
       part
     ) : (
       <a
+        // eslint-disable-next-line react/no-array-index-key -- citations are positional in the fixed text, and a marker can repeat
         key={index}
         href={value.reference_urls[Number(part.slice(1, -1)) - 1]}
         target="_blank"
@@ -25,7 +32,13 @@ export function ReasoningText({ value, maxLength }: { value: ReasoningSpec; maxL
 }
 
 /** The scientific reasoning recorded on an authored entity. */
-export function Reasoning({ value, muted = false }: { value: ReasoningSpec; muted?: boolean }) {
+export function Reasoning({
+  value,
+  muted = false,
+}: {
+  readonly value: ReasoningSpec;
+  readonly muted?: boolean;
+}) {
   const Text = muted ? Hint : Prose;
   return (
     <Text>

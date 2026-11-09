@@ -1,10 +1,22 @@
+import type {
+  CausalEdgeSpec,
+  ConstructId,
+  ConstructSpec,
+  DynamicalModelSpec,
+  EdgeId,
+  IndicatorId,
+  IndicatorSpec,
+  ParameterId,
+  ParameterSpec,
+} from "@grassmoth/api-types";
 import { modelConstructs, modelEdges, modelParameters } from "@/lib/model-accessors";
-import type { ConstructSpec, DynamicalModelSpec, ParameterId } from "@grassmoth/api-types";
-import { humanize, type EntitySelection } from "./selection";
 import { ownLawUses } from "./laws";
+import { type EntitySelection, humanize } from "./selection";
 
 /** Index the authored graph; these maps are derived, never a second model definition. */
-export function indexModel(dynamicalModelSpec: DynamicalModelSpec | null | undefined) {
+export function indexModel(
+  dynamicalModelSpec: DynamicalModelSpec | null | undefined,
+): ModelEntities {
   const constructs = modelConstructs(dynamicalModelSpec);
   const edges = modelEdges(dynamicalModelSpec);
   const indicators = constructs.flatMap((construct) => construct.indicators);
@@ -26,15 +38,32 @@ export function indexModel(dynamicalModelSpec: DynamicalModelSpec | null | undef
   };
 }
 
-export type ModelEntities = ReturnType<typeof indexModel>;
+export interface ModelEntities {
+  readonly constructs: readonly ConstructSpec[];
+  readonly edges: readonly CausalEdgeSpec[];
+  readonly indicators: readonly IndicatorSpec[];
+  readonly parameters: readonly ParameterSpec[];
+  readonly constructById: ReadonlyMap<ConstructId, ConstructSpec>;
+  readonly edgeById: ReadonlyMap<EdgeId, CausalEdgeSpec>;
+  readonly indicatorOwnerById: ReadonlyMap<IndicatorId, ConstructSpec>;
+  readonly indicatorById: ReadonlyMap<IndicatorId, IndicatorSpec>;
+  readonly parameterById: ReadonlyMap<ParameterId, ParameterSpec>;
+}
 
 export interface EntityLink {
-  selection: EntitySelection;
-  label: string;
+  readonly selection: EntitySelection;
+  readonly label: string;
 }
 
 export interface EntityPresentation extends EntityLink {
-  relationships: EntityLink[];
+  readonly relationships: readonly EntityLink[];
+}
+
+function constructLink(construct: ConstructSpec): EntityLink {
+  return {
+    selection: { kind: "construct", id: construct.id },
+    label: humanize(construct.name),
+  };
 }
 
 /** Resolve ownership, labels and fields regardless of where endpoints serialize. */
@@ -42,10 +71,6 @@ export function resolveEntity(
   entities: ModelEntities,
   selection: EntitySelection,
 ): EntityPresentation | undefined {
-  const constructLink = (construct: ConstructSpec): EntityLink => ({
-    selection: { kind: "construct", id: construct.id },
-    label: humanize(construct.name),
-  });
   switch (selection.kind) {
     case "edge": {
       const edge = entities.edgeById.get(selection.id);

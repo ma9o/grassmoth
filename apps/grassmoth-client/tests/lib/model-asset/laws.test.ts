@@ -1,5 +1,5 @@
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { describe, expect, it } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { outcome as construct } from "@/lib/__fixtures__/model";
 import {
   authoredSnapshot as authored,

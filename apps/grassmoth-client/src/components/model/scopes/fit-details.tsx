@@ -8,15 +8,16 @@ import { FitCalibration } from "./fit-calibration";
 import { PosteriorPairs } from "./law-sections";
 
 /** Model-wide fitted evidence; individual laws own their chains. */
-export function FitDetails({ context }: { context: ScopeContext }) {
+export function FitDetails({ context }: { readonly context: ScopeContext }) {
   const fit = context.modelSnapshot.fit;
   const detail = useInferenceReport(context.modelSnapshot);
-  if (!fit)
+  if (!fit) {
     return (
       <Section title="Fit">
         <Hint>No inference report recorded at this version.</Hint>
       </Section>
     );
+  }
   const report = fit;
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
@@ -45,7 +46,10 @@ export function FitDetails({ context }: { context: ScopeContext }) {
               ["Divergences", String(nuts.divergences)],
               ["Mean acceptance", formatSignificant(nuts.mean_accept_prob)],
               ["Mean leapfrog steps", formatSignificant(nuts.mean_num_steps)],
-              ["Final step sizes", nuts.final_step_size.map(formatSignificant).join(", ")],
+              [
+                "Final step sizes",
+                nuts.final_step_size.map((size) => formatSignificant(size)).join(", "),
+              ],
               [
                 "Tree depth limit reached",
                 nuts.max_tree_depth_fraction === null
@@ -74,7 +78,7 @@ export function FitDetails({ context }: { context: ScopeContext }) {
           />
         </Section>
       )}
-      {(gibbs || plot?.final_latent_delta) && (
+      {(gibbs ?? plot?.final_latent_delta) && (
         <Section title="Latent mixing" wide>
           <Hint>
             Movement telemetry complements the latent R-hat and ESS reported for each construct.

@@ -1,15 +1,15 @@
-import { modelFixture } from "@/lib/__fixtures__/model";
 import { Buffer } from "node:buffer";
-import { ExtData, encode } from "@msgpack/msgpack";
 import {
   createModelClient,
   decodeModelMessage,
   readNumericalArray,
   type TimelineRevision,
 } from "@grassmoth/api-types";
+import { ExtData, encode } from "@msgpack/msgpack";
 import { dump } from "npyjs";
 import { beforeEach, expect, it, vi } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { modelFixture } from "@/lib/__fixtures__/model";
 import { readActionPoll } from "@/lib/api/endpoints";
 
 const { fetcher } = vi.hoisted(() => ({
@@ -102,7 +102,7 @@ it("reads retained traces from a failed call's messages", async () => {
 
 it("decodes binary NPY buffers once with shape, non-finite values and exact 64-bit integers", async () => {
   const floats = {
-    npy: new Uint8Array(dump(new Float64Array([1, NaN, Infinity, -Infinity]), [2, 2])),
+    npy: new Uint8Array(dump(new Float64Array([1, Number.NaN, Infinity, -Infinity]), [2, 2])),
   };
   const integers = {
     npy: new Uint8Array(dump(new BigUint64Array([BigInt("18446744073709551615")]), [1])),
@@ -137,8 +137,9 @@ it("decodes binary NPY buffers once with shape, non-finite values and exact 64-b
   );
   const saved = await readActionPoll("user-1", "model_diff", fixtureValue(comparison.call_id));
   expect(saved.body).toEqual(body);
-  if (saved.status !== "success" || saved.action !== "model_diff")
+  if (saved.status !== "success" || saved.action !== "model_diff") {
     throw new Error("Expected model comparison");
+  }
   const laws = fixtureValue(saved.body.changes.distributions);
   const law = fixtureValue(laws["distribution:floats"]);
   const integerLaw = fixtureValue(laws["distribution:integers"]);
@@ -148,8 +149,9 @@ it("decodes binary NPY buffers once with shape, non-finite values and exact 64-b
       typeof value !== "object" ||
       !("npy" in value) ||
       !(value.npy instanceof Uint8Array)
-    )
+    ) {
       throw new Error("Expected owned numerical value");
+    }
     return { npy: value.npy };
   }
   const array = buffer(law.params?.loc);
@@ -158,13 +160,13 @@ it("decodes binary NPY buffers once with shape, non-finite values and exact 64-b
   expect(array.npy).toBeInstanceOf(Uint8Array);
   const decoded = readNumericalArray(array);
   expect(decoded.shape).toEqual([2, 2]);
-  expect(Array.from(decoded.values)).toEqual([1, NaN, Infinity, -Infinity]);
+  expect(Array.from(decoded.values)).toEqual([1, Number.NaN, Infinity, -Infinity]);
   expect(readNumericalArray(array)).toBe(decoded);
   expect(readNumericalArray(shared)).toBe(decoded);
   const nodeBuffer = Buffer.concat([Buffer.from("padding"), Buffer.from(floats.npy)]);
   expect(Array.from(readNumericalArray({ npy: nodeBuffer.subarray(7) }).values)).toEqual([
     1,
-    NaN,
+    Number.NaN,
     Infinity,
     -Infinity,
   ]);
@@ -243,13 +245,10 @@ it("keeps JSON requests, timeline responses and HTTP errors alongside binary act
   expect(await sent.json()).toEqual(request);
   const timeline = { attempts: [], dependencies: [], running: [] };
   fetcher.mockResolvedValueOnce(Response.json(timeline));
-  expect(
-    (
-      await client.GET("/api/studies/{workspace_id}/timeline", {
-        params: { path: { workspace_id: "user-1" } },
-      })
-    ).data,
-  ).toEqual(timeline);
+  const loaded = await client.GET("/api/studies/{workspace_id}/timeline", {
+    params: { path: { workspace_id: "user-1" } },
+  });
+  expect(loaded.data).toEqual(timeline);
   fetcher.mockResolvedValueOnce(Response.json({ detail: "Unavailable" }, { status: 422 }));
   const error = await client.GET("/api/studies/{workspace_id}/timeline", {
     params: { path: { workspace_id: "user-1" } },

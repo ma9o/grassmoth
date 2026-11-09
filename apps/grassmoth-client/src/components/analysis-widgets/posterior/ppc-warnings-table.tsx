@@ -2,16 +2,16 @@
 
 import type {
   ObservationSpec,
+  PosteriorPredictiveChecks,
   PPCOverlay,
   PPCTestStat,
-  PosteriorPredictiveChecks,
 } from "@grassmoth/api-types";
 import { type ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { DrawsChart } from "@/components/charts/draws-chart";
 import { overlayChart } from "@/components/charts/series-adapters";
 import { StatStrip } from "@/components/charts/stat-strip";
-import { HeaderWithTooltip, InfoTable } from "@/components/ui/info-table";
 import { StatusIcon } from "@/components/model/scope-primitives";
+import { HeaderWithTooltip, InfoTable } from "@/components/ui/info-table";
 import { formatNumber } from "@/lib/utils/format";
 
 // ── Row type (one per variable) ──────────────────────────
@@ -21,41 +21,48 @@ type CheckType = "calibration" | "autocorrelation" | "variance";
 type StatName = PPCTestStat["stat_name"];
 
 interface PPCVariableRow {
-  variable: string;
-  checks: Partial<Record<string, PPCWarning>>;
-  testStats: Partial<Record<StatName, PPCTestStat>>;
-  overlay?: PPCOverlay;
-}
-
-function getOrCreate(map: Map<string, PPCVariableRow>, variable: string): PPCVariableRow {
-  let row = map.get(variable);
-  if (!row) {
-    row = { variable, checks: {}, testStats: {} };
-    map.set(variable, row);
-  }
-  return row;
+  readonly variable: string;
+  readonly checks: Readonly<Partial<Record<string, PPCWarning>>>;
+  readonly testStats: Readonly<Partial<Record<StatName, PPCTestStat>>>;
+  readonly overlay?: PPCOverlay;
 }
 
 function buildRows(
   warnings: readonly PPCWarning[],
   testStats: readonly PPCTestStat[],
   overlays: readonly PPCOverlay[],
-  indicators: Pick<ObservationSpec<string | null>, "id" | "name">[],
+  indicators: readonly Pick<ObservationSpec<string | null>, "id" | "name">[],
 ): PPCVariableRow[] {
-  const map = new Map<string, PPCVariableRow>();
+  const map = new Map<
+    string,
+    {
+      variable: string;
+      checks: Partial<Record<string, PPCWarning>>;
+      testStats: Partial<Record<StatName, PPCTestStat>>;
+      overlay?: PPCOverlay;
+    }
+  >();
+  const getOrCreate = (variable: string) => {
+    let row = map.get(variable);
+    if (!row) {
+      row = { variable, checks: {}, testStats: {} };
+      map.set(variable, row);
+    }
+    return row;
+  };
   for (const w of warnings) {
-    getOrCreate(map, w.subject.target.id).checks[w.code] = w;
+    getOrCreate(w.subject.target.id).checks[w.code] = w;
   }
   for (const ts of testStats) {
-    getOrCreate(map, ts.indicator_id).testStats[ts.stat_name] = ts;
+    getOrCreate(ts.indicator_id).testStats[ts.stat_name] = ts;
   }
   for (const ov of overlays) {
-    getOrCreate(map, ov.indicator_id).overlay = ov;
+    getOrCreate(ov.indicator_id).overlay = ov;
   }
   const definitions = new Map<string, Pick<ObservationSpec<string | null>, "id" | "name">>(
     indicators.map((indicator) => [indicator.id, indicator]),
   );
-  return Array.from(map.values()).map((row) => ({
+  return [...map.values()].map((row) => ({
     ...row,
     variable: definitions.get(row.variable)?.name ?? row.variable,
   }));
@@ -63,7 +70,13 @@ function buildRows(
 
 // ── Overlay: observations over saved predictive replicates ─
 
-function OverlayCell({ overlay, variable }: { overlay?: PPCOverlay; variable: string }) {
+function OverlayCell({
+  overlay,
+  variable,
+}: {
+  readonly overlay?: PPCOverlay;
+  readonly variable: string;
+}) {
   if (!overlay) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <div className="w-60">
@@ -76,7 +89,7 @@ function OverlayCell({ overlay, variable }: { overlay?: PPCOverlay; variable: st
   );
 }
 
-function StatCell({ stat }: { stat?: PPCTestStat }) {
+function StatCell({ stat }: { readonly stat?: PPCTestStat }) {
   if (!stat) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <div className="w-28">
@@ -107,7 +120,7 @@ const STAT_TOOLTIPS: Record<StatName, string> = {
   max: "Compares observed maximum to distribution of replicated maxima.",
 };
 
-const columns: ColumnDef<PPCVariableRow, unknown>[] = [
+const columns: ColumnDef<PPCVariableRow>[] = [
   col.display({
     id: "variable",
     header: "Variable",
@@ -174,10 +187,10 @@ export function PPCWarningsTable({
   overlays,
   indicators,
 }: {
-  warnings: readonly PPCWarning[];
-  testStats: readonly PPCTestStat[];
-  overlays: readonly PPCOverlay[];
-  indicators: Pick<ObservationSpec<string | null>, "id" | "name">[];
+  readonly warnings: readonly PPCWarning[];
+  readonly testStats: readonly PPCTestStat[];
+  readonly overlays: readonly PPCOverlay[];
+  readonly indicators: readonly Pick<ObservationSpec<string | null>, "id" | "name">[];
 }) {
   const rows = buildRows(warnings, testStats, overlays, indicators);
   if (rows.length === 0) return null;

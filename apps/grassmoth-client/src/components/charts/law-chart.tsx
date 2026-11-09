@@ -1,14 +1,15 @@
 "use client";
 
+import type { PosteriorMarginal } from "@grassmoth/api-types";
 import type { ReactNode } from "react";
 import { type LawCurve, lawLabel } from "@/lib/model-asset/laws";
 import { humanize } from "@/lib/model-asset/selection";
 import { formatPosteriorIntervalLabel, formatSignificant } from "@/lib/utils/format";
-import { CHART_COLORS, cssColor } from "./chart-tokens";
+import { CHART_COLORS, type ChartColor, cssColor } from "./chart-tokens";
 import { DistributionChart } from "./distribution-chart";
 import { lawDomain, lawLayers } from "./law-layers";
 
-function Swatch({ color, dashed = false }: { color: string; dashed?: boolean }) {
+function Swatch({ color, dashed = false }: { readonly color: string; readonly dashed?: boolean }) {
   return (
     <svg width={14} height={6} aria-hidden="true">
       <line
@@ -24,8 +25,43 @@ function Swatch({ color, dashed = false }: { color: string; dashed?: boolean }) 
   );
 }
 
+/** The posterior mean and interval, or the element count when the parameter has several. */
+function PosteriorSummary({
+  posterior,
+  count,
+  tone,
+}: {
+  readonly posterior: PosteriorMarginal | undefined;
+  readonly count: number;
+  readonly tone: ChartColor;
+}) {
+  if (posterior) {
+    return (
+      <span
+        className="flex-none text-right font-mono text-[10px]"
+        title={formatPosteriorIntervalLabel(posterior)}
+      >
+        <span style={{ color: cssColor(tone) }}>{formatSignificant(posterior.mean)}</span>{" "}
+        <span className="text-muted-foreground">
+          [{formatSignificant(posterior.lower)}, {formatSignificant(posterior.upper)}]
+        </span>
+      </span>
+    );
+  }
+  if (count > 1) {
+    return <span className="flex-none text-[10px] text-muted-foreground">{count} elements</span>;
+  }
+  return null;
+}
+
 /** A law's curves on one axis, with the recorded posterior interval after a fit. */
-export function LawChart({ curve, caption }: { curve: LawCurve; caption?: ReactNode }) {
+export function LawChart({
+  curve,
+  caption,
+}: {
+  readonly curve: LawCurve;
+  readonly caption?: ReactNode;
+}) {
   const posterior = curve.posteriors.length === 1 ? curve.posteriors[0] : undefined;
   const tone = CHART_COLORS.posterior;
   return (
@@ -41,24 +77,10 @@ export function LawChart({ curve, caption }: { curve: LawCurve; caption?: ReactN
             </>
           )}
         </span>
-        {posterior ? (
-          <span
-            className="flex-none text-right font-mono text-[10px]"
-            title={formatPosteriorIntervalLabel(posterior)}
-          >
-            <span style={{ color: cssColor(tone) }}>{formatSignificant(posterior.mean)}</span>{" "}
-            <span className="text-muted-foreground">
-              [{formatSignificant(posterior.lower)}, {formatSignificant(posterior.upper)}]
-            </span>
-          </span>
-        ) : curve.posteriors.length > 1 ? (
-          <span className="flex-none text-[10px] text-muted-foreground">
-            {curve.posteriors.length} elements
-          </span>
-        ) : null}
+        <PosteriorSummary posterior={posterior} count={curve.posteriors.length} tone={tone} />
       </figcaption>
       <DistributionChart
-        label={`${lawLabel(curve)}: ${curve.posteriors.length ? "prior and posterior densities" : "prior density"}`}
+        label={`${lawLabel(curve)}: ${curve.posteriors.length > 0 ? "prior and posterior densities" : "prior density"}`}
         height={96}
         densities={lawLayers(curve)}
         frame={lawDomain(curve)}

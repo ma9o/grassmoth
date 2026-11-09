@@ -1,13 +1,12 @@
 import type {
+  CausalEdgeSpec,
   CoefficientRole,
   ConstructSpec,
-  CausalEdgeSpec,
-  ParameterSpec,
-  Expression,
   DynamicalModelSpec,
+  Expression,
   ParameterId,
+  ParameterSpec,
 } from "@grassmoth/api-types";
-import { assertNever } from "./assert-never";
 
 /** Enumerate present entries without losing the trusted API's named key type. */
 export function presentEntries<Key extends string, Value>(
@@ -15,7 +14,7 @@ export function presentEntries<Key extends string, Value>(
 ): [Key, Value][] {
   return Object.entries<Value | undefined>(record).flatMap(([key, value]) => {
     if (value === undefined) return [];
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Object.entries erases the key type of this trusted API-owned sparse map.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion, @typescript-eslint/consistent-type-assertions -- Object.entries erases the key type of this trusted API-owned sparse map.
     return [[key as Key, value] satisfies [Key, Value]];
   });
 }
@@ -27,10 +26,13 @@ export function modelConstructs(
   return presentEntries(dynamicalModelSpec?.constructs ?? {}).map(([id, value]) => ({
     ...value,
     id,
-    dynamics: presentEntries(value.dynamics).map(([id, mechanism]) => ({ ...mechanism, id })),
-    indicators: presentEntries(value.indicators).map(([id, indicator]) => ({
+    dynamics: presentEntries(value.dynamics).map(([mechanismId, mechanism]) => ({
+      ...mechanism,
+      id: mechanismId,
+    })),
+    indicators: presentEntries(value.indicators).map(([indicatorId, indicator]) => ({
       ...indicator,
-      observation: { ...indicator.observation, id },
+      observation: { ...indicator.observation, id: indicatorId },
     })),
   }));
 }
@@ -44,7 +46,10 @@ export function modelEdges(
     id,
     cause: { kind: "construct", id: edge.cause },
     effect: { kind: "construct", id: edge.effect },
-    mechanisms: presentEntries(edge.mechanisms).map(([id, mechanism]) => ({ ...mechanism, id })),
+    mechanisms: presentEntries(edge.mechanisms).map(([mechanismId, mechanism]) => ({
+      ...mechanism,
+      id: mechanismId,
+    })),
   }));
 }
 
@@ -60,8 +65,8 @@ export function modelParameters(
 
 /** A coefficient operand that names a parameter, with the quantity its authored role declares. */
 export interface CoefficientUse {
-  role: CoefficientRole;
-  parameterId: ParameterId;
+  readonly role: CoefficientRole;
+  readonly parameterId: ParameterId;
 }
 
 /** Follow serialized coefficient references in declaration order, keeping each parameter's first role. */
@@ -69,24 +74,27 @@ export function coefficientUses(expressions: readonly Expression[]): Coefficient
   const uses = new Map<ParameterId, CoefficientUse>();
   const visit = (operand: Expression): void => {
     switch (operand.kind) {
-      case "coefficient":
-        if (typeof operand.value === "string" && !uses.has(operand.value))
+      case "coefficient": {
+        if (typeof operand.value === "string" && !uses.has(operand.value)) {
           uses.set(operand.value, { role: operand.role, parameterId: operand.value });
+        }
         return;
-      case "binary":
+      }
+      case "binary": {
         visit(operand.left);
         visit(operand.right);
         return;
-      case "call":
-        operand.arguments.forEach(visit);
+      }
+      case "call": {
+        for (const argument of operand.arguments) visit(argument);
         return;
+      }
       case "literal":
-      case "state":
+      case "state": {
         return;
-      default:
-        assertNever(operand);
+      }
     }
   };
-  expressions.forEach(visit);
+  for (const expression of expressions) visit(expression);
   return [...uses.values()];
 }

@@ -66,9 +66,9 @@ describe("authored equation display", () => {
     });
     for (const law of Object.values(laws)) {
       const latex = equation(law, renamed);
-      expect(latex).toContain(`\\operatorname{${law.distribution}}`);
+      expect(latex).toContain(String.raw`\operatorname{${law.distribution}}`);
       expect(latex).toContain("0.25");
-      expect(latex).toContain("Renamed \\& safe \\{label\\}");
+      expect(latex).toContain(String.raw`Renamed \& safe \{label\}`);
       expect(() => renderToString(latex, { throwOnError: true })).not.toThrow();
     }
     expect(observationEquation(indicator, entities)).toBeNull();
@@ -105,11 +105,14 @@ describe("authored equation display", () => {
         (name): Expression => ({ kind: "call", function: name, arguments: [crossLoading] }),
       ),
     ];
-    for (const value of expressions)
+    for (const value of expressions) {
       expect(() =>
         renderToString(equation({ distribution: "Delta", v: value }), { throwOnError: true }),
       ).not.toThrow();
-    expect(equation({ distribution: "Delta", v: unfinished })).toContain("\\underbrace{?}");
+    }
+    expect(equation({ distribution: "Delta", v: unfinished })).toContain(
+      String.raw`\underbrace{?}`,
+    );
     for (const transform of [
       { kind: "identity" },
       { kind: "initial_state_correlation" },
@@ -130,8 +133,10 @@ describe("authored equation display", () => {
         },
         indexed,
       );
-      expect(latex.includes("\\Delta")).toBe(transform.kind.startsWith("dt_"));
-      expect(latex.includes("\\log")).toBe(transform.kind === "dt_persistence_to_ct_decay");
+      expect(latex.includes(String.raw`\Delta`)).toBe(transform.kind.startsWith("dt_"));
+      expect(latex.includes(String.raw`\log`)).toBe(
+        transform.kind === "dt_persistence_to_ct_decay",
+      );
       expect(() => renderToString(latex, { throwOnError: true })).not.toThrow();
     }
   });
@@ -149,7 +154,7 @@ describe("authored equation display", () => {
     };
     const drift = fixtureValue(constructEquation(construct, entities));
     expect(drift.title).toBe("Authored drift");
-    expect(drift.latex).toContain("\\partial");
+    expect(drift.latex).toContain(String.raw`\partial`);
     expect(() => renderToString(drift.latex, { throwOnError: true })).not.toThrow();
     const links = fixtureValue(
       constructEquation(
@@ -158,7 +163,7 @@ describe("authored equation display", () => {
       ),
     );
     expect(links.title).toBe("Authored connections");
-    expect(links.latex).toContain("\\to");
+    expect(links.latex).toContain(String.raw`\to`);
     expect(links.latex).toContain("outcome");
     expect(() => renderToString(links.latex, { throwOnError: true })).not.toThrow();
   });

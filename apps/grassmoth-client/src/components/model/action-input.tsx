@@ -66,7 +66,7 @@ function entriesOf(value: InputList | InputRecord): readonly InputEntry[] {
 }
 
 /** A long value kept to one line; the control at its end shows the rest in place. */
-function OneLine({ children, breaks }: { children: ReactNode; breaks: boolean }) {
+function OneLine({ children, breaks }: { readonly children: ReactNode; readonly breaks: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [clipped, setClipped] = useState(breaks);
   const text = useRef<HTMLSpanElement>(null);
@@ -105,10 +105,11 @@ function OneLine({ children, breaks }: { children: ReactNode; breaks: boolean })
 }
 
 /** A value with no entries to open, written as the API's JSON form would read. */
-function LeafValue({ value }: { value: InputValue }) {
+function LeafValue({ value }: { readonly value: InputValue }) {
   if (value === null) return <span className="text-muted-foreground">null</span>;
-  if (typeof value === "string")
+  if (typeof value === "string") {
     return value === "" ? '""' : <OneLine breaks={value.includes("\n")}>{value}</OneLine>;
+  }
   if (typeof value !== "object") return String(value);
   if (isList(value)) return <span className="text-muted-foreground">[]</span>;
   if (isNumericalArray(value)) {
@@ -126,7 +127,13 @@ function LeafValue({ value }: { value: InputValue }) {
 }
 
 /** The timeline node that published an input, drawn as the timeline draws it. */
-function SourceChip({ call, sources }: { call: TimelineRevision; sources: InputSources }) {
+function SourceChip({
+  call,
+  sources,
+}: {
+  readonly call: TimelineRevision;
+  readonly sources: InputSources;
+}) {
   const style = ACTION_STYLE[call.record.attempt.action];
   return (
     <Link
@@ -150,8 +157,8 @@ function SourceChips({
   calls,
   sources,
 }: {
-  calls: readonly TimelineRevision[];
-  sources: InputSources;
+  readonly calls: readonly TimelineRevision[];
+  readonly sources: InputSources;
 }) {
   return (
     <span className="inline-flex flex-wrap gap-1 align-middle">
@@ -174,12 +181,12 @@ function InputGroup({
   sources,
   depth,
 }: {
-  name: string;
-  value: InputList | InputRecord;
-  entries: readonly InputEntry[];
-  calls: readonly TimelineRevision[];
-  sources: InputSources;
-  depth: number;
+  readonly name: string;
+  readonly value: InputList | InputRecord;
+  readonly entries: readonly InputEntry[];
+  readonly calls: readonly TimelineRevision[];
+  readonly sources: InputSources;
+  readonly depth: number;
 }) {
   const [open, setOpen] = useState(
     () => depth > 0 && calls.length === 0 && JSON.stringify(value).length <= OPEN_UP_TO_CHARACTERS,
@@ -217,14 +224,14 @@ function InputField({
   sources,
   depth,
 }: {
-  name: string;
-  value: InputValue;
-  sources: InputSources;
-  depth: number;
+  readonly name: string;
+  readonly value: InputValue;
+  readonly sources: InputSources;
+  readonly depth: number;
 }) {
   const group = groupOf(value);
   const calls = sources.calls.get(name) ?? [];
-  if (group !== null)
+  if (group !== null) {
     return (
       <InputGroup
         name={name}
@@ -235,6 +242,7 @@ function InputField({
         depth={depth}
       />
     );
+  }
   return (
     <div className="flex min-w-0 items-baseline gap-2">
       <span className="flex-none text-muted-foreground">{name}</span>
@@ -254,9 +262,9 @@ function InputFields({
   sources,
   depth,
 }: {
-  entries: readonly InputEntry[];
-  sources: InputSources;
-  depth: number;
+  readonly entries: readonly InputEntry[];
+  readonly sources: InputSources;
+  readonly depth: number;
 }) {
   return (
     <div className="space-y-1">
@@ -276,15 +284,16 @@ export function ActionInput({
   request,
   sources,
 }: {
-  request: TimelineRevision["record"]["attempt"]["request"];
-  sources: InputSources;
+  readonly request: TimelineRevision["record"]["attempt"]["request"];
+  readonly sources: InputSources;
 }) {
-  if (request === null)
+  if (request === null) {
     return (
       <RecordSection title="Input" aria-label="Action input">
         <Hint>This attempt has no retained call arguments.</Hint>
       </RecordSection>
     );
+  }
   return (
     <RecordSection
       title="Input"

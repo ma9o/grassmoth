@@ -1,9 +1,3 @@
-import type { ScopeContext } from "@/lib/model-asset/scope";
-import { ObservationPlots } from "./recorded-history";
-import { humanize, type EntitySelection } from "@/lib/model-asset/selection";
-import { formatModelDate } from "@/lib/utils/format";
-import { Hint, Section, StatusIcon } from "../scope-primitives";
-import type { DataComparisonView, DataVariableView } from "@/lib/model-asset/data-comparison";
 import { PPCWarningsTable } from "@/components/analysis-widgets/posterior/ppc-warnings-table";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { CHART_COLORS, chainColor, cssColor } from "@/components/charts/chart-tokens";
@@ -11,6 +5,12 @@ import { DistributionChart } from "@/components/charts/distribution-chart";
 import { DrawsChart } from "@/components/charts/draws-chart";
 import { extentOf } from "@/components/charts/plot-geometry";
 import { dataComparisonChart } from "@/components/charts/series-adapters";
+import type { DataComparisonView, DataVariableView } from "@/lib/model-asset/data-comparison";
+import type { ScopeContext } from "@/lib/model-asset/scope";
+import { type EntitySelection, humanize } from "@/lib/model-asset/selection";
+import { formatModelDate } from "@/lib/utils/format";
+import { Hint, Section, StatusIcon } from "../scope-primitives";
+import { ObservationPlots } from "./recorded-history";
 
 function comparisonEvaluation(variable: DataVariableView) {
   return variable.predictive?.evaluation ?? null;
@@ -21,9 +21,9 @@ export function DataComparisonEvidence({
   report,
   selection,
 }: {
-  context: ScopeContext;
-  report: DataComparisonView;
-  selection: EntitySelection | null;
+  readonly context: ScopeContext;
+  readonly report: DataComparisonView;
+  readonly selection: EntitySelection | null;
 }) {
   const variables = report.variables.filter(
     (variable) =>
@@ -38,7 +38,7 @@ export function DataComparisonEvidence({
   ));
 }
 
-function VariableComparison({ variable }: { variable: DataVariableView }) {
+function VariableComparison({ variable }: { readonly variable: DataVariableView }) {
   const definition = [...variable.left, ...variable.right]
     .flatMap((history) => history?.variable ?? [])
     .at(0);
@@ -189,7 +189,7 @@ function VariableComparison({ variable }: { variable: DataVariableView }) {
   );
 }
 
-export function PreparedObservations({ context }: { context: ScopeContext }) {
+export function PreparedObservations({ context }: { readonly context: ScopeContext }) {
   const { metadata, profile } = context.modelSnapshot;
   if (!metadata) return <Hint>No observation panel recorded.</Hint>;
   return (

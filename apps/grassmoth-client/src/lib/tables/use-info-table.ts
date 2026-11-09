@@ -1,25 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
 import {
   type ColumnDef,
-  type SortingState,
   getCoreRowModel,
   getSortedRowModel,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useTableKeyboardNav } from "./use-table-keyboard-nav";
+import { useMemo, useRef, useState } from "react";
 import { tableItems } from "./rows";
+import { useTableKeyboardNav } from "./use-table-keyboard-nav";
 
 interface InfoTableOptions<TData> {
-  columns: ColumnDef<TData, unknown>[];
-  data: TData[];
-  enableSorting: boolean;
-  estimateRowHeight: number;
-  groupBy: ((row: TData) => string) | undefined;
-  hasGroupHeaders: boolean;
-  isRowExpanded: ((row: TData) => boolean) | undefined;
+  readonly columns: readonly ColumnDef<TData>[];
+  readonly data: readonly TData[];
+  readonly enableSorting: boolean;
+  readonly estimateRowHeight: number;
+  readonly groupBy: ((row: TData) => string) | undefined;
+  readonly hasGroupHeaders: boolean;
+  readonly isRowExpanded: ((row: TData) => boolean) | undefined;
 }
 
 const GROUP_HEADER_HEIGHT = 36;
@@ -38,17 +38,18 @@ export function useInfoTable<TData>({
   const [searchQuery, setSearchQuery] = useState("");
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Pre-filter data before passing to TanStack Table
+  // Pre-filter data before passing to TanStack Table, which takes mutable arrays
   const filteredData = useMemo(() => {
-    if (!searchQuery) return data;
+    if (!searchQuery) return [...data];
     const search = searchQuery.toLowerCase();
     return data.filter((row) => JSON.stringify(row).toLowerCase().includes(search));
   }, [data, searchQuery]);
+  const tableColumns = useMemo(() => [...columns], [columns]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- This hook and its renderers opt out with "use no memo".
   const table = useReactTable({
     data: filteredData,
-    columns,
+    columns: tableColumns,
     ...(enableSorting
       ? { state: { sorting: sortingState }, onSortingChange: setSortingState }
       : {}),

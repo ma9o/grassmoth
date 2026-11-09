@@ -4,7 +4,7 @@ import type {
   GitOid,
   PrepareDataOutput,
 } from "@grassmoth/api-types";
-import { historyView, type HistoryView } from "./result-values";
+import { type HistoryView, historyView } from "./result-values";
 
 export type DataSourceResult = Extract<ActionSuccess, { action: "prepare_data" | "simulate" }>;
 
@@ -38,11 +38,11 @@ export function dataComparisonView(
 ): DataComparisonView {
   const cached = comparisons.get(report);
   if (
-    cached &&
-    cached.sources.size === sources.size &&
+    cached?.sources.size === sources.size &&
     [...sources].every(([revision, source]) => cached.sources.get(revision) === source)
-  )
+  ) {
     return cached.view;
+  }
   const side = (name: "left" | "right", id: DataVariableView["indicator_id"]) =>
     report[name].map((source): DataSeriesView | null => {
       const result = coordinate(sources.get(source.revision));

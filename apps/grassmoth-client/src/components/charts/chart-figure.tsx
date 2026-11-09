@@ -23,11 +23,11 @@ function WindowControls({
   onChange,
   label,
 }: {
-  domain: Domain;
-  origin: string | null;
-  value: Domain | null;
-  onChange: (value: Domain | null) => void;
-  label: string;
+  readonly domain: Domain;
+  readonly origin: string | null;
+  readonly value: Domain | null;
+  readonly onChange: (value: Domain | null) => void;
+  readonly label: string;
 }) {
   const [from, to] = value ?? domain;
   const set = (next: Domain) => {
@@ -105,13 +105,13 @@ export function ChartFigure({
   timeline,
   children,
 }: {
-  title: ReactNode;
-  legend?: ReactNode;
-  note?: ReactNode;
-  height: number;
+  readonly title: ReactNode;
+  readonly legend?: ReactNode;
+  readonly note?: string;
+  readonly height: number;
   /** The chart's time span, which enables narrowing it when expanded. */
-  timeline?: { readonly domain: Domain; readonly origin: string | null };
-  children: (view: ChartView) => ReactNode;
+  readonly timeline?: { readonly domain: Domain; readonly origin: string | null };
+  readonly children: (view: ChartView) => ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [timeWindow, setTimeWindow] = useState<Domain | null>(null);
@@ -159,7 +159,7 @@ export function ChartFigure({
             />
           )}
           {children({ height: 440, timeWindow })}
-          {legend && <div className="text-xs text-muted-foreground">{legend}</div>}
+          {legend != null && <div className="text-xs text-muted-foreground">{legend}</div>}
           {note && <p className="m-0 text-xs leading-relaxed text-muted-foreground">{note}</p>}
         </dialog>
       )}

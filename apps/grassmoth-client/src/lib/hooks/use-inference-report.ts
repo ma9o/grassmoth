@@ -1,8 +1,7 @@
 "use client";
 
-import { inferenceView } from "@/lib/model-asset/result-values";
-
 import type { ModelSnapshot } from "@grassmoth/api-types";
+import { inferenceView } from "@/lib/model-asset/result-values";
 import { useActionResult } from "./use-model-snapshot";
 
 /** The complete report is already part of the saved action result. */

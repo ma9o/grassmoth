@@ -1,17 +1,23 @@
 import type { ConstructId, ConstructSpec } from "@grassmoth/api-types";
-import { constructPresentation } from "@/lib/model-asset/inspector";
+import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { constructEquation } from "@/lib/model-asset/equations";
+import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
+import { constructPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
-import { humanize } from "@/lib/model-asset/selection";
 import type { ScopeContext } from "@/lib/model-asset/scope";
+import { humanize } from "@/lib/model-asset/selection";
 import { Callout, KeyValue, OwnerLink, Prose, Section, StatusIcon } from "../scope-primitives";
+import { FlowSection } from "./flow-sections";
 import { LawSections, SimulatedHistory } from "./law-sections";
 import { Reasoning } from "./reasoning";
-import { FlowSection } from "./flow-sections";
-import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 
-export function ConstructScope({ context, id }: { context: ScopeContext; id: ConstructId }) {
+export function ConstructScope({
+  context,
+  id,
+}: {
+  readonly context: ScopeContext;
+  readonly id: ConstructId;
+}) {
   const scope = constructPresentation(context, id);
   if (!scope) return null;
   const { modelSnapshot, construct, indicators } = scope;
@@ -96,8 +102,8 @@ export function IdentificationFinding({
   context,
   construct,
 }: {
-  context: ScopeContext;
-  construct: ConstructSpec;
+  readonly context: ScopeContext;
+  readonly construct: ConstructSpec;
 }) {
   const finding = context.modelSnapshot.identification?.treatments[construct.id];
   const identified = finding?.status === "identified" ? finding : null;
@@ -139,6 +145,7 @@ export function IdentificationFinding({
             </span>
           </div>
           {explanations?.map((item, index) => (
+            // eslint-disable-next-line react/no-array-index-key -- findings on one target share code and subject, so position is their identity
             <p key={index} className="mt-2">
               {item.kind === "evaluated" ? item.evidence : item.detail}
             </p>

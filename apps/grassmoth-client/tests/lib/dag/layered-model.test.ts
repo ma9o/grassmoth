@@ -1,11 +1,11 @@
-import { presentEntries } from "@/lib/model-accessors";
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { indexModel } from "@/lib/model-asset/entities";
+import type { DynamicalModelSpec, ModelSnapshot } from "@grassmoth/api-types";
 import { describe, expect, it } from "vitest";
-import type { ModelSnapshot, DynamicalModelSpec } from "@grassmoth/api-types";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { baseline, modelFixture, outcome, treatment } from "@/lib/__fixtures__/model";
 import { authoredSnapshot, emptySnapshot, fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { availableGraphLayers, graphEntities, graphStatus } from "@/lib/dag/layered-model";
+import { presentEntries } from "@/lib/model-accessors";
+import { indexModel } from "@/lib/model-asset/entities";
 
 const measuredModel: DynamicalModelSpec = {
   ...modelFixture,

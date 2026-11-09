@@ -1,15 +1,13 @@
 "use client";
 
-import { attemptError } from "@/lib/model-asset/journal";
-
-import type { RecordDependency } from "@grassmoth/api-types";
-import { ChevronDown, ChevronUp, Pin } from "lucide-react";
+import type { RecordDependency, TimelineRevision } from "@grassmoth/api-types";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
-import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { TimelineRevision } from "@grassmoth/api-types";
-import { revisionTimeline } from "@/lib/model-asset/revision-timeline";
-import { timelineComparison, type TimelineComparison } from "@/lib/model-asset/timeline-comparison";
+import { attemptError } from "@/lib/model-asset/journal";
+import { type RevisionTimelineNode, revisionTimeline } from "@/lib/model-asset/revision-timeline";
+import { type TimelineComparison, timelineComparison } from "@/lib/model-asset/timeline-comparison";
+import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import {
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -21,12 +19,35 @@ import {
 } from "@/lib/model-asset/timeline-presentation";
 import { cn } from "@/lib/utils";
 import { ACTION_STYLE, ActionMark } from "./action-mark";
+import { PinToggle } from "./pin-toggle";
 
 const HOVER_INTENT_MS = 300;
 /** Sweeping across nodes must not move the contextual Compare control. */
 const COMPARE_INTENT_MS = 120;
 const COLLAPSED_TRACK = NODE_HEIGHT / 2 + 6;
 const COLLAPSED_HEIGHT = COLLAPSED_TRACK + NODE_HEIGHT / 2 + 20;
+
+/** The column a navigation key moves focus to, or null for keys the timeline leaves alone. */
+function keyTarget(key: string, column: number, columns: number): number | null {
+  if (key === "ArrowRight") return column + 1;
+  if (key === "ArrowLeft") return column - 1;
+  if (key === "Home") return 0;
+  if (key === "End") return columns - 1;
+  return null;
+}
+
+/** A node's name adds whether its attempt failed and whether it is the latest action. */
+function nodeLabel(node: RevisionTimelineNode, latest: number): string {
+  return `${timelineTickLabel(node.tick)}${node.failed ? " · failed" : ""}${node.tick.record.seq === latest ? " · latest" : ""}`;
+}
+
+interface ComparisonControls {
+  readonly comparedSeq: number | null;
+  readonly onPreview: (comparison: TimelineComparison) => void;
+  readonly onEndPreview: () => void;
+  readonly onRetainPreview: () => void;
+  readonly onKeep: (comparison: TimelineComparison) => void;
+}
 
 /**
  * The study's named actions in execution order, in lanes by what they produce.
@@ -41,25 +62,18 @@ export function VersionScrubber({
   dependencies,
   playhead,
   latest,
-  comparedSeq,
   navigation,
   onPlayhead,
-  onPreviewComparison,
-  onEndPreview,
-  onRetainPreview,
-  onKeepComparison,
+  compare,
 }: {
-  ticks: readonly TimelineRevision[];
-  dependencies: readonly RecordDependency[];
-  playhead: number;
-  latest: number;
-  comparedSeq: number | null;
-  navigation: TimelineNavigation;
-  onPlayhead: (seq: number | null) => void;
-  onPreviewComparison: (comparison: TimelineComparison) => void;
-  onEndPreview: () => void;
-  onRetainPreview: () => void;
-  onKeepComparison: (comparison: TimelineComparison) => void;
+  readonly ticks: readonly TimelineRevision[];
+  readonly dependencies: readonly RecordDependency[];
+  readonly playhead: number;
+  readonly latest: number;
+  readonly navigation: TimelineNavigation;
+  readonly onPlayhead: (seq: number | null) => void;
+  /** Absent while the viewed version has no model state, which leaves nothing to compare. */
+  readonly compare?: ComparisonControls;
 }) {
   const timelineId = useId();
   const [collapsed, setCollapsed] = useState(false);
@@ -80,15 +94,18 @@ export function VersionScrubber({
       ? undefined
       : timeline.nodes.find((node) => node.tick.record.seq === hoverSeq);
   const tabStop = selectedNode ?? timeline.nodes.at(-1);
+  const offersComparisons = compare !== undefined;
   const comparisons = useMemo(
     () =>
       new Map(
         timeline.nodes.flatMap((node) => {
-          const comparison = timelineComparison(selectedNode?.tick, node.tick);
+          const comparison = offersComparisons
+            ? timelineComparison(selectedNode?.tick, node.tick)
+            : null;
           return comparison ? [[node.tick.record.seq, comparison] as const] : [];
         }),
       ),
-    [timeline, selectedNode],
+    [timeline, selectedNode, offersComparisons],
   );
   const hasComparisons = comparisons.size > 0;
   // A comparison costs a backend diff: start it only once the pointer rests on a tick.
@@ -113,23 +130,14 @@ export function VersionScrubber({
   }, [playhead, selectedNode?.column, collapsed]);
 
   const moveFocus = (event: KeyboardEvent<HTMLElement>, column: number) => {
-    const target =
-      event.key === "ArrowRight"
-        ? column + 1
-        : event.key === "ArrowLeft"
-          ? column - 1
-          : event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? timeline.nodes.length - 1
-              : null;
+    const target = keyTarget(event.key, column, timeline.nodes.length);
     if (target === null) return;
     event.preventDefault();
     const node = timeline.nodes[target];
     if (node) links.current.get(node.tick.record.seq)?.focus();
   };
 
-  if (timeline.nodes.length === 0)
+  if (timeline.nodes.length === 0) {
     return (
       <nav
         aria-label="Action history"
@@ -138,6 +146,7 @@ export function VersionScrubber({
         <p className="text-muted-foreground">No actions yet.</p>
       </nav>
     );
+  }
 
   return (
     <nav
@@ -178,7 +187,7 @@ export function VersionScrubber({
             cancelIntents();
             setHoverSeq(null);
             setFocusSeq(null);
-            onEndPreview();
+            compare?.onEndPreview();
             setCollapsed((value) => !value);
           }}
         >
@@ -252,7 +261,7 @@ export function VersionScrubber({
                     link,
                     touches: link.from === selectedNode || link.to === selectedNode,
                   }))
-                  .sort((a, b) => Number(a.touches) - Number(b.touches))
+                  .toSorted((a, b) => Number(a.touches) - Number(b.touches))
                   .map(({ link, touches }) => (
                     <path
                       key={`${link.from.tick.record.seq}:${link.to.tick.record.seq}:${link.argument}`}
@@ -274,10 +283,10 @@ export function VersionScrubber({
             const style = ACTION_STYLE[node.tick.record.attempt.action];
             const current = node === selectedNode;
             const pinned = navigation.seq === seq;
-            const compared = seq === comparedSeq;
+            const compared = seq === compare?.comparedSeq;
             const comparison = comparisons.get(seq);
             const comparable = comparison !== undefined;
-            const label = `${timelineTickLabel(node.tick)}${node.failed ? " · failed" : ""}${seq === latest ? " · latest" : ""}`;
+            const label = nodeLabel(node, latest);
             const error = attemptError(node.tick.record.attempt.outcome);
             return (
               <Fragment key={seq}>
@@ -314,22 +323,25 @@ export function VersionScrubber({
                     cancelIntents();
                     setHoverSeq(seq);
                     compareIntent.current = setTimeout(() => setFocusSeq(seq), COMPARE_INTENT_MS);
-                    if (!comparison) return onEndPreview();
+                    if (!comparison) {
+                      compare?.onEndPreview();
+                      return;
+                    }
                     hoverIntent.current = setTimeout(
-                      () => onPreviewComparison(comparison),
+                      () => compare?.onPreview(comparison),
                       HOVER_INTENT_MS,
                     );
                   }}
                   onPointerLeave={() => {
                     cancelIntents();
                     setHoverSeq(null);
-                    onEndPreview();
+                    compare?.onEndPreview();
                   }}
                   onFocus={() => {
                     setFocusSeq(seq);
-                    if (comparison) onPreviewComparison(comparison);
+                    if (comparison) compare?.onPreview(comparison);
                   }}
-                  onBlur={onEndPreview}
+                  onBlur={compare?.onEndPreview}
                   onNavigate={(event) => {
                     event.preventDefault();
                     cancelIntents();
@@ -342,38 +354,22 @@ export function VersionScrubber({
                     {node.tick.commit_id.slice(0, 7)}
                   </span>
                 </Link>
-                <button
-                  type="button"
-                  aria-label={`Pin ${timelineTickLabel(node.tick)}`}
-                  aria-pressed={pinned}
-                  title={pinned ? "Unpin and follow latest" : "Pin this action"}
-                  tabIndex={node === focusNode || node === tabStop ? 0 : -1}
-                  className={cn(
-                    "absolute flex cursor-pointer items-center justify-center rounded-r-md hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring",
-                    pinned ? "text-slate-900" : "text-muted-foreground",
-                  )}
-                  style={{
-                    left: point.x + NODE_WIDTH / 2 - 28,
-                    top: track - NODE_HEIGHT / 2 + 1,
-                    width: 27,
-                    height: NODE_HEIGHT - 2,
-                  }}
-                  onPointerEnter={() => {
+                <PinToggle
+                  tick={node.tick}
+                  pinned={pinned}
+                  tabbable={node === focusNode || node === tabStop}
+                  x={point.x}
+                  y={track}
+                  onEnter={() => {
                     cancelIntents();
-                    onEndPreview();
+                    compare?.onEndPreview();
                   }}
-                  onFocus={() => {
-                    cancelIntents();
-                    onEndPreview();
-                  }}
-                  onClick={() => {
+                  onToggle={() => {
                     cancelIntents();
                     onPlayhead(pinned ? null : seq);
                   }}
                   onKeyDown={(event) => moveFocus(event, node.column)}
-                >
-                  <Pin size={13} aria-hidden="true" fill={pinned ? "currentColor" : "none"} />
-                </button>
+                />
                 <div
                   className="absolute flex h-4 items-center justify-center gap-2 text-[10px] leading-3"
                   style={{
@@ -386,11 +382,11 @@ export function VersionScrubber({
                     <button
                       type="button"
                       aria-label={`Compare ${timelineTickLabel(selectedNode.tick)} with ${timelineTickLabel(node.tick)}`}
-                      onPointerEnter={onRetainPreview}
-                      onPointerLeave={onEndPreview}
-                      onFocus={onRetainPreview}
-                      onBlur={onEndPreview}
-                      onClick={() => onKeepComparison(comparison)}
+                      onPointerEnter={compare?.onRetainPreview}
+                      onPointerLeave={compare?.onEndPreview}
+                      onFocus={compare?.onRetainPreview}
+                      onBlur={compare?.onEndPreview}
+                      onClick={() => compare?.onKeep(comparison)}
                       className={cn(
                         "cursor-pointer rounded bg-card px-1 underline-offset-2 hover:underline focus-visible:outline-ring",
                         compared ? "text-amber-900" : "text-muted-foreground",

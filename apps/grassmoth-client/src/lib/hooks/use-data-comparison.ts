@@ -2,9 +2,9 @@
 
 import type { DataComparisonReport, GitOid, TimelineRevision } from "@grassmoth/api-types";
 import { useQueries } from "@tanstack/react-query";
-import { recordedCallQuery, successfulResult } from "./use-action-poll";
 import { producingCall } from "@/lib/model-asset/call-dependencies";
-import { dataComparisonView, type DataSourceResult } from "@/lib/model-asset/data-comparison";
+import { type DataSourceResult, dataComparisonView } from "@/lib/model-asset/data-comparison";
+import { recordedCallQuery, successfulResult } from "./use-action-poll";
 
 /** Resolve each immutable source once, including artifact refs and explicitly selected replicates. */
 export function useDataComparison(
@@ -30,8 +30,9 @@ export function useDataComparison(
     const queryIndex = calls.findIndex((call) => call.call_id === producers[index]?.call_id);
     const result = queries[queryIndex]?.data;
     if (!result) continue;
-    if (result.action !== "prepare_data" && result.action !== "simulate")
+    if (result.action !== "prepare_data" && result.action !== "simulate") {
       throw new Error("Saved comparison source is not a data-producing action");
+    }
     sources.set(revision, result);
   }
   const missing = revisions.find((_, index) => producers[index] === undefined);

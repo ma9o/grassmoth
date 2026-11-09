@@ -36,8 +36,9 @@ export const authoredResult: EditModelOutput = {
   pruning: { constructs: [], edges: [], parameters: [], distributions: [] },
 };
 
-if (fittedSnapshot.fit === null || fittedSnapshot.fit_checks === null)
+if (fittedSnapshot.fit === null || fittedSnapshot.fit_checks === null) {
   throw new Error("The fitted unit fixture must own its report and checks");
+}
 
 export const fittedResult: FitOutput = {
   dynamical_model_spec: modelFixture,
@@ -62,8 +63,8 @@ export const fittedResult: FitOutput = {
   },
 };
 
-const array = (values: number[], shape: number[], dtype: "f8" | "b1" = "f8") => ({
-  npy: new Uint8Array(dump(values, shape, { dtype })),
+const array = (values: readonly number[], shape: readonly number[], dtype: "f8" | "b1" = "f8") => ({
+  npy: new Uint8Array(dump([...values], [...shape], { dtype })),
 });
 const paths = array([1, 3, 4, 5, 2, 5, 6, 7], [2, 4, 1]);
 

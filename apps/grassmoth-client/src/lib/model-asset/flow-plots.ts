@@ -1,16 +1,17 @@
 import type {
   ConstructId,
-  DynamicsMechanismSpec,
   DynamicalModelSpec,
+  DynamicsMechanismSpec,
   EdgeId,
   Expression,
   IndicatorId,
   MechanismId,
 } from "@grassmoth/api-types";
 import { modelConstructs, modelEdges } from "@/lib/model-accessors";
+import { formatModelDate } from "@/lib/utils/format";
 import {
-  evaluateExpression,
   type ExpressionInputs,
+  evaluateExpression,
   finiteValue,
   PlotUnavailable,
   potentialDrift,
@@ -18,9 +19,8 @@ import {
 } from "./expression-evaluation";
 import { displayProbability } from "./law-draws";
 import { measurementDraw } from "./measurement-draws";
-import { modelDraws } from "./model-draws";
+import { type ModelDraws, modelDraws } from "./model-draws";
 import { humanize, mechanismName } from "./selection";
-import { formatModelDate } from "@/lib/utils/format";
 
 export type FlowPlot =
   | {
@@ -44,6 +44,12 @@ export interface ModelFlowPlots {
   readonly indicators: ReadonlyMap<IndicatorId, FlowPlot>;
 }
 
+/** A plot's time coordinates and, for a discrete reading, its category levels. */
+interface PlotAxes {
+  readonly times?: readonly number[];
+  readonly levels?: readonly string[] | null;
+}
+
 /** The state operands arriving at a local mechanism, in declaration order. */
 export function expressionStates(expressions: readonly Expression[]): readonly ConstructId[] {
   const ids = new Set<ConstructId>();
@@ -53,13 +59,22 @@ export function expressionStates(expressions: readonly Expression[]): readonly C
       visit(expression.left);
       visit(expression.right);
     }
-    if (expression.kind === "call") expression.arguments.forEach(visit);
+    if (expression.kind === "call") {
+      for (const argument of expression.arguments) visit(argument);
+    }
   };
-  expressions.forEach(visit);
+  for (const expression of expressions) visit(expression);
   return [...ids];
 }
 
 const cache = new WeakMap<DynamicalModelSpec, ModelFlowPlots>();
+
+function readingTimeNote(draws: ModelDraws): string {
+  const firstTime = draws.times[0];
+  if (firstTime === undefined) return "";
+  if (draws.timeOrigin === "relative") return `At model day ${firstTime}. `;
+  return `At ${formatModelDate(firstTime, draws.timeOrigin)}. `;
+}
 
 /**
  * Compose local outputs from the model's saved laws, without changing any action result.
@@ -70,21 +85,14 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
   const cached = cache.get(model);
   if (cached) return cached;
   const draws = modelDraws(model);
-  const firstTime = draws.times[0];
-  const readingTime =
-    firstTime === undefined
-      ? ""
-      : draws.timeOrigin === "relative"
-        ? `At model day ${firstTime}. `
-        : `At ${formatModelDate(firstTime, draws.timeOrigin)}. `;
+  const readingTime = readingTimeNote(draws);
   const constructs = modelConstructs(model);
   const name = (id: ConstructId) => humanize(model.constructs[id]?.name ?? id);
   const plot = (
     label: string,
     note: string,
     evaluate: (inputs: ExpressionInputs, draw: number, time: number) => number,
-    times = draws.times,
-    levels: readonly string[] | null = null,
+    { times = draws.times, levels = null }: PlotAxes = {},
   ): FlowPlot => {
     try {
       return {
@@ -109,8 +117,9 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
     target: ConstructId,
     label = `Drift into ${name(target)}`,
   ): FlowPlot => {
-    if (mechanisms.length === 0)
+    if (mechanisms.length === 0) {
       return { kind: "unavailable", label, reason: "No mechanism assigned." };
+    }
     return plot(
       label,
       `Model law ${expressionStates(mechanisms.map((mechanism) => mechanism.expression)).some((id) => !model.constructs[id]?.distribution) ? "at the initial state" : "at the saved state coordinates"}; contribution in ${name(target)} units per day.`,
@@ -135,7 +144,7 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
             ? "State draws from the saved model law."
             : "Initial state distribution; later trajectories come from simulate.",
           (inputs) => inputs.state(construct.id),
-          construct.distribution ? draws.times : draws.times.slice(0, 1),
+          { times: construct.distribution ? draws.times : draws.times.slice(0, 1) },
         ),
       ]),
     ),
@@ -174,11 +183,14 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
                     draws.inputs(draw, time, indicator),
                     displayProbability(`reading:${indicator.observation.id}:${time}`, draw),
                   ),
-                // A local measurement distribution has one state input. It is not a new predictive history.
-                draws.times.slice(0, 1),
-                "levels" in indicator.observation.measurement
-                  ? indicator.observation.measurement.levels
-                  : null,
+                {
+                  // A local measurement distribution has one state input. It is not a new predictive history.
+                  times: draws.times.slice(0, 1),
+                  levels:
+                    "levels" in indicator.observation.measurement
+                      ? indicator.observation.measurement.levels
+                      : null,
+                },
               )
             : { kind: "unavailable", label, reason: "No observation law assigned." };
           return [indicator.observation.id, value] as const;

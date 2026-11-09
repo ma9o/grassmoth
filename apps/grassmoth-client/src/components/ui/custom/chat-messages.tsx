@@ -1,8 +1,13 @@
 "use client";
 
-import { assertNever } from "@/lib/assert-never";
-
-import { isDataUIPart, type UIMessage } from "ai";
+import {
+  type DynamicToolUIPart,
+  getToolName,
+  isDataUIPart,
+  isToolUIPart,
+  type ToolUIPart,
+  type UIMessage,
+} from "ai";
 import { Bot, User, Wrench } from "lucide-react";
 import { memo } from "react";
 import Markdown from "react-markdown";
@@ -17,11 +22,16 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const remarkPlugins = [remarkGfm];
-type DynamicToolMessagePart = Extract<UIMessage["parts"][number], { type: "dynamic-tool" }>;
-type StaticToolMessagePart = Extract<UIMessage["parts"][number], { type: `tool-${string}` }>;
-type ToolMessagePart = DynamicToolMessagePart | StaticToolMessagePart;
 
-const TextPart = memo(function TextPart({ text }: { text: string }) {
+/** What a static or dynamic tool part shows: its state, input, and output or error. */
+interface ToolCallView {
+  readonly state: (ToolUIPart | DynamicToolUIPart)["state"];
+  readonly input: unknown;
+  readonly output?: unknown;
+  readonly errorText?: string;
+}
+
+const TextPart = memo(function TextPart({ text }: { readonly text: string }) {
   return (
     <div className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-th:text-foreground prose-code:text-foreground prose-pre:bg-muted/50 prose-pre:text-foreground [&_pre]:text-xs [&_code]:text-xs [&_table]:text-xs [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm [&_h4]:text-sm [&_pre]:my-1 [&_pre]:p-2 [&_table]:block [&_table]:overflow-x-auto">
       <Markdown remarkPlugins={remarkPlugins}>{text}</Markdown>
@@ -29,7 +39,7 @@ const TextPart = memo(function TextPart({ text }: { text: string }) {
   );
 });
 
-function ReasoningPart({ text, idx }: { text: string; idx: number }) {
+function ReasoningPart({ text, idx }: { readonly text: string; readonly idx: number }) {
   return (
     <Accordion>
       <AccordionItem
@@ -55,7 +65,7 @@ function deepParseJson(value: unknown): unknown {
       return value;
     }
   }
-  if (Array.isArray(value)) return value.map(deepParseJson);
+  if (Array.isArray(value)) return value.map((item) => deepParseJson(item));
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, deepParseJson(v)]));
   }
@@ -67,27 +77,20 @@ function formatToolData(data: unknown): string {
   return JSON.stringify(deepParseJson(data), null, 2);
 }
 
-function isToolMessagePart(part: UIMessage["parts"][number]): part is ToolMessagePart {
-  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
-}
-
-function getToolName(part: ToolMessagePart): string {
-  return part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
-}
-
 function ToolPart({
   part,
+  toolName,
   idx,
   className,
 }: {
-  part: ToolMessagePart;
-  idx: number;
-  className?: string;
+  readonly part: ToolCallView;
+  readonly toolName: string;
+  readonly idx: number;
+  readonly className?: string;
 }) {
   const hasOutput = part.state === "output-available";
   const hasError = part.state === "output-error";
   const isFinished = hasOutput || hasError;
-  const toolName = getToolName(part);
 
   return (
     <div
@@ -150,7 +153,7 @@ function ToolPart({
   );
 }
 
-function SystemMessage({ msg }: { msg: UIMessage }) {
+function SystemMessage({ msg }: { readonly msg: UIMessage }) {
   const text = msg.parts.find((p) => p.type === "text");
   if (!text) return null;
 
@@ -173,7 +176,7 @@ function SystemMessage({ msg }: { msg: UIMessage }) {
   );
 }
 
-function UserMessage({ msg }: { msg: UIMessage }) {
+function UserMessage({ msg }: { readonly msg: UIMessage }) {
   const text = msg.parts.find((p) => p.type === "text");
   return (
     <div className="rounded-md border bg-background p-2.5">
@@ -186,7 +189,7 @@ function UserMessage({ msg }: { msg: UIMessage }) {
   );
 }
 
-function AssistantMessage({ msg }: { msg: UIMessage }) {
+function AssistantMessage({ msg }: { readonly msg: UIMessage }) {
   return (
     <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5">
       <div className="mb-1 flex items-center gap-1.5">
@@ -198,40 +201,48 @@ function AssistantMessage({ msg }: { msg: UIMessage }) {
       {msg.parts.map((part, i) => {
         const key = `${part.type}-${i}`;
         if (isDataUIPart(part)) return null;
-        if (isToolMessagePart(part)) {
-          return <ToolPart key={key} part={part} idx={i} className="mt-2" />;
+        if (isToolUIPart(part)) {
+          return (
+            <ToolPart key={key} part={part} toolName={getToolName(part)} idx={i} className="mt-2" />
+          );
         }
         switch (part.type) {
-          case "text":
+          case "text": {
             return <TextPart key={key} text={part.text} />;
-          case "reasoning":
+          }
+          case "reasoning": {
             return <ReasoningPart key={key} text={part.text} idx={i} />;
+          }
           case "file":
           case "source-url":
           case "source-document":
-          case "step-start":
+          case "step-start": {
             return null;
-          default:
-            return assertNever(part);
+          }
         }
       })}
     </div>
   );
 }
 
-export const ChatMessages = memo(function ChatMessages({ messages }: { messages: UIMessage[] }) {
+export const ChatMessages = memo(function ChatMessages({
+  messages,
+}: {
+  readonly messages: readonly UIMessage[];
+}) {
   return (
     <div className="flex flex-col gap-2">
       {messages.map((msg) => {
         switch (msg.role) {
-          case "system":
+          case "system": {
             return <SystemMessage key={msg.id} msg={msg} />;
-          case "user":
+          }
+          case "user": {
             return <UserMessage key={msg.id} msg={msg} />;
-          case "assistant":
+          }
+          case "assistant": {
             return <AssistantMessage key={msg.id} msg={msg} />;
-          default:
-            return assertNever(msg.role);
+          }
         }
       })}
     </div>

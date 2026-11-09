@@ -24,11 +24,11 @@ export function ProfileMarks({
   top,
   height,
 }: {
-  profile: IndicatorEmpiricalProfile;
-  values: readonly (number | null)[];
-  x: (value: number) => number;
-  top: number;
-  height: number;
+  readonly profile: IndicatorEmpiricalProfile;
+  readonly values: readonly (number | null)[];
+  readonly x: (value: number) => number;
+  readonly top: number;
+  readonly height: number;
 }) {
   const mid = top + height / 2;
   const box = Math.min(16, height - 2);
@@ -51,7 +51,7 @@ export function ProfileMarks({
       {values.map((value, index) =>
         value == null ? null : (
           <circle
-            // biome-ignore lint/suspicious/noArrayIndexKey: observations are positional
+            // eslint-disable-next-line react/no-array-index-key -- observations are positional
             key={index}
             cx={x(value)}
             cy={mid - box / 2 + jitter(index) * box}
@@ -86,8 +86,9 @@ export function ProfileMarks({
 export function profileSummary(profile: IndicatorEmpiricalProfile): string {
   const parts = [`n ${profile.n_obs.toLocaleString()}`];
   if (profile.q50 != null) parts.push(`median ${formatSignificant(profile.q50)}`);
-  if (profile.q25 != null && profile.q75 != null)
+  if (profile.q25 != null && profile.q75 != null) {
     parts.push(`quartiles ${formatSignificant(profile.q25)}–${formatSignificant(profile.q75)}`);
+  }
   if (profile.mean != null) parts.push(`mean ${formatSignificant(profile.mean)}`);
   return parts.join(" · ");
 }
@@ -98,10 +99,10 @@ export function ProfileStrip({
   label,
   height = 44,
 }: {
-  profile: IndicatorEmpiricalProfile;
-  values: readonly (number | null)[];
-  label: string;
-  height?: number;
+  readonly profile: IndicatorEmpiricalProfile;
+  readonly values: readonly (number | null)[];
+  readonly label: string;
+  readonly height?: number;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const domain = profileDomain(profile, values);
@@ -137,11 +138,11 @@ function ProfileSvg({
   width,
   height,
 }: {
-  profile: IndicatorEmpiricalProfile;
-  values: readonly (number | null)[];
-  domain: Domain;
-  width: number;
-  height: number;
+  readonly profile: IndicatorEmpiricalProfile;
+  readonly values: readonly (number | null)[];
+  readonly domain: Domain;
+  readonly width: number;
+  readonly height: number;
 }) {
   const padded = padDomain(domain, 0.03);
   const x = linearScale(padded, [6, width - 6]);

@@ -1,16 +1,16 @@
-import {
-  type ConstructId,
-  type EdgeId,
-  type IndicatorId,
-  type MechanismId,
-  type ComputedExtractionSpec,
+import type {
+  ComputedExtractionSpec,
+  ConstructId,
+  EdgeId,
+  IndicatorId,
+  MechanismId,
 } from "@grassmoth/api-types";
 
 /** The graph entity shown in the details pane. */
 export type EntitySelection =
-  | { kind: "construct"; id: ConstructId }
-  | { kind: "edge"; id: EdgeId }
-  | { kind: "indicator"; id: IndicatorId };
+  | { readonly kind: "construct"; readonly id: ConstructId }
+  | { readonly kind: "edge"; readonly id: EdgeId }
+  | { readonly kind: "indicator"; readonly id: IndicatorId };
 
 export function humanize(value: string): string {
   return value.replaceAll("_", " ");

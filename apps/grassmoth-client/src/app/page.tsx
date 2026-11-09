@@ -1,11 +1,11 @@
 "use client";
 
-import { LandingPageView } from "@/components/landing/landing-page-view";
-import { getWorkspaces, getWorkspacesQueryKey } from "@/lib/api/workspaces";
-import { getMockFixture, isMockMode } from "@/lib/api/mock-provider";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { LandingPageView } from "@/components/landing/landing-page-view";
+import { getMockFixture, isMockMode } from "@/lib/api/mock-provider";
+import { getWorkspaces, getWorkspacesQueryKey } from "@/lib/api/workspaces";
 
 export default function LandingPage() {
   const router = useRouter();

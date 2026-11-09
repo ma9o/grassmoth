@@ -9,8 +9,14 @@ import { formatNumber } from "@/lib/utils/format";
 import { KeyValue, Section } from "../scope-primitives";
 
 /** Every held-out row's Pareto k at its time step, against the engine's two limits. */
-function ParetoK({ loo, points }: { loo: LOODiagnostics; points: readonly ParetoKPoint[] }) {
-  const ordered = [...points].sort((a, b) => a.timestep - b.timestep);
+function ParetoK({
+  loo,
+  points,
+}: {
+  readonly loo: LOODiagnostics;
+  readonly points: readonly ParetoKPoint[];
+}) {
+  const ordered = points.toSorted((a, b) => a.timestep - b.timestep);
   return (
     <ChartFigure
       title="Pareto k by time step"
@@ -61,7 +67,7 @@ function ParetoK({ loo, points }: { loo: LOODiagnostics; points: readonly Pareto
 }
 
 /** The fit's leave-one-out predictive checks, as the engine recorded them. */
-export function FitCalibration({ context }: { context: ScopeContext }) {
+export function FitCalibration({ context }: { readonly context: ScopeContext }) {
   const detail = useInferenceReport(context.modelSnapshot).data?.detail;
   const fit = context.modelSnapshot.fit;
   const loo = fit?.loo_diagnostics;
@@ -73,9 +79,9 @@ export function FitCalibration({ context }: { context: ScopeContext }) {
           ["ELPD", `${formatNumber(loo.elpd_loo, 1)} ± ${formatNumber(loo.se, 1)}`],
           ["Effective parameters", formatNumber(loo.p_loo, 1)],
           ["Held-out rows", loo.n_data_points.toLocaleString()],
-          ...(loo.n_bad_k != null
-            ? [["Unreliable rows", loo.n_bad_k.toLocaleString()] as [string, string]]
-            : []),
+          ...(loo.n_bad_k == null
+            ? []
+            : [["Unreliable rows", loo.n_bad_k.toLocaleString()] as const]),
         ]}
       />
       {detail && detail.loo_pit.length > 0 && (

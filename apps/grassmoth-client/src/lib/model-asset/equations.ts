@@ -1,4 +1,5 @@
 import type {
+  BinaryOperator,
   CallExpression,
   CausalEdgeSpec,
   ConstructId,
@@ -6,94 +7,108 @@ import type {
   DynamicsMechanismSpec,
   Expression,
   IndicatorSpec,
+  ParameterSpec,
 } from "@grassmoth/api-types";
-import { assertNever } from "@/lib/assert-never";
 import type { ModelEntities } from "./entities";
 import { observationArguments } from "./observation-law";
 
 const TEXT_ESCAPES: Readonly<Record<string, string>> = {
-  "\\": "\\textbackslash{}",
-  "{": "\\{",
-  "}": "\\}",
-  "%": "\\%",
-  "&": "\\&",
-  "#": "\\#",
-  $: "\\$",
+  "\\": String.raw`\textbackslash{}`,
+  "{": String.raw`\{`,
+  "}": String.raw`\}`,
+  "%": String.raw`\%`,
+  "&": String.raw`\&`,
+  "#": String.raw`\#`,
+  $: String.raw`\$`,
   _: " ",
-  "^": "\\textasciicircum{}",
-  "~": "\\textasciitilde{}",
+  "^": String.raw`\textasciicircum{}`,
+  "~": String.raw`\textasciitilde{}`,
 };
 const FUNCTIONS: Record<CallExpression["function"], string> = {
-  exp: "\\exp",
-  sigmoid: "\\operatorname{logistic}",
-  normal_cdf: "\\Phi",
-  ordered_cutpoints: "\\operatorname{ordered\\_cutpoints}",
-  category_logits: "\\operatorname{category\\_logits}",
+  exp: String.raw`\exp`,
+  sigmoid: String.raw`\operatorname{logistic}`,
+  normal_cdf: String.raw`\Phi`,
+  ordered_cutpoints: String.raw`\operatorname{ordered\_cutpoints}`,
+  category_logits: String.raw`\operatorname{category\_logits}`,
 };
 
 function text(label: string): string {
-  return `\\text{${label.replace(/[\\{}%&#$_^~]/g, (character) => TEXT_ESCAPES[character] ?? character)}}`;
+  return String.raw`\text{${label.replaceAll(/[\\{}%&#$_^~]/g, (character) => TEXT_ESCAPES[character] ?? character)}}`;
 }
 
 function state(entities: ModelEntities, id: ConstructId): string {
   const construct = entities.constructById.get(id);
   if (!construct) throw new Error(`Equation references absent construct ${id}`);
-  return `\\eta_{${text(construct.name)}}(t)`;
+  return String.raw`\eta_{${text(construct.name)}}(t)`;
+}
+
+function parameterLatex(parameter: ParameterSpec): string {
+  const theta = String.raw`\theta_{${text(parameter.name)}}`;
+  const interval = String.raw`\Delta_{${text(parameter.name)}}`;
+  switch (parameter.transform.kind) {
+    case "dt_persistence_to_ct_decay": {
+      return String.raw`\frac{-\log\left(${theta}\right)}{${interval}}`;
+    }
+    case "dt_effect_to_ct_rate": {
+      return String.raw`\frac{${theta}}{${interval}}`;
+    }
+    case "identity":
+    case "initial_state_correlation": {
+      return theta;
+    }
+  }
+}
+
+function binaryLatex(operator: BinaryOperator, left: string, right: string): string {
+  switch (operator) {
+    case "add": {
+      return String.raw`\left(${left} + ${right}\right)`;
+    }
+    case "subtract": {
+      return String.raw`\left(${left} - ${right}\right)`;
+    }
+    case "multiply": {
+      return String.raw`\left(${left} \cdot ${right}\right)`;
+    }
+    case "divide": {
+      return String.raw`\frac{${left}}{${right}}`;
+    }
+    case "power": {
+      return String.raw`{\left(${left}\right)}^{${right}}`;
+    }
+    case "maximum": {
+      return String.raw`\max\left(${left},\;${right}\right)`;
+    }
+  }
 }
 
 /** Typeset the saved syntax tree without simplifying or evaluating it. */
 function expressionLatex(entities: ModelEntities, expression: Expression): string {
   const render = (operand: Expression) => expressionLatex(entities, operand);
   switch (expression.kind) {
-    case "literal":
-      return String(expression.value).replace(/e([+-]?\d+)/, "\\times 10^{$1}");
-    case "state":
+    case "literal": {
+      return String(expression.value).replace(/e([+-]?\d+)/, String.raw`\times 10^{$1}`);
+    }
+    case "state": {
       return state(entities, expression.construct_id);
+    }
     case "coefficient": {
-      if (expression.value === null) return `\\underbrace{?}_{${text(expression.role)}}`;
-      if (typeof expression.value === "number")
+      if (expression.value === null) return String.raw`\underbrace{?}_{${text(expression.role)}}`;
+      if (typeof expression.value === "number") {
         return render({ kind: "literal", value: expression.value });
+      }
       const parameter = entities.parameterById.get(expression.value);
       if (!parameter) throw new Error(`Equation references absent parameter ${expression.value}`);
-      const theta = `\\theta_{${text(parameter.name)}}`;
-      const interval = `\\Delta_{${text(parameter.name)}}`;
-      switch (parameter.transform.kind) {
-        case "dt_persistence_to_ct_decay":
-          return `\\frac{-\\log\\left(${theta}\\right)}{${interval}}`;
-        case "dt_effect_to_ct_rate":
-          return `\\frac{${theta}}{${interval}}`;
-        case "identity":
-        case "initial_state_correlation":
-          return theta;
-        default:
-          return assertNever(parameter.transform);
-      }
+      return parameterLatex(parameter);
     }
     case "binary": {
       const left = render(expression.left);
       const right = render(expression.right);
-      const operator = expression.operator;
-      switch (operator) {
-        case "add":
-          return `\\left(${left} + ${right}\\right)`;
-        case "subtract":
-          return `\\left(${left} - ${right}\\right)`;
-        case "multiply":
-          return `\\left(${left} \\cdot ${right}\\right)`;
-        case "divide":
-          return `\\frac{${left}}{${right}}`;
-        case "power":
-          return `{\\left(${left}\\right)}^{${right}}`;
-        case "maximum":
-          return `\\max\\left(${left},\\;${right}\\right)`;
-        default:
-          return assertNever(operator);
-      }
+      return binaryLatex(expression.operator, left, right);
     }
-    case "call":
-      return `${FUNCTIONS[expression.function]}\\left(${expression.arguments.map(render).join(",\\;")}\\right)`;
-    default:
-      return assertNever(expression);
+    case "call": {
+      return String.raw`${FUNCTIONS[expression.function]}\left(${expression.arguments.map((argument) => render(argument)).join(String.raw`,\;`)}\right)`;
+    }
   }
 }
 
@@ -105,9 +120,9 @@ export function observationEquation(
   if (!indicator.likelihood) return null;
   const law = indicator.likelihood.law;
   const argumentsLatex = observationArguments(law)
-    .map(([name, value]) => `\\mathrm{${name}}=${expressionLatex(entities, value)}`)
-    .join(",\\; ");
-  return `y_{${text(indicator.observation.name)}}(t) \\sim \\operatorname{${law.distribution}}\\left(${argumentsLatex}\\right)`;
+    .map(([name, value]) => String.raw`\mathrm{${name}}=${expressionLatex(entities, value)}`)
+    .join(String.raw`,\; `);
+  return String.raw`y_{${text(indicator.observation.name)}}(t) \sim \operatorname{${law.distribution}}\left(${argumentsLatex}\right)`;
 }
 
 function driftTerms(
@@ -119,7 +134,7 @@ function driftTerms(
     .map((mechanism) => {
       const expression = expressionLatex(entities, mechanism.expression);
       return mechanism.kind === "potential"
-        ? `-\\frac{\\partial}{\\partial ${state(entities, target)}}\\left[${expression}\\right]`
+        ? String.raw`-\frac{\partial}{\partial ${state(entities, target)}}\left[${expression}\right]`
         : expression;
     })
     .join(" + ");
@@ -129,16 +144,17 @@ function driftTerms(
 export function edgeEquation(edge: CausalEdgeSpec, entities: ModelEntities): string | null {
   return edge.mechanisms.length === 0
     ? null
-    : `g(\\eta,t) = ${driftTerms(edge.mechanisms, edge.effect.id, entities)}`;
+    : String.raw`g(\eta,t) = ${driftTerms(edge.mechanisms, edge.effect.id, entities)}`;
 }
 
 /** Display authored mechanisms or direct DAG links, never a newly inferred noise projection. */
 export function constructEquation(construct: ConstructSpec, entities: ModelEntities) {
-  if (construct.temporal_status === "time_invariant")
+  if (construct.temporal_status === "time_invariant") {
     return {
       title: "Static state",
-      latex: `\\mathrm{d}${state(entities, construct.id)} = 0`,
+      latex: String.raw`\mathrm{d}${state(entities, construct.id)} = 0`,
     };
+  }
   const mechanisms = [
     ...construct.dynamics,
     ...entities.edges
@@ -151,11 +167,11 @@ export function constructEquation(construct: ConstructSpec, entities: ModelEntit
       ? null
       : {
           title: "Authored connections",
-          latex: `${state(entities, construct.id)} \\to \\left\\{${children.map((edge) => state(entities, edge.effect.id)).join(",\\;")}\\right\\}`,
+          latex: String.raw`${state(entities, construct.id)} \to \left\{${children.map((edge) => state(entities, edge.effect.id)).join(String.raw`,\;`)}\right\}`,
         };
   }
   return {
     title: "Authored drift",
-    latex: `f_{${text(construct.name)}}(\\eta,t) = ${driftTerms(mechanisms, construct.id, entities)}`,
+    latex: String.raw`f_{${text(construct.name)}}(\eta,t) = ${driftTerms(mechanisms, construct.id, entities)}`,
   };
 }

@@ -1,6 +1,6 @@
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import type { ElkNode } from "elkjs/lib/elk.bundled.js";
 import { describe, expect, it } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { buildElkGraph, readElkLayout } from "@/lib/utils/dag-graph-layout";
 
 describe("buildElkGraph", () => {

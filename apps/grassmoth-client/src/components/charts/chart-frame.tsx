@@ -14,13 +14,13 @@ export function CanvasChartFrame({
   label,
   children,
 }: {
-  container: Ref<HTMLDivElement>;
+  readonly container: Ref<HTMLDivElement>;
   /** Null when the chart has no canvas marks. */
-  canvas: Ref<HTMLCanvasElement>;
-  size: ChartSize | null;
-  height: number;
-  label: string;
-  children: ReactNode;
+  readonly canvas: Ref<HTMLCanvasElement>;
+  readonly size: ChartSize | null;
+  readonly height: number;
+  readonly label: string;
+  readonly children: ReactNode;
 }) {
   return (
     <div
@@ -59,9 +59,9 @@ export function ValueGridlines({
   y,
   ticks,
 }: {
-  box: PlotBox;
-  y: (value: number) => number;
-  ticks: readonly Tick[];
+  readonly box: PlotBox;
+  readonly y: (value: number) => number;
+  readonly ticks: readonly Tick[];
 }) {
   return (
     <>

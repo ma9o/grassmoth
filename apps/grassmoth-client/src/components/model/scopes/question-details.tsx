@@ -8,8 +8,8 @@ export function QuestionDetails({
   context,
   model,
 }: {
-  context: ScopeContext;
-  model: DynamicalModelSpec;
+  readonly context: ScopeContext;
+  readonly model: DynamicalModelSpec;
 }) {
   const name = (id: ConstructId) => {
     const construct = context.entities.constructs.find((item) => item.id === id);
@@ -47,7 +47,7 @@ export function QuestionDetails({
 }
 
 /** Every check of the question against the model and record, passing or not. */
-export function QuestionChecks({ context }: { context: ScopeContext }) {
+export function QuestionChecks({ context }: { readonly context: ScopeContext }) {
   const checks = context.modelSnapshot.question_checks;
   if (!checks) return null;
   return (

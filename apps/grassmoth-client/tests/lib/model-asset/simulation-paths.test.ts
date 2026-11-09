@@ -2,11 +2,11 @@ import type { SimulateOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { pathLayers } from "@/components/charts/series-adapters";
 import { simulatedResult, unavailableEffect } from "@/lib/__fixtures__/action-results";
 import { outcome } from "@/lib/__fixtures__/model";
 import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { pathsView } from "@/lib/model-asset/result-values";
-import { pathLayers } from "@/components/charts/series-adapters";
 
 const simulation = simulatedResult;
 
@@ -26,8 +26,8 @@ it("keeps both recorded arms when the causal evaluation is unavailable", () => {
   expect(both[0]?.points).toBe(false);
 });
 
-function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
-  return { npy: new Uint8Array(dump(values, shape, { dtype })) };
+function array(shape: readonly number[], values: readonly number[], dtype: "f8" | "b1" = "f8") {
+  return { npy: new Uint8Array(dump([...values], [...shape], { dtype })) };
 }
 
 it.each([

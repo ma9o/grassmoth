@@ -8,11 +8,12 @@ import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, type ChartColor, cssColor, resolveColor } from "./chart-tokens";
 import {
   type Domain,
-  type PlotBox,
   extentOf,
   jitter,
   linearScale,
+  type Margin,
   marginBox,
+  type PlotBox,
   padDomain,
   valueTicks,
 } from "./plot-geometry";
@@ -78,7 +79,8 @@ export function densityExtent(layers: readonly DensityLayer[]): Domain | null {
 }
 
 export function densityPeak(layers: readonly DensityLayer[]): number {
-  return Math.max(0, ...layers.flatMap((layer) => layer.curve.density)) || 1;
+  const peak = Math.max(0, ...layers.flatMap((layer) => layer.curve.density));
+  return peak > 0 ? peak : 1;
 }
 
 /** Density curves in a box: shared value and density scales, prior outlined, fills underneath. */
@@ -88,10 +90,10 @@ export function DensityMarks({
   box,
   peak,
 }: {
-  layers: readonly DensityLayer[];
-  x: (value: number) => number;
-  box: PlotBox;
-  peak: number;
+  readonly layers: readonly DensityLayer[];
+  readonly x: (value: number) => number;
+  readonly box: PlotBox;
+  readonly peak: number;
 }) {
   const y = (density: number) => box.top + box.height - (density / peak) * box.height;
   return (
@@ -133,6 +135,11 @@ const MARGIN = { left: 8, right: 8, top: 8, bottom: 20 } as const;
 const COMPACT_MARGIN = { left: 3, right: 3, top: 2, bottom: 2 } as const;
 const CUMULATIVE_MARGIN = { left: 30, right: 8, top: 8, bottom: 20 } as const;
 
+function chartMargin(compact: boolean, cumulative: boolean): Margin {
+  if (compact) return COMPACT_MARGIN;
+  return cumulative ? CUMULATIVE_MARGIN : MARGIN;
+}
+
 /**
  * Distributions: prior and posterior curves, every draw or replicate as a dot, and observed
  * values as marks. Dots go on a canvas; values beyond the frame pile at its edge and are counted.
@@ -149,18 +156,18 @@ export function DistributionChart({
   frame = null,
   compact = false,
 }: {
-  label: string;
-  height: number;
-  densities?: readonly DensityLayer[];
-  dots?: readonly DotLayer[];
-  marks?: readonly ValueMark[];
-  interval?: IntervalMark | null;
-  cumulative?: readonly CumulativeLayer[];
+  readonly label: string;
+  readonly height: number;
+  readonly densities?: readonly DensityLayer[];
+  readonly dots?: readonly DotLayer[];
+  readonly marks?: readonly ValueMark[];
+  readonly interval?: IntervalMark | null;
+  readonly cumulative?: readonly CumulativeLayer[];
   /** The uniform reference a calibrated probability integral transform follows. */
-  diagonal?: boolean;
+  readonly diagonal?: boolean;
   /** The value range shown, from the backend; otherwise every value fits. */
-  frame?: Domain | null;
-  compact?: boolean;
+  readonly frame?: Domain | null;
+  readonly compact?: boolean;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -168,11 +175,7 @@ export function DistributionChart({
 
   const geometry = useMemo(() => {
     if (!size) return null;
-    const box = marginBox(
-      size.width,
-      size.height,
-      compact ? COMPACT_MARGIN : isCumulative ? CUMULATIVE_MARGIN : MARGIN,
-    );
+    const box = marginBox(size.width, size.height, chartMargin(compact, isCumulative));
     const domain =
       frame ??
       extentOf([
@@ -183,11 +186,10 @@ export function DistributionChart({
         ...cumulative.flatMap((layer) => layer.points.map((point) => point.value)),
       ]) ??
       ([0, 1] as const);
-    const valueDomain = frame || densities.length ? domain : padDomain(domain, 0.03);
+    const valueDomain = frame || densities.length > 0 ? domain : padDomain(domain, 0.03);
     const intervalRow = interval ? 10 : 0;
-    const densityHeight = densities.length
-      ? (box.height - intervalRow) * (dots.length ? 0.6 : 1)
-      : 0;
+    const densityHeight =
+      densities.length > 0 ? (box.height - intervalRow) * (dots.length > 0 ? 0.6 : 1) : 0;
     return {
       box,
       valueDomain,
@@ -199,8 +201,8 @@ export function DistributionChart({
       intervalY: box.top + densityHeight + intervalRow / 2 + 1,
       dotBox: {
         ...box,
-        top: box.top + densityHeight + intervalRow + (densities.length ? 4 : 0),
-        height: box.height - densityHeight - intervalRow - (densities.length ? 4 : 0),
+        top: box.top + densityHeight + intervalRow + (densities.length > 0 ? 4 : 0),
+        height: box.height - densityHeight - intervalRow - (densities.length > 0 ? 4 : 0),
       },
     };
   }, [size, compact, isCumulative, frame, densities, dots, marks, interval, cumulative]);
@@ -213,31 +215,31 @@ export function DistributionChart({
     const radius = compact ? 1.3 : 1.6;
     paintCanvas(target, size, 1, (context) => {
       const flagged = resolveColor(target, CHART_COLORS.flagged);
-      dots.forEach((layer, bandIndex) => {
+      const draw = (top: number, value: number, index: number) => {
+        const clamped = Math.min(Math.max(value, valueDomain[0]), valueDomain[1]);
+        context.beginPath();
+        context.arc(
+          x(clamped),
+          top + radius + jitter(index) * Math.max(0, band - 2 * radius),
+          radius,
+          0,
+          Math.PI * 2,
+        );
+        context.fill();
+      };
+      for (const [bandIndex, layer] of dots.entries()) {
         const top = dotBox.top + bandIndex * band;
-        const draw = (value: number, index: number) => {
-          const clamped = Math.min(Math.max(value, valueDomain[0]), valueDomain[1]);
-          context.beginPath();
-          context.arc(
-            x(clamped),
-            top + radius + jitter(index) * Math.max(0, band - 2 * radius),
-            radius,
-            0,
-            Math.PI * 2,
-          );
-          context.fill();
-        };
         context.globalAlpha = layer.values.length > 400 ? 0.3 : 0.5;
         context.fillStyle = resolveColor(target, layer.color);
-        layer.values.forEach((value, index) => {
-          if (!layer.flagged?.[index]) draw(value, index);
-        });
+        for (const [index, value] of layer.values.entries()) {
+          if (!layer.flagged?.[index]) draw(top, value, index);
+        }
         context.globalAlpha = 0.9;
         context.fillStyle = flagged;
-        layer.values.forEach((value, index) => {
-          if (layer.flagged?.[index]) draw(value, index);
-        });
-      });
+        for (const [index, value] of layer.values.entries()) {
+          if (layer.flagged?.[index]) draw(top, value, index);
+        }
+      }
     });
   }, [size, geometry, dots, compact]);
 
@@ -360,10 +362,10 @@ function CumulativeMarks({
   x,
   box,
 }: {
-  layers: readonly CumulativeLayer[];
-  diagonal: boolean;
-  x: (value: number) => number;
-  box: PlotBox;
+  readonly layers: readonly CumulativeLayer[];
+  readonly diagonal: boolean;
+  readonly x: (value: number) => number;
+  readonly box: PlotBox;
 }) {
   const y = linearScale([0, 1], [box.top + box.height, box.top]);
   return (

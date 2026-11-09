@@ -1,5 +1,5 @@
-import { modelConstructs, modelEdges, presentEntries } from "@/lib/model-accessors";
 import type {
+  CausalEdgeSpec,
   ConstructId,
   ConstructSpec,
   DynamicalModelSpec,
@@ -7,25 +7,64 @@ import type {
   ModelDiffOutput,
   ReasoningSpec,
 } from "@grassmoth/api-types";
-import type { DagLayoutEdge, DagLayoutNode, Point } from "@/lib/utils/dag-graph-layout";
+import type { GraphDensity, LayeredGraphBundle } from "@/lib/dag/build-layered-causal-graph";
+import { modelConstructs, modelEdges, presentEntries } from "@/lib/model-accessors";
 import { humanize } from "@/lib/model-asset/selection";
-import type { LayeredGraphBundle } from "@/lib/dag/build-layered-causal-graph";
+import type {
+  DagLayoutEdge,
+  DagLayoutNode,
+  DagLayoutResult,
+  Point,
+} from "@/lib/utils/dag-graph-layout";
 
 /** Saved spec changes joined to their original model values for presentation. */
 export type ModelComparison = ModelDiffOutput & {
-  beforeDynamicalModelSpec: DynamicalModelSpec | null;
-  afterDynamicalModelSpec: DynamicalModelSpec | null;
+  readonly beforeDynamicalModelSpec: DynamicalModelSpec | null;
+  readonly afterDynamicalModelSpec: DynamicalModelSpec | null;
 };
 
 type Change = "added" | "removed" | "revised";
 
 interface DifferenceMark {
-  id: string;
-  change: Change;
-  x: number;
-  y: number;
-  title: string;
-  detail: string | ReasoningSpec;
+  readonly id: string;
+  readonly change: Change;
+  readonly x: number;
+  readonly y: number;
+  readonly title: string;
+  readonly detail: string | ReasoningSpec;
+}
+
+interface AddedNode {
+  readonly node: DagLayoutNode;
+  readonly construct: ConstructSpec;
+}
+
+interface AddedEdge {
+  readonly id: EdgeId;
+  readonly points: readonly Point[];
+}
+
+interface ComparisonOverlay {
+  readonly width: number;
+  readonly height: number;
+  readonly addedNodes: readonly AddedNode[];
+  readonly addedEdges: readonly AddedEdge[];
+  readonly edgeChanges: ReadonlyMap<EdgeId, Change>;
+  readonly constructChanges: ReadonlyMap<ConstructId, Change>;
+  readonly marks: readonly DifferenceMark[];
+}
+
+/** The first arrow drawn for a causal edge, and the constructs the layout drew it between. */
+interface DrawnEdge {
+  readonly points: readonly Point[];
+  readonly cause: ConstructId;
+  readonly effect: ConstructId;
+}
+
+interface ChangedEdge {
+  readonly id: EdgeId;
+  readonly change: Change;
+  readonly definition: CausalEdgeSpec;
 }
 
 /** The point halfway along a routed polyline. */
@@ -45,129 +84,187 @@ function halfway(points: readonly Point[]): Point | undefined {
   return points.at(-1);
 }
 
-/** Place additions around the selected layout. Existing coordinates are never recomputed. */
-export function placeComparisonOverlay(
-  comparison: ModelComparison | null,
+function changeOf(patch: object | null, existedBefore: boolean): Change {
+  if (patch === null) return "removed";
+  return existedBefore ? "revised" : "added";
+}
+
+/** Each causal edge's first drawn arrow. */
+function drawnEdges(
+  arrows: readonly DagLayoutEdge[],
   topology: LayeredGraphBundle,
-  layout: { nodes: DagLayoutNode[]; edges: DagLayoutEdge[]; width: number; height: number },
-) {
-  const positions = new Map(layout.nodes.map((node) => [node.id, node]));
-  const drawn = new Map<EdgeId, { points: Point[]; cause: ConstructId; effect: ConstructId }>();
-  for (const arrow of layout.edges) {
+): ReadonlyMap<EdgeId, DrawnEdge> {
+  const drawn = new Map<EdgeId, DrawnEdge>();
+  for (const arrow of arrows) {
     const meta = topology.arrowMeta.get(arrow.id);
-    if (meta && !drawn.has(meta.edge.id))
+    if (meta && !drawn.has(meta.edge.id)) {
       drawn.set(meta.edge.id, {
         points: arrow.points,
         cause: meta.cause.id,
         effect: meta.effect.id,
       });
+    }
   }
-  const beforeConstructs = new Map(
-    (comparison ? modelConstructs(comparison.beforeDynamicalModelSpec) : []).map((item) => [
-      item.id,
-      item,
-    ]),
+  return drawn;
+}
+
+/**
+ * Mark each changed construct on its card. Added constructs the layout has no card for stack in a
+ * column to its right, which is the only way the overlay grows.
+ */
+function placeConstructChanges(
+  comparison: ModelComparison | null,
+  size: GraphDensity["state"],
+  layout: DagLayoutResult,
+) {
+  const before = new Map(
+    modelConstructs(comparison?.beforeDynamicalModelSpec).map((item) => [item.id, item]),
   );
-  const constructs = new Map(
-    (comparison ? modelConstructs(comparison.afterDynamicalModelSpec) : []).map((item) => [
-      item.id,
-      item,
-    ]),
+  const after = new Map(
+    modelConstructs(comparison?.afterDynamicalModelSpec).map((item) => [item.id, item]),
   );
-  const beforeEdges = new Map(
+  const changed = presentEntries(comparison?.changes.constructs ?? {}).map(([id, patch]) => {
+    const change = changeOf(patch, before.has(id));
+    const definition = (change === "removed" ? before : after).get(id);
+    if (!definition) throw new Error(`Compared construct ${id} is missing from its model`);
+    return { id, change, definition };
+  });
+  const laidOut = new Map(layout.nodes.map((node) => [node.id, node]));
+  const addedNodes: readonly AddedNode[] = changed
+    .filter(({ id, change }) => change === "added" && !laidOut.has(id))
+    .map(({ definition }, index) => ({
+      node: {
+        id: definition.id,
+        x: layout.width + 60,
+        y: 20 + index * (size.height + 40),
+        width: size.width,
+        height: size.height,
+      },
+      construct: definition,
+    }));
+  const positions: ReadonlyMap<string, DagLayoutNode> = new Map([
+    ...laidOut,
+    ...addedNodes.map(({ node }) => [node.id, node] as const),
+  ]);
+  const marks = changed.flatMap(({ id, change, definition }): DifferenceMark[] => {
+    const node = positions.get(id);
+    if (!node) return [];
+    return [
+      {
+        id,
+        x: node.x + node.width,
+        y: node.y,
+        change,
+        title: `${humanize(change)} construct`,
+        detail: humanize(definition.name),
+      },
+    ];
+  });
+  return {
+    width: Math.max(layout.width, ...addedNodes.map(({ node }) => node.x + node.width)),
+    height: Math.max(layout.height, ...addedNodes.map(({ node }) => node.y + node.height)),
+    positions,
+    addedNodes,
+    changes: new Map(changed.map(({ id, change }) => [id, change])),
+    marks,
+  };
+}
+
+/** A right-angled route from one card's east side to another's west side, and its midpoint. */
+function routeBetween(source: DagLayoutNode, target: DagLayoutNode) {
+  const start = { x: source.x + source.width, y: source.y + source.height / 2 };
+  const end = { x: target.x, y: target.y + target.height / 2 };
+  const middle = (start.x + end.x) / 2;
+  return {
+    points: [start, { x: middle, y: start.y }, { x: middle, y: end.y }, end],
+    anchor: { x: middle, y: (start.y + end.y) / 2 },
+  };
+}
+
+/**
+ * A changed edge's mark sits halfway along its drawn arrow. A present edge the layout has no arrow
+ * for, or drew between other constructs, gets a new arrow between its endpoints' cards when both
+ * are placed; the mark moves onto it, and a moved edge's old arrow reads as removed.
+ */
+function placeEdgeChange(
+  { id, change, definition }: ChangedEdge,
+  drawn: ReadonlyMap<EdgeId, DrawnEdge>,
+  positions: ReadonlyMap<string, DagLayoutNode>,
+) {
+  const arrow = drawn.get(id);
+  const moved =
+    arrow !== undefined &&
+    (arrow.cause !== definition.cause.id || arrow.effect !== definition.effect.id);
+  const source = positions.get(definition.cause.id);
+  const target = positions.get(definition.effect.id);
+  if (change !== "removed" && (!arrow || moved) && source && target) {
+    const { points, anchor } = routeBetween(source, target);
+    const shown: Change = moved ? "removed" : change;
+    return { shown, added: { id, points }, anchor };
+  }
+  return { shown: change, added: null, anchor: arrow ? halfway(arrow.points) : undefined };
+}
+
+function placeEdgeChanges(
+  comparison: ModelComparison | null,
+  drawn: ReadonlyMap<EdgeId, DrawnEdge>,
+  positions: ReadonlyMap<string, DagLayoutNode>,
+) {
+  const before = new Map(
     modelEdges(comparison?.beforeDynamicalModelSpec).map((item) => [item.id, item]),
   );
-  const afterEdges = new Map(
+  const after = new Map(
     modelEdges(comparison?.afterDynamicalModelSpec).map((item) => [item.id, item]),
   );
-  const edgeChanges = new Map<EdgeId, Change>();
-  const constructChanges = new Map<ConstructId, Change>();
-  const addedNodes: Array<{ node: DagLayoutNode; construct: ConstructSpec }> = [];
-  const addedEdges: Array<{ id: EdgeId; points: Point[] }> = [];
-  const marks: DifferenceMark[] = [];
-  let overlayWidth = layout.width,
-    overlayHeight = layout.height,
-    nextY = 20;
-
-  const addNode = (construct: ConstructSpec) => {
-    const existing = positions.get(construct.id);
-    if (existing) return existing;
-    const size = topology.density.state;
-    const node = {
-      id: construct.id,
-      x: layout.width + 60,
-      y: nextY,
-      width: size.width,
-      height: size.height,
-    };
-    nextY += size.height + 40;
-    positions.set(construct.id, node);
-    addedNodes.push({ node, construct });
-    overlayWidth = Math.max(overlayWidth, node.x + node.width);
-    overlayHeight = Math.max(overlayHeight, node.y + node.height);
-    return node;
-  };
-  const addEdge = (id: EdgeId, source: DagLayoutNode, target: DagLayoutNode) => {
-    const start = { x: source.x + source.width, y: source.y + source.height / 2 };
-    const end = { x: target.x, y: target.y + target.height / 2 };
-    const middle = (start.x + end.x) / 2;
-    addedEdges.push({
-      id,
-      points: [start, { x: middle, y: start.y }, { x: middle, y: end.y }, end],
-    });
-    return { x: middle, y: (start.y + end.y) / 2 };
-  };
-  for (const [id, patch] of presentEntries(comparison?.changes.constructs ?? {})) {
-    const change = patch === null ? "removed" : beforeConstructs.has(id) ? "revised" : "added";
-    constructChanges.set(id, change);
-    const definition = (change === "removed" ? beforeConstructs : constructs).get(id);
-    if (!definition) throw new Error(`Compared construct ${id} is missing from its model`);
-    const node = change === "added" ? addNode(definition) : positions.get(id);
-    if (!node) continue;
-    marks.push({
-      id: id,
-      x: node.x + node.width,
-      y: node.y,
-      change: change,
-      title: `${humanize(change)} construct`,
-      detail: humanize(definition.name),
-    });
-  }
-  for (const [id, patch] of presentEntries(comparison?.changes.edges ?? {})) {
-    const change = patch === null ? "removed" : beforeEdges.has(id) ? "revised" : "added";
-    edgeChanges.set(id, change);
-    const definition = (change === "removed" ? beforeEdges : afterEdges).get(id);
+  const placed = presentEntries(comparison?.changes.edges ?? {}).map(([id, patch]) => {
+    const change = changeOf(patch, before.has(id));
+    const definition = (change === "removed" ? before : after).get(id);
     if (!definition) throw new Error(`Compared edge ${id} is missing from its model`);
-    const arrow = drawn.get(id);
-    let anchor = arrow ? halfway(arrow.points) : undefined;
-    const moved =
-      arrow !== undefined &&
-      (arrow.cause !== definition.cause.id || arrow.effect !== definition.effect.id);
-    if (change !== "removed" && (!arrow || moved)) {
-      const source = positions.get(definition.cause.id);
-      const target = positions.get(definition.effect.id);
-      if (source && target) {
-        if (moved) edgeChanges.set(id, "removed");
-        anchor = addEdge(id, source, target);
-      }
-    }
-    if (anchor)
-      marks.push({
-        id: id,
-        x: anchor.x,
-        y: anchor.y,
-        change: change,
-        title: `${humanize(change)} connection`,
-        detail: definition.reasoning,
-      });
-  }
+    return {
+      id,
+      change,
+      definition,
+      ...placeEdgeChange({ id, change, definition }, drawn, positions),
+    };
+  });
   return {
-    width: overlayWidth,
-    height: overlayHeight,
-    addedNodes,
-    addedEdges,
-    edgeChanges,
-    constructChanges,
-    marks,
+    addedEdges: placed.flatMap(({ added }) => (added ? [added] : [])),
+    changes: new Map(placed.map(({ id, shown }) => [id, shown])),
+    marks: placed.flatMap(({ id, change, definition, anchor }): DifferenceMark[] => {
+      if (!anchor) return [];
+      return [
+        {
+          id,
+          x: anchor.x,
+          y: anchor.y,
+          change,
+          title: `${humanize(change)} connection`,
+          detail: definition.reasoning,
+        },
+      ];
+    }),
+  };
+}
+
+/** Place additions around the selected layout. Existing coordinates are never recomputed. */
+export function placeComparisonOverlay(
+  comparison: ModelComparison | null,
+  topology: LayeredGraphBundle,
+  layout: DagLayoutResult,
+): ComparisonOverlay {
+  const constructs = placeConstructChanges(comparison, topology.density.state, layout);
+  const edges = placeEdgeChanges(
+    comparison,
+    drawnEdges(layout.edges, topology),
+    constructs.positions,
+  );
+  return {
+    width: constructs.width,
+    height: constructs.height,
+    addedNodes: constructs.addedNodes,
+    addedEdges: edges.addedEdges,
+    edgeChanges: edges.changes,
+    constructChanges: constructs.changes,
+    marks: [...constructs.marks, ...edges.marks],
   };
 }

@@ -1,7 +1,7 @@
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import type { TimelineRevision } from "@grassmoth/api-types";
 import { QueryClient, skipToken, useQuery } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { readActionPoll } from "@/lib/api/endpoints";
 import { useModelDiff } from "@/lib/hooks/use-model-diff";
 

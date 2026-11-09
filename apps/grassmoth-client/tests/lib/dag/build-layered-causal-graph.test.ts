@@ -1,9 +1,9 @@
-import { placeComparisonOverlay } from "@/lib/dag/comparison-overlay";
-import { modelEdges } from "@/lib/model-accessors";
-import { describe, expect, it } from "vitest";
 import type { CausalEdgeSpec, ConstructSpec } from "@grassmoth/api-types";
+import { describe, expect, it } from "vitest";
 import { baseline, modelFixture, outcome, treatment } from "@/lib/__fixtures__/model";
 import { buildLayeredCausalGraph, GRAPH_DENSITIES } from "@/lib/dag/build-layered-causal-graph";
+import { placeComparisonOverlay } from "@/lib/dag/comparison-overlay";
+import { modelEdges } from "@/lib/model-accessors";
 
 const response: CausalEdgeSpec["mechanisms"][number] = {
   id: "mechanism:00000000000000000009",

@@ -1,48 +1,48 @@
-import { DefinitionContext } from "./definition-context";
+import type { TimelineRevision } from "@grassmoth/api-types";
+import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { Button } from "@/components/ui/button";
-import { PaneToggle } from "./workbench-panes";
+import { type EntityPresentation, resolveEntity } from "@/lib/model-asset/entities";
 import { constructEquation, observationEquation } from "@/lib/model-asset/equations";
-import { resolveEntity } from "@/lib/model-asset/entities";
+import type { ScopeContext } from "@/lib/model-asset/scope";
 import type { EntitySelection } from "@/lib/model-asset/selection";
+import { humanize } from "@/lib/model-asset/selection";
+import { DefinitionContext } from "./definition-context";
 import { Hint, OwnerLink, Section } from "./scope-primitives";
 import { ConstructScope, IdentificationFinding } from "./scopes/construct-scope";
-import { EdgeScope } from "./scopes/edge-scope";
-import { IndicatorScope } from "./scopes/indicator-scope";
-import type { ScopeContext } from "@/lib/model-asset/scope";
-import type { TimelineRevision } from "@grassmoth/api-types";
-import { humanize } from "@/lib/model-asset/selection";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { DataComparisonEvidence, PreparedObservations } from "./scopes/data-details";
+import { EdgeScope } from "./scopes/edge-scope";
+import { ModelComparisonDetails } from "./scopes/edit-details";
 import { FitDetails } from "./scopes/fit-details";
+import { IndicatorScope } from "./scopes/indicator-scope";
 import { QuestionChecks, QuestionDetails } from "./scopes/question-details";
 import { SimulationEvidence } from "./simulation-evidence";
-import { ModelComparisonDetails } from "./scopes/edit-details";
+import { PaneToggle } from "./workbench-panes";
 
 function ModelScope({
   context,
   tick,
 }: {
-  context: ScopeContext;
-  tick: TimelineRevision | undefined;
+  readonly context: ScopeContext;
+  readonly tick: TimelineRevision | undefined;
 }) {
-  if (
-    !tick ||
-    tick.record.attempt.outcome.status !== "applied" ||
-    tick.record.attempt.request === null
-  )
+  if (tick?.record.attempt.outcome.status !== "applied" || tick.record.attempt.request === null) {
     return <Hint>No new model-wide state was produced.</Hint>;
+  }
   if (tick.record.attempt.action === "fit") return <FitDetails context={context} />;
   if (tick.record.attempt.action === "simulate") return <SimulationEvidence context={context} />;
-  if (tick.record.attempt.action === "prepare_data")
+  if (tick.record.attempt.action === "prepare_data") {
     return <PreparedObservations context={context} />;
-  if (tick.record.attempt.action === "data_diff")
+  }
+  if (tick.record.attempt.action === "data_diff") {
     return context.dataDiff ? (
       <DataComparisonEvidence context={context} report={context.dataDiff} selection={null} />
     ) : (
       <Hint>Reading the saved comparison…</Hint>
     );
-  if (tick.record.attempt.action === "model_diff")
+  }
+  if (tick.record.attempt.action === "model_diff") {
     return <ModelComparisonDetails context={context} />;
+  }
   const identification = context.modelSnapshot.identification;
   const equations = [
     ...context.entities.constructs.flatMap((construct) => {
@@ -121,6 +121,39 @@ function ModelScope({
   );
 }
 
+/** A data comparison, the selected part's scope, or the model-wide state with no selection. */
+function DetailsContent({
+  selection,
+  entity,
+  context,
+  loading,
+  tick,
+}: {
+  readonly selection: EntitySelection | null;
+  readonly entity: EntityPresentation | null | undefined;
+  readonly context: ScopeContext;
+  readonly loading: boolean;
+  readonly tick: TimelineRevision | undefined;
+}) {
+  if (loading) {
+    return (
+      <p role="status" className="text-xs">
+        Loading version…
+      </p>
+    );
+  }
+  if (context.dataDiff) {
+    return (
+      <DataComparisonEvidence context={context} report={context.dataDiff} selection={selection} />
+    );
+  }
+  if (!selection) return <ModelScope context={context} tick={tick} />;
+  if (!entity) return <Hint>This {selection.kind} is absent from this revision.</Hint>;
+  if (selection.kind === "construct") return <ConstructScope context={context} id={selection.id} />;
+  if (selection.kind === "edge") return <EdgeScope context={context} id={selection.id} />;
+  return <IndicatorScope context={context} id={selection.id} />;
+}
+
 /**
  * The state the selected action left, in depth. With a graph part selected it shows that part.
  * With nothing selected it shows the model-wide state that action produced, and only that:
@@ -146,10 +179,10 @@ export function DetailsPane({
   loading,
   tick,
 }: {
-  selection: EntitySelection | null;
-  context: ScopeContext;
-  loading: boolean;
-  tick: TimelineRevision | undefined;
+  readonly selection: EntitySelection | null;
+  readonly context: ScopeContext;
+  readonly loading: boolean;
+  readonly tick: TimelineRevision | undefined;
 }) {
   const entity = selection ? resolveEntity(context.entities, selection) : null;
   return (
@@ -180,27 +213,13 @@ export function DetailsPane({
           key={selection?.id ?? tick?.record.seq}
           className="flex min-h-0 flex-1 flex-col flex-wrap content-start items-start gap-x-[18px] gap-y-3 overflow-x-auto pb-2 [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto"
         >
-          {loading ? (
-            <p role="status" className="text-xs">
-              Loading version…
-            </p>
-          ) : context.dataDiff ? (
-            <DataComparisonEvidence
-              context={context}
-              report={context.dataDiff}
-              selection={selection}
-            />
-          ) : !selection ? (
-            <ModelScope context={context} tick={tick} />
-          ) : !entity ? (
-            <Hint>This {selection.kind} is absent from this revision.</Hint>
-          ) : selection.kind === "construct" ? (
-            <ConstructScope context={context} id={selection.id} />
-          ) : selection.kind === "edge" ? (
-            <EdgeScope context={context} id={selection.id} />
-          ) : (
-            <IndicatorScope context={context} id={selection.id} />
-          )}
+          <DetailsContent
+            selection={selection}
+            entity={entity}
+            context={context}
+            loading={loading}
+            tick={tick}
+          />
         </div>
       </div>
     </section>

@@ -16,7 +16,7 @@ import { PaneToggle, usePane } from "./workbench-panes";
  * One call's input above its log. Each scrolls on its own, and the rows share the height: a
  * section shorter than half keeps its natural height and the other takes the rest.
  */
-function CallSections({ children }: { children: ReactNode }) {
+function CallSections({ children }: { readonly children: ReactNode }) {
   return (
     <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,auto)_minmax(0,auto)] content-start divide-y">
       {children}
@@ -24,7 +24,7 @@ function CallSections({ children }: { children: ReactNode }) {
   );
 }
 
-function RecordHeading({ tick }: { tick: TimelineRevision }) {
+function RecordHeading({ tick }: { readonly tick: TimelineRevision }) {
   const { action, outcome } = tick.record.attempt;
   const style = ACTION_STYLE[action];
   return (
@@ -58,15 +58,15 @@ export function ActionRecord({
   hrefAt,
   onSelectVersion,
 }: {
-  tick: TimelineRevision | undefined;
-  attempts: readonly TimelineRevision[];
-  dependencies: readonly RecordDependency[];
-  running: readonly RunningAction[];
-  useActionPoll: UseActionPoll;
-  hrefAt: (seq: number) => string;
-  onSelectVersion: (seq: number) => void;
+  readonly tick: TimelineRevision | undefined;
+  readonly attempts: readonly TimelineRevision[];
+  readonly dependencies: readonly RecordDependency[];
+  readonly running: readonly RunningAction[];
+  readonly useActionPoll: UseActionPoll;
+  readonly hrefAt: (seq: number) => string;
+  readonly onSelectVersion: (seq: number) => void;
 }) {
-  if (usePane()?.collapsed)
+  if (usePane()?.collapsed) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center gap-2 py-2">
         <PaneToggle title="action record" />
@@ -75,6 +75,7 @@ export function ActionRecord({
         </h2>
       </div>
     );
+  }
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex min-h-11 flex-none items-center gap-2 border-b px-3 py-1.5">

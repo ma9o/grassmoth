@@ -18,9 +18,10 @@ export async function readActionPoll(
     },
     ...(signal === undefined ? {} : { signal }),
   });
-  if (response.data === undefined)
+  if (response.data === undefined) {
     throw new Error(
       `Cannot read ${action} (${response.response.status}): ${JSON.stringify(response.error)}`,
     );
+  }
   return response.data;
 }

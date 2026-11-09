@@ -1,16 +1,33 @@
 "use client";
 
-import type { IndicatorId, ModelSnapshot } from "@grassmoth/api-types";
+import type { ActionSuccess, IndicatorId, ModelSnapshot } from "@grassmoth/api-types";
 import { useMemo } from "react";
+import { presentEntries } from "@/lib/model-accessors";
 import {
-  historyView,
-  pathsView,
   drawsView,
+  historyView,
   type PathSeriesView,
+  pathsView,
   type SimulationPathsView,
 } from "@/lib/model-asset/result-values";
-import { presentEntries } from "@/lib/model-accessors";
 import { useActionResult, useViewedSimulationResult } from "./use-model-snapshot";
+
+function savedObservations(modelSnapshot: ModelSnapshot, result: ActionSuccess | undefined) {
+  if (result?.action === "simulate") {
+    return {
+      history:
+        modelSnapshot.state.data && result.body.data[modelSnapshot.state.data.replicate_index],
+      owner: {
+        ...result.body.report.evidence.observation_layout,
+        time_origin: result.body.report.evidence.time_origin,
+      },
+    };
+  }
+  if (result?.action === "prepare_data") {
+    return { history: result.body.data, owner: result.body.metadata };
+  }
+  return { history: null, owner: null };
+}
 
 export function useObservationHistory(modelSnapshot: ModelSnapshot, id: IndicatorId) {
   const query = useActionResult(
@@ -18,23 +35,9 @@ export function useObservationHistory(modelSnapshot: ModelSnapshot, id: Indicato
     modelSnapshot.state.data?.revision ?? modelSnapshot.commit_id,
   );
   const result = query.data;
-  const history =
-    result?.action === "simulate"
-      ? modelSnapshot.state.data && result.body.data[modelSnapshot.state.data.replicate_index]
-      : result?.action === "prepare_data"
-        ? result.body.data
-        : null;
+  const { history, owner } = savedObservations(modelSnapshot, result);
   const selected = history?.[id];
-  const owner =
-    result?.action === "prepare_data"
-      ? result.body.metadata
-      : result?.action === "simulate"
-        ? {
-            ...result.body.report.evidence.observation_layout,
-            time_origin: result.body.report.evidence.time_origin,
-          }
-        : null;
-  const variable = owner?.variables.find((variable) => variable.id === id);
+  const variable = owner?.variables.find((observation) => observation.id === id);
   return {
     ...query,
     data:

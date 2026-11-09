@@ -51,7 +51,7 @@ const TOGGLE_ICONS: Record<Edge, { collapse: LucideIcon; expand: LucideIcon }> =
 };
 
 /** Collapses the pane around it to its title bar, or restores it. */
-export function PaneToggle({ title }: { title: string }) {
+export function PaneToggle({ title }: { readonly title: string }) {
   const pane = usePane();
   if (pane === null) return null;
   const Icon = pane.collapsed ? TOGGLE_ICONS[pane.edge].expand : TOGGLE_ICONS[pane.edge].collapse;
@@ -74,7 +74,7 @@ export function PaneToggle({ title }: { title: string }) {
  * The gap between two panes: drag it, move it with the arrow keys once focused, or double-click
  * it to restore the default split.
  */
-function Seam({ between }: { between: "columns" | "rows" }) {
+function Seam({ between }: { readonly between: "columns" | "rows" }) {
   return (
     <Separator
       className={cn(
@@ -102,7 +102,10 @@ const DETAILS_SHARE = 50;
  * One group's split for one action. A split the user drags or collapses is saved under that
  * action alone; opening an action restores its saved split, or the group's default split.
  */
-function useActionLayout(id: string, restoreDefault: (group: GroupImperativeHandle) => void) {
+function useActionLayout(
+  id: string,
+  restoreDefault: (group: Readonly<GroupImperativeHandle>) => void,
+) {
   const groupRef = useGroupRef();
   const saved = useDefaultLayout({ id, onlySaveAfterUserInteractions: true });
   // Runs whenever the action changes, even when neither action has a saved split.
@@ -133,15 +136,23 @@ function CollapsiblePanel({
   onToggled,
   children,
   ...panel
-}: Omit<
-  PanelProps,
-  "panelRef" | "collapsible" | "collapsedSize" | "onResize" | "className" | "children"
+}: Readonly<
+  Omit<
+    PanelProps,
+    | "panelRef"
+    | "collapsible"
+    | "collapsedSize"
+    | "onResize"
+    | "className"
+    | "children"
+    | "dangerouslySetInnerHTML"
+  >
 > & {
-  edge: Edge;
-  panelRef: RefObject<PanelImperativeHandle | null>;
-  sibling: RefObject<PanelImperativeHandle | null> | null;
-  onToggled: () => void;
-  children: ReactNode;
+  readonly edge: Edge;
+  readonly panelRef: RefObject<PanelImperativeHandle | null>;
+  readonly sibling: RefObject<PanelImperativeHandle | null> | null;
+  readonly onToggled: () => void;
+  readonly children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const control = useMemo(
@@ -188,17 +199,17 @@ export function WorkbenchPanes({
   record,
 }: {
   /** The workspace and action whose split this is. */
-  layoutId: string;
-  graph: ReactNode;
-  details: ReactNode;
-  record: ReactNode;
+  readonly layoutId: string;
+  readonly graph: ReactNode;
+  readonly details: ReactNode;
+  readonly record: ReactNode;
 }) {
   const graphRef = usePanelRef();
   const detailsRef = usePanelRef();
   const recordRef = usePanelRef();
   const restoreColumns = useCallback(() => recordRef.current?.resize(RECORD_WIDTH), [recordRef]);
   const restoreRows = useCallback(
-    (group: GroupImperativeHandle) =>
+    (group: Readonly<GroupImperativeHandle>) =>
       group.setLayout({ graph: 100 - DETAILS_SHARE, details: DETAILS_SHARE }),
     [],
   );

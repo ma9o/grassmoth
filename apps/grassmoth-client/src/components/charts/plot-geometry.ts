@@ -67,20 +67,26 @@ export function timeTicks(domain: Domain, origin: string | null, count: number):
 export function finiteRuns(
   times: readonly number[],
   values: readonly (number | null)[],
-): Array<Array<readonly [number, number]>> {
-  const runs: Array<Array<readonly [number, number]>> = [];
-  let run: Array<readonly [number, number]> = [];
-  times.forEach((time, index) => {
+): (readonly [number, number])[][] {
+  const runs: (readonly [number, number])[][] = [];
+  let run: (readonly [number, number])[] = [];
+  for (const [index, time] of times.entries()) {
     const value = values[index];
     if (value == null || !Number.isFinite(value)) {
-      if (run.length) runs.push(run);
+      if (run.length > 0) runs.push(run);
       run = [];
-      return;
+      continue;
     }
     run.push([time, value]);
-  });
-  if (run.length) runs.push(run);
+  }
+  if (run.length > 0) runs.push(run);
   return runs;
+}
+
+/** Pixel positions along a plot's time and value axes. */
+export interface PlotScales {
+  readonly x: (time: number) => number;
+  readonly y: (value: number) => number;
 }
 
 /** Trace every finite coordinate directly, breaking the line at each missing value. */
@@ -88,20 +94,19 @@ export function traceLine(
   path: Pick<CanvasPath, "moveTo" | "lineTo">,
   times: readonly number[],
   values: readonly (number | null)[],
-  x: (time: number) => number,
-  y: (value: number) => number,
+  { x, y }: PlotScales,
 ): void {
   let connected = false;
-  times.forEach((time, index) => {
+  for (const [index, time] of times.entries()) {
     const value = values[index];
     if (value == null || !Number.isFinite(value)) {
       connected = false;
-      return;
+      continue;
     }
     if (connected) path.lineTo(x(time), y(value));
     else path.moveTo(x(time), y(value));
     connected = true;
-  });
+  }
 }
 
 /** SVG path data for a series, including the highlighted draw above the canvas. */
@@ -116,7 +121,7 @@ export function linePath(
       run
         .map(
           ([time, value], index) =>
-            `${index ? "L" : "M"}${x(time).toFixed(2)},${y(value).toFixed(2)}`,
+            `${index > 0 ? "L" : "M"}${x(time).toFixed(2)},${y(value).toFixed(2)}`,
         )
         .join(""),
     )

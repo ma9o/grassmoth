@@ -1,9 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { expect, it, vi } from "vitest";
-import { readActionPoll } from "@/lib/api/endpoints";
-import { actionPollQuery } from "@/lib/hooks/use-action-poll";
 import { modelComparison, runningPoll } from "@/lib/__fixtures__/action-results";
 import { executionMessages } from "@/lib/__fixtures__/execution-log";
+import { readActionPoll } from "@/lib/api/endpoints";
+import { actionPollQuery } from "@/lib/hooks/use-action-poll";
 
 vi.mock("@/lib/api/endpoints", () => ({ readActionPoll: vi.fn() }));
 

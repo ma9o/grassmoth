@@ -1,12 +1,10 @@
 "use client";
 
-import { modelReference, producingCall } from "./call-dependencies";
-
 import type { ActionSuccess, ModelSnapshot, TimelineRevision } from "@grassmoth/api-types";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelComparison } from "@/lib/dag/comparison-overlay";
 import { useModelDiff } from "@/lib/hooks/use-model-diff";
+import { modelReference, producingCall } from "./call-dependencies";
 import { indexModel } from "./entities";
 import { latestSeq } from "./journal";
 import type { ScopeContext } from "./scope";
@@ -20,6 +18,22 @@ export type SnapshotReader = (commitId: string | undefined) => {
   result?: ActionSuccess | undefined;
 };
 
+function inspectedCommit(
+  record: TimelineRevision | undefined,
+  attempts: readonly TimelineRevision[],
+  latest: number,
+): string | undefined {
+  if (!record) return attempts.find((entry) => entry.record.seq === latest)?.commit_id;
+  // Applied leaves own their results; failed attempts inspect their unchanged parent state.
+  if (
+    record.record.attempt.outcome.status === "applied" &&
+    record.record.attempt.request !== null
+  ) {
+    return record.commit_id;
+  }
+  return modelReference(record, attempts);
+}
+
 export function useWorkbenchSnapshots(
   attempts: readonly TimelineRevision[],
   useSnapshot: SnapshotReader,
@@ -28,12 +42,7 @@ export function useWorkbenchSnapshots(
   const latest = latestSeq(attempts);
   const playhead = requestedSeq ?? latest;
   const record = attempts.find((item) => item.record.seq === playhead);
-  // Applied leaves own their results; failed attempts inspect their unchanged parent state.
-  const commitId = record
-    ? record.record.attempt.outcome.status === "applied" && record.record.attempt.request !== null
-      ? record.commit_id
-      : modelReference(record, attempts)
-    : attempts.find((entry) => entry.record.seq === latest)?.commit_id;
+  const commitId = inspectedCommit(record, attempts, latest);
   const selected = useSnapshot(commitId);
   const hasSelectedState = producingCall(attempts, commitId) !== undefined;
   const hasCurrentState = attempts.some(
@@ -48,14 +57,14 @@ export function useWorkbenchSnapshots(
 }
 
 interface WorkbenchOptions {
-  useSnapshot: SnapshotReader;
-  workspaceId: string;
-  attempts: readonly TimelineRevision[];
-  modelSnapshot: ModelSnapshot;
-  focusSeq: number;
-  navigationKey: string;
-  result: ActionSuccess | undefined;
-  viewAt: (seq: number | null) => void;
+  readonly useSnapshot: SnapshotReader;
+  readonly workspaceId: string;
+  readonly attempts: readonly TimelineRevision[];
+  readonly modelSnapshot: ModelSnapshot;
+  readonly focusSeq: number;
+  readonly navigationKey: string;
+  readonly result: ActionSuccess | undefined;
+  readonly viewAt: (seq: number | null) => void;
 }
 
 /** Coordinate scoped details, chat, version navigation and comparison previews. */

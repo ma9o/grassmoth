@@ -1,11 +1,17 @@
 import type { ConstructId, Expression } from "@grassmoth/api-types";
 import { FlowChart } from "@/components/charts/flow-chart";
-import { expressionStates, modelFlowPlots, type FlowPlot } from "@/lib/model-asset/flow-plots";
+import { expressionStates, type FlowPlot, modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
 import { Hint, OwnerLink, Section } from "../scope-primitives";
 
-export function FlowSection({ title, plot }: { title: string; plot: FlowPlot | undefined }) {
+export function FlowSection({
+  title,
+  plot,
+}: {
+  readonly title: string;
+  readonly plot: FlowPlot | undefined;
+}) {
   if (!plot) return null;
   return (
     <Section title={title} wide>
@@ -24,9 +30,9 @@ export function FlowInputs({
   expressions,
   target,
 }: {
-  context: ScopeContext;
-  expressions: readonly Expression[];
-  target: ConstructId;
+  readonly context: ScopeContext;
+  readonly expressions: readonly Expression[];
+  readonly target: ConstructId;
 }) {
   const model = context.modelSnapshot.dynamical_model_spec;
   if (!model) return null;

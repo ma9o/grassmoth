@@ -1,13 +1,13 @@
 import type {
+  CausalEdgeSpec,
   ConstructId,
   ConstructSpec,
-  CausalEdgeSpec,
   IndicatorId,
   IndicatorSpec,
   ModelSnapshot,
 } from "@grassmoth/api-types";
-import type { ScopeContext } from "./scope";
 import { recordedEntityFailures } from "./entity-findings";
+import type { ScopeContext } from "./scope";
 
 /** These selectors only arrange recorded findings for their owning entities. */
 export function constructPresentation(context: ScopeContext, id: ConstructId) {

@@ -1,4 +1,3 @@
-import { modelParameters } from "@/lib/model-accessors";
 import type {
   CausalEdgeSpec,
   ConstructSpec,
@@ -8,30 +7,31 @@ import type {
   ParameterSpec,
   PosteriorMarginal,
 } from "@grassmoth/api-types";
-import { type CoefficientUse, coefficientUses } from "@/lib/model-accessors";
-import { observationArguments } from "./observation-law";
+import { type CoefficientUse, coefficientUses, modelParameters } from "@/lib/model-accessors";
 import { authoredPriorPlot } from "./authored-prior-plot";
+import { observationArguments } from "./observation-law";
 import { humanize } from "./selection";
 
 /** One parameter's recorded laws at the viewed version, arranged on a single axis. */
 export interface LawCurve {
-  use: CoefficientUse;
-  parameter: ParameterSpec;
+  readonly use: CoefficientUse;
+  readonly parameter: ParameterSpec;
   /**
    * `fitted`: the fit's conditioned input law beside its posteriors, on the quantity scale.
    * `authored`: the law as written, on its authoring scale.
    */
-  kind: "fitted" | "authored";
-  prior: DensityCurve;
-  posteriors: readonly PosteriorMarginal[];
+  readonly kind: "fitted" | "authored";
+  readonly prior: DensityCurve;
+  readonly posteriors: readonly PosteriorMarginal[];
   /** The authored law's family; a fitted law is known by its posteriors. */
-  family: string | null;
+  readonly family: string | null;
 }
 
 /** Laws named by an entity's own terms: construct dynamics and noise, edge mechanisms, or measurement. */
 export function ownLawUses(entity: ConstructSpec | CausalEdgeSpec | IndicatorSpec) {
-  if ("dynamics" in entity)
+  if ("dynamics" in entity) {
     return coefficientUses([...entity.dynamics.map((d) => d.expression), ...entity.coefficients]);
+  }
   if ("mechanisms" in entity) return coefficientUses(entity.mechanisms.map((m) => m.expression));
   return coefficientUses(
     entity.likelihood ? observationArguments(entity.likelihood.law).map(([, value]) => value) : [],
@@ -56,7 +56,7 @@ export function lawCurves(
     const posteriors = (fit?.posterior_marginals ?? []).filter(
       (marginal) => marginal.subject.parameter_id === use.parameterId,
     );
-    if (fit && posteriors.length > 0)
+    if (fit && posteriors.length > 0) {
       return [
         {
           use,
@@ -67,6 +67,7 @@ export function lawCurves(
           family: null,
         },
       ];
+    }
     const law = parameter.distribution
       ? modelSnapshot.dynamical_model_spec?.distributions[parameter.distribution]
       : null;
@@ -75,8 +76,9 @@ export function lawCurves(
       law?.distribution === "Delta" ||
       (parameter.distribution &&
         modelSnapshot.dynamical_model_spec?.law_layouts[parameter.distribution])
-    )
+    ) {
       return [];
+    }
     return law
       ? [
           {

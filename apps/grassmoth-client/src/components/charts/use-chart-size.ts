@@ -18,7 +18,7 @@ export function useChartSize<T extends HTMLElement>() {
       const box = entries.at(-1)?.contentRect;
       if (!box) return;
       setSize((previous) =>
-        previous && previous.width === box.width && previous.height === box.height
+        previous?.width === box.width && previous.height === box.height
           ? previous
           : { width: box.width, height: box.height },
       );
@@ -52,7 +52,7 @@ export function paintCanvas(
   resolution: number,
   paint: (context: CanvasRenderingContext2D) => void,
 ) {
-  const ratio = (window.devicePixelRatio || 1) * resolution;
+  const ratio = window.devicePixelRatio * resolution;
   canvas.width = Math.max(1, Math.round(size.width * ratio));
   canvas.height = Math.max(1, Math.round(size.height * ratio));
   const context = canvas.getContext("2d");

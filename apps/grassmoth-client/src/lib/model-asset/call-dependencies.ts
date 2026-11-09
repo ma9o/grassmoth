@@ -70,8 +70,9 @@ export function callDependencies(
     visited.add(seq);
     for (const dependency of viewDependencies(entry, dependencies)) {
       const parent = bySeq.get(dependency.source_seq);
-      if (parent === undefined)
+      if (parent === undefined) {
         throw new Error(`Missing recorded dependency ${dependency.source_seq} for call ${seq}`);
+      }
       visit(parent);
     }
     calls.push(entry);
@@ -93,21 +94,26 @@ export function modelReference(
   }
   if (!request) return undefined;
   switch (request.action) {
-    case "edit_model":
+    case "edit_model": {
       return request.input.parent_ref ?? undefined;
-    case "fit":
+    }
+    case "fit": {
       return request.input.target.kind === "new"
         ? request.input.target.dynamical_model_spec_ref
         : modelReference(producingCall(attempts, request.input.target.fit_ref), attempts);
+    }
     case "prepare_data":
-    case "simulate":
+    case "simulate": {
       return request.input.dynamical_model_spec_ref;
-    case "model_diff":
+    }
+    case "model_diff": {
       return request.input.after_ref;
-    case "data_diff":
+    }
+    case "data_diff": {
       return modelReference(
         producingCall(attempts, request.input.right_ref[0]?.revision),
         attempts,
       );
+    }
   }
 }

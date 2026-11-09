@@ -1,5 +1,8 @@
 "use client";
 
+import { type ColumnDef, flexRender, type SortDirection } from "@tanstack/react-table";
+import { ChevronDown, ChevronsUpDown, ChevronUp, Search } from "lucide-react";
+import type { ReactNode } from "react";
 import { StatTooltip } from "@/components/ui/stat-tooltip";
 import {
   Table,
@@ -9,19 +12,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { type ColumnDef, flexRender } from "@tanstack/react-table";
 import { useInfoTable } from "@/lib/tables/use-info-table";
-import { ChevronDown, ChevronUp, ChevronsUpDown, Search } from "lucide-react";
-import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 // ---------- Column meta typing ----------
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData, TValue> {
-    align?: "left" | "center" | "right";
-    mono?: boolean;
+    readonly align?: "left" | "center" | "right";
+    readonly mono?: boolean;
     /** Thresholding function: "fail" → red bg, "warn" → orange bg, undefined → default. */
-    severity?: (value: TValue, row: TData) => "fail" | "warn" | undefined;
+    readonly severity?: (value: TValue, row: TData) => "fail" | "warn" | undefined;
   }
 }
 
@@ -31,15 +31,25 @@ function severityClass(level: "fail" | "warn" | undefined): string | undefined {
   return undefined;
 }
 
+const ALIGN_CLASS = { left: "text-left", center: "text-center", right: "text-right" } as const;
+
+const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
+
+function SortIcon({ direction }: { readonly direction: false | SortDirection }) {
+  if (direction === "asc") return <ChevronUp className="h-3.5 w-3.5" />;
+  if (direction === "desc") return <ChevronDown className="h-3.5 w-3.5" />;
+  return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
+}
+
 // ---------- HeaderWithTooltip helper ----------
 export function HeaderWithTooltip({
   label,
   tooltip,
   className,
 }: {
-  label: string;
-  tooltip: string;
-  className?: string;
+  readonly label: string;
+  readonly tooltip: string;
+  readonly className?: string;
 }) {
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
@@ -52,18 +62,18 @@ export function HeaderWithTooltip({
 // ---------- InfoTable ----------
 
 interface InfoTableProps<TData> {
-  columns: ColumnDef<TData, unknown>[];
-  data: TData[];
-  sorting?: boolean;
-  filtering?: boolean;
-  compact?: boolean;
-  maxHeight?: string;
-  estimateRowHeight?: number;
-  groupBy?: (row: TData) => string;
-  renderGroupHeader?: (groupKey: string, rows: TData[]) => ReactNode;
-  rowClassName?: (row: TData, index: number) => string | undefined;
-  isRowExpanded?: (row: TData) => boolean;
-  renderExpandedRow?: (row: TData) => ReactNode;
+  readonly columns: readonly ColumnDef<TData>[];
+  readonly data: readonly TData[];
+  readonly sorting?: boolean;
+  readonly filtering?: boolean;
+  readonly compact?: boolean;
+  readonly maxHeight?: string;
+  readonly estimateRowHeight?: number;
+  readonly groupBy?: (row: TData) => string;
+  readonly renderGroupHeader?: (groupKey: string, rows: readonly TData[]) => ReactNode;
+  readonly rowClassName?: (row: TData, index: number) => string | undefined;
+  readonly isRowExpanded?: (row: TData) => boolean;
+  readonly renderExpandedRow?: (row: TData) => ReactNode;
 }
 
 export function InfoTable<TData>({
@@ -132,12 +142,8 @@ export function InfoTable<TData>({
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => {
                   const meta = header.column.columnDef.meta;
-                  const alignClass =
-                    meta?.align === "right"
-                      ? "text-right"
-                      : meta?.align === "center"
-                        ? "text-center"
-                        : "text-left";
+                  const alignClass = ALIGN_CLASS[meta?.align ?? "left"];
+                  const sorted = header.column.getIsSorted();
 
                   return (
                     <TableHead
@@ -153,27 +159,15 @@ export function InfoTable<TData>({
                           ? { cursor: "pointer", userSelect: "none" }
                           : undefined
                       }
-                      aria-sort={
-                        enableSorting && header.column.getIsSorted()
-                          ? header.column.getIsSorted() === "asc"
-                            ? "ascending"
-                            : "descending"
-                          : undefined
-                      }
+                      aria-sort={enableSorting && sorted !== false ? ARIA_SORT[sorted] : undefined}
                     >
                       <span className="inline-flex items-center gap-1">
                         {header.isPlaceholder
                           ? null
                           : flexRender(header.column.columnDef.header, header.getContext())}
-                        {enableSorting &&
-                          header.column.getCanSort() &&
-                          (header.column.getIsSorted() === "asc" ? (
-                            <ChevronUp className="h-3.5 w-3.5" />
-                          ) : header.column.getIsSorted() === "desc" ? (
-                            <ChevronDown className="h-3.5 w-3.5" />
-                          ) : (
-                            <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />
-                          ))}
+                        {enableSorting && header.column.getCanSort() && (
+                          <SortIcon direction={sorted} />
+                        )}
                       </span>
                     </TableHead>
                   );
@@ -234,12 +228,7 @@ export function InfoTable<TData>({
                 >
                   {row.getVisibleCells().map((cell) => {
                     const meta = cell.column.columnDef.meta;
-                    const alignClass =
-                      meta?.align === "right"
-                        ? "text-right"
-                        : meta?.align === "center"
-                          ? "text-center"
-                          : "text-left";
+                    const alignClass = ALIGN_CLASS[meta?.align ?? "left"];
                     const sev = meta?.severity?.(cell.getValue(), cell.row.original);
 
                     return (

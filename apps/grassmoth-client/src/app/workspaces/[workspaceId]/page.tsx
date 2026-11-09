@@ -6,7 +6,11 @@ import { CausalModelAsset } from "@/components/model/causal-model-asset";
 import { useStudyJournal } from "@/lib/hooks/use-study-journal";
 
 /** Inspect the canonical study from its first, possibly empty, checkpoint. */
-export default function ModelPage({ params }: { params: Promise<{ workspaceId: string }> }) {
+export default function ModelPage({
+  params,
+}: {
+  readonly params: Promise<{ workspaceId: string }>;
+}) {
   const { workspaceId } = use(params);
   const journalQuery = useStudyJournal(workspaceId);
   const journal = journalQuery.data;

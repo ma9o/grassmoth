@@ -1,7 +1,7 @@
 import type { ConstructId, ModelSnapshot, SimulationReport } from "@grassmoth/api-types";
 import { modelConstructs, presentEntries } from "@/lib/model-accessors";
-import type { ConstructStatus } from "./construct-statuses";
 import type { ModelEntities } from "@/lib/model-asset/entities";
+import type { ConstructStatus } from "./construct-statuses";
 
 export const CAUSAL_GRAPH_LAYER_ORDER = [
   "structure",
@@ -35,11 +35,9 @@ export function graphStatus(modelSnapshot: ModelSnapshot, id: ConstructId): Cons
     ([target, finding]) =>
       finding.status === "not_identified" && (target === id || finding.confounders.includes(id)),
   );
-  return blocking
-    ? "blocking"
-    : construct.indicators.length > 0 || construct.role === "exogenous"
-      ? "observed"
-      : "latent";
+  if (blocking) return "blocking";
+  if (construct.indicators.length > 0 || construct.role === "exogenous") return "observed";
+  return "latent";
 }
 
 /** Layer visibility reflects facts in the selected revision, including partial models. */

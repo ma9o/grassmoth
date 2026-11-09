@@ -3,7 +3,8 @@ import type { Point } from "@/lib/utils/dag-graph-layout";
 const unit = (from: Point, to: Point): Point => {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy) || 1;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return { x: 0, y: 0 };
   return { x: dx / len, y: dy / len };
 };
 
@@ -12,7 +13,7 @@ const unit = (from: Point, to: Point): Point => {
  * quadratic fillet. `points` is `[start, ...bends, end]` from the layout.
  * Returns an SVG path `d` string (empty when there are fewer than two points).
  */
-export function orthoPath(points: Point[], radius = 12): string {
+export function orthoPath(points: readonly Point[], radius = 12): string {
   const [start, ...rest] = points;
   const end = rest.at(-1);
   if (start === undefined || end === undefined) return "";

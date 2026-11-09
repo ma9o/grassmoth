@@ -7,17 +7,108 @@
  * - Tool results are merged into the assistant message's tool parts (state: "output-available")
  * - System/user messages become simple text-part messages
  */
-import type { LLMTrace } from "@grassmoth/api-types";
-import type { UIMessage } from "ai";
+import type { LLMTrace, TraceMessage } from "@grassmoth/api-types";
+import type { DynamicToolUIPart, UIMessage } from "ai";
 import { normalizeTraceToolCall } from "./trace-tool-call";
 
-type Part = UIMessage["parts"][number];
+/**
+ * A tool message's result as the dynamic-tool part of the call it answers.
+ */
+function toolResultPart(
+  toolMsg: TraceMessage,
+  toolCallId: string,
+  input: unknown,
+): DynamicToolUIPart {
+  return toolMsg.tool_is_error
+    ? {
+        type: "dynamic-tool",
+        toolCallId,
+        toolName: toolMsg.tool_name ?? "unknown",
+        state: "output-error",
+        input,
+        errorText: toolMsg.tool_result ?? toolMsg.content,
+      }
+    : {
+        type: "dynamic-tool",
+        toolCallId,
+        toolName: toolMsg.tool_name ?? "unknown",
+        state: "output-available",
+        input,
+        output: toolMsg.tool_result ?? toolMsg.content,
+      };
+}
 
 /**
- * Build a UIMessage from role + parts, generating a stable id from the index.
+ * Tool calls — start as input-available, then look ahead for matching tool results.
  */
-function makeMsg(role: "system" | "user" | "assistant", parts: Part[], idx: number): UIMessage {
-  return { id: `trace-${idx}`, role, parts };
+function toolCallParts(msg: TraceMessage): DynamicToolUIPart[] {
+  return (msg.tool_calls ?? []).flatMap((tc): DynamicToolUIPart[] => {
+    const normalized = normalizeTraceToolCall(tc);
+    return normalized
+      ? [
+          {
+            type: "dynamic-tool",
+            toolCallId: normalized.toolCallId,
+            toolName: normalized.toolName,
+            state: "input-available",
+            input: normalized.input,
+          },
+        ]
+      : [];
+  });
+}
+
+/**
+ * The tool messages directly following an assistant message.
+ */
+function followingToolMessages(
+  traceMessages: readonly TraceMessage[],
+  index: number,
+): readonly TraceMessage[] {
+  const following = traceMessages.slice(index + 1);
+  const end = following.findIndex((toolMsg) => toolMsg.role !== "tool");
+  return end === -1 ? following : following.slice(0, end);
+}
+
+/**
+ * An assistant message's text, reasoning and tool-call parts, with its tool messages folded in.
+ */
+function assistantParts(
+  msg: TraceMessage,
+  toolMessages: readonly TraceMessage[],
+): UIMessage["parts"] {
+  const parts: UIMessage["parts"] = [];
+
+  // Reasoning
+  if (msg.reasoning) {
+    parts.push({ type: "reasoning", text: msg.reasoning });
+  }
+
+  // Text content
+  if (msg.content) {
+    parts.push({ type: "text", text: msg.content });
+  }
+
+  const toolParts = toolCallParts(msg);
+  const toolCallIds = new Set(toolParts.map((part) => part.toolCallId));
+  parts.push(...toolParts);
+
+  // Consume following tool messages and merge them into the tool parts
+  for (const toolMsg of toolMessages) {
+    const callId = toolMsg.tool_call_id;
+    if (callId && toolCallIds.has(callId)) {
+      // Find the part in the parts array and replace it
+      const idx = parts.findIndex(
+        (p) => p.type === "dynamic-tool" && "toolCallId" in p && p.toolCallId === callId,
+      );
+      const part = parts[idx];
+      if (idx !== -1 && part?.type === "dynamic-tool") {
+        parts[idx] = toolResultPart(toolMsg, callId, part.input);
+      }
+    }
+  }
+
+  return parts;
 }
 
 /**
@@ -36,108 +127,25 @@ export function traceToUIMessages(trace: LLMTrace): UIMessage[] {
   let nextIndex = 0;
   for (const [i, msg] of traceMessages.entries()) {
     if (i < nextIndex) continue;
+    // A stable id from the index
+    const id = `trace-${i}`;
 
     if (msg.role === "system" || msg.role === "user") {
-      messages.push(makeMsg(msg.role, [{ type: "text", text: msg.content }], i));
+      messages.push({ id, role: msg.role, parts: [{ type: "text", text: msg.content }] });
       continue;
     }
 
     if (msg.role === "assistant") {
-      const parts: Part[] = [];
-
-      // Reasoning
-      if (msg.reasoning) {
-        parts.push({ type: "reasoning", text: msg.reasoning });
-      }
-
-      // Text content
-      if (msg.content) {
-        parts.push({ type: "text", text: msg.content });
-      }
-
-      // Tool calls — start as input-available, then look ahead for matching tool results
-      const toolParts: Map<string, Part> = new Map();
-      if (msg.tool_calls) {
-        for (const tc of msg.tool_calls) {
-          const normalized = normalizeTraceToolCall(tc);
-          if (!normalized) {
-            continue;
-          }
-
-          const part: Part = {
-            type: "dynamic-tool" as const,
-            toolCallId: normalized.toolCallId,
-            toolName: normalized.toolName,
-            state: "input-available" as const,
-            input: normalized.input,
-          };
-          toolParts.set(normalized.toolCallId, part);
-          parts.push(part);
-        }
-      }
-
-      // Consume following tool messages and merge them into the tool parts
-      let j = i + 1;
-      for (const toolMsg of traceMessages.slice(i + 1)) {
-        if (toolMsg.role !== "tool") break;
-        const callId = toolMsg.tool_call_id;
-        if (callId && toolParts.has(callId)) {
-          // Find the part in the parts array and replace it
-          const idx = parts.findIndex(
-            (p) => p.type === "dynamic-tool" && "toolCallId" in p && p.toolCallId === callId,
-          );
-          const part = parts[idx];
-          if (idx !== -1 && part?.type === "dynamic-tool") {
-            if (toolMsg.tool_is_error) {
-              parts[idx] = {
-                type: "dynamic-tool" as const,
-                toolCallId: callId,
-                toolName: toolMsg.tool_name ?? "unknown",
-                state: "output-error" as const,
-                input: part.input,
-                errorText: toolMsg.tool_result ?? toolMsg.content,
-              };
-            } else {
-              parts[idx] = {
-                type: "dynamic-tool" as const,
-                toolCallId: callId,
-                toolName: toolMsg.tool_name ?? "unknown",
-                state: "output-available" as const,
-                input: part.input,
-                output: toolMsg.tool_result ?? toolMsg.content,
-              };
-            }
-          }
-        }
-        j++;
-      }
-
-      messages.push(makeMsg("assistant", parts, i));
-      nextIndex = j; // skip past consumed tool messages
+      const toolMessages = followingToolMessages(traceMessages, i);
+      messages.push({ id, role: "assistant", parts: assistantParts(msg, toolMessages) });
+      nextIndex = i + 1 + toolMessages.length; // skip past consumed tool messages
       continue;
     }
 
     // Orphan tool message (shouldn't happen, but handle gracefully)
     if (msg.role === "tool") {
       const toolCallId = msg.tool_call_id ?? `orphan-${i}`;
-      const part: Part = msg.tool_is_error
-        ? {
-            type: "dynamic-tool" as const,
-            toolCallId,
-            toolName: msg.tool_name ?? "unknown",
-            state: "output-error" as const,
-            input: {},
-            errorText: msg.tool_result ?? msg.content,
-          }
-        : {
-            type: "dynamic-tool" as const,
-            toolCallId,
-            toolName: msg.tool_name ?? "unknown",
-            state: "output-available" as const,
-            input: {},
-            output: msg.tool_result ?? msg.content,
-          };
-      messages.push(makeMsg("assistant", [part], i));
+      messages.push({ id, role: "assistant", parts: [toolResultPart(msg, toolCallId, {})] });
       continue;
     }
 

@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ workspaceId: string }>;
+  readonly params: Promise<{ readonly workspaceId: string }>;
 }): Promise<Metadata> {
   const { workspaceId } = await params;
   return { title: workspaceId };
 }
 
 /** On desktop the workbench fills the viewport; its panes scroll independently. */
-export default function ModelLayout({ children }: { children: ReactNode }) {
+export default function ModelLayout({ children }: { readonly children: ReactNode }) {
   return (
     <div className="md:flex md:h-dvh md:flex-col md:overflow-hidden">
       <div className="md:min-h-0 md:flex-1 [&>div]:md:h-full [&>div]:md:min-h-0">{children}</div>

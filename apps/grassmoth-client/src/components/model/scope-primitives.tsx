@@ -15,8 +15,8 @@ export function StatusIcon({
   status,
   label,
 }: {
-  status: keyof typeof STATUS_PRESENTATION;
-  label?: string;
+  readonly status: keyof typeof STATUS_PRESENTATION;
+  readonly label?: string;
 }) {
   const { icon: Icon, className, label: description } = STATUS_PRESENTATION[status];
   return (
@@ -41,9 +41,9 @@ export function Section({
   wide = false,
   children,
 }: {
-  title: string;
-  wide?: boolean;
-  children: ReactNode;
+  readonly title: string;
+  readonly wide?: boolean;
+  readonly children: ReactNode;
 }) {
   return (
     <section
@@ -68,9 +68,9 @@ export function RecordSection({
   pinned,
   children,
   ...props
-}: Omit<ComponentProps<"section">, "className" | "title"> & {
-  title: string;
-  pinned?: ReactNode;
+}: Readonly<Omit<ComponentProps<"section">, "className" | "title" | "dangerouslySetInnerHTML">> & {
+  readonly title: string;
+  readonly pinned?: ReactNode;
 }) {
   return (
     <section {...props} className="flex min-h-0 min-w-0 flex-col gap-2 pt-2">
@@ -81,7 +81,7 @@ export function RecordSection({
   );
 }
 
-export function KeyValue({ rows }: { rows: Array<[string, ReactNode]> }) {
+export function KeyValue({ rows }: { readonly rows: readonly (readonly [string, ReactNode])[] }) {
   return (
     <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1 text-[11px]">
       {rows.map(([key, value]) => (
@@ -94,7 +94,13 @@ export function KeyValue({ rows }: { rows: Array<[string, ReactNode]> }) {
   );
 }
 
-export function Hint({ children, issue = false }: { children: ReactNode; issue?: boolean }) {
+export function Hint({
+  children,
+  issue = false,
+}: {
+  readonly children: ReactNode;
+  readonly issue?: boolean;
+}) {
   return (
     <p
       className={cn(
@@ -107,11 +113,17 @@ export function Hint({ children, issue = false }: { children: ReactNode; issue?:
   );
 }
 
-export function Prose({ children }: { children: ReactNode }) {
+export function Prose({ children }: { readonly children: ReactNode }) {
   return <p className="m-0 leading-relaxed text-pretty text-foreground">{children}</p>;
 }
 
-export function Callout({ tone, children }: { tone: "ok" | "bad" | "warn"; children: ReactNode }) {
+export function Callout({
+  tone,
+  children,
+}: {
+  readonly tone: "ok" | "bad" | "warn";
+  readonly children: ReactNode;
+}) {
   return (
     <div
       className={cn(
@@ -127,7 +139,13 @@ export function Callout({ tone, children }: { tone: "ok" | "bad" | "warn"; child
 }
 
 /** References navigate to the canonical entity inspector. */
-export function OwnerLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+export function OwnerLink({
+  onClick,
+  children,
+}: {
+  readonly onClick: () => void;
+  readonly children: ReactNode;
+}) {
   return (
     <button
       type="button"

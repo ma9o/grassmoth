@@ -6,9 +6,9 @@ export function LandingPageView({
   error,
   isLoading,
 }: {
-  data: WorkspaceList | undefined;
-  error: string | null;
-  isLoading: boolean;
+  readonly data: WorkspaceList | undefined;
+  readonly error: string | null;
+  readonly isLoading: boolean;
 }) {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-8 px-4 py-10 sm:px-6">

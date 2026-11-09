@@ -12,65 +12,65 @@ import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
  */
 
 export interface Point {
-  x: number;
-  y: number;
+  readonly x: number;
+  readonly y: number;
 }
 
 export type DagDirection = "RIGHT" | "DOWN" | "LEFT" | "UP";
 
 /** A fixed point on its node's west side where edges end, measured from the node's top. */
 export interface DagLayoutPortInput {
-  id: string;
-  y: number;
+  readonly id: string;
+  readonly y: number;
 }
 
 export interface DagLayoutNodeInput {
-  id: string;
-  width: number;
-  height: number;
+  readonly id: string;
+  readonly width: number;
+  readonly height: number;
   /** Per-node ELK options (e.g. partitions for the interactive glyph columns). */
-  layoutOptions?: Record<string, string>;
+  readonly layoutOptions?: Readonly<Record<string, string>>;
   /** Fixed west-side ports; edges may target a port id instead of the node. */
-  ports?: readonly DagLayoutPortInput[];
+  readonly ports?: readonly DagLayoutPortInput[];
 }
 
 export interface DagLayoutEdgeInput {
-  id: string;
-  source: string;
+  readonly id: string;
+  readonly source: string;
   /** A node id, or a port id of the target node. */
-  target: string;
+  readonly target: string;
 }
 
 export interface DagGraphInput {
-  nodes: DagLayoutNodeInput[];
-  edges: DagLayoutEdgeInput[];
+  readonly nodes: readonly DagLayoutNodeInput[];
+  readonly edges: readonly DagLayoutEdgeInput[];
   /** Layout flow direction. Defaults to RIGHT (cause → effect, left to right). */
-  direction?: DagDirection;
+  readonly direction?: DagDirection;
   /** Graph-level ELK option overrides, merged over the defaults. */
-  layoutOptions?: Record<string, string>;
+  readonly layoutOptions?: Readonly<Record<string, string>>;
 }
 
 export interface DagLayoutNode {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  readonly id: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface DagLayoutEdge {
-  id: string;
-  source: string;
-  target: string;
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
   /** Routed polyline: [startPoint, ...bendPoints, endPoint]. */
-  points: Point[];
+  readonly points: readonly Point[];
 }
 
 export interface DagLayoutResult {
-  width: number;
-  height: number;
-  nodes: DagLayoutNode[];
-  edges: DagLayoutEdge[];
+  readonly width: number;
+  readonly height: number;
+  readonly nodes: readonly DagLayoutNode[];
+  readonly edges: readonly DagLayoutEdge[];
 }
 
 export const EMPTY_LAYOUT: DagLayoutResult = {
@@ -93,6 +93,24 @@ const DEFAULT_OPTIONS: Record<string, string> = {
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
 };
 
+/** A node's own ELK options, with its fixed west-side ports when it has any. */
+function elkNodeOptions(node: DagLayoutNodeInput): Pick<ElkNode, "layoutOptions" | "ports"> {
+  if (node.ports) {
+    return {
+      layoutOptions: { ...node.layoutOptions, "elk.portConstraints": "FIXED_POS" },
+      ports: node.ports.map((port) => ({
+        id: port.id,
+        x: 0,
+        y: port.y,
+        width: 0,
+        height: 0,
+        layoutOptions: { "elk.port.side": "WEST" },
+      })),
+    };
+  }
+  return node.layoutOptions ? { layoutOptions: node.layoutOptions } : {};
+}
+
 /** Build the ELK graph from a generic graph input. Pure — no layout is run. */
 export function buildElkGraph(input: DagGraphInput): ElkNode {
   return {
@@ -100,27 +118,13 @@ export function buildElkGraph(input: DagGraphInput): ElkNode {
     layoutOptions: {
       ...DEFAULT_OPTIONS,
       "elk.direction": input.direction ?? "RIGHT",
-      ...(input.layoutOptions ?? {}),
+      ...input.layoutOptions,
     },
     children: input.nodes.map((n) => ({
       id: n.id,
       width: n.width,
       height: n.height,
-      ...(n.ports
-        ? {
-            layoutOptions: { ...n.layoutOptions, "elk.portConstraints": "FIXED_POS" },
-            ports: n.ports.map((port) => ({
-              id: port.id,
-              x: 0,
-              y: port.y,
-              width: 0,
-              height: 0,
-              layoutOptions: { "elk.port.side": "WEST" },
-            })),
-          }
-        : n.layoutOptions
-          ? { layoutOptions: n.layoutOptions }
-          : {}),
+      ...elkNodeOptions(n),
     })),
     edges: input.edges.map((e) => ({
       id: e.id,

@@ -47,16 +47,21 @@ export function timelineComparison(
 ): TimelineComparison | null {
   if (!before || !after || before.record.seq === after.record.seq) return null;
   switch (before.record.attempt.action) {
-    case "edit_model":
+    case "edit_model": {
       return pairForAction("edit_model", before, after);
-    case "prepare_data":
+    }
+    case "prepare_data": {
       return pairForAction("prepare_data", before, after);
-    case "fit":
+    }
+    case "fit": {
       return pairForAction("fit", before, after);
-    case "simulate":
+    }
+    case "simulate": {
       return pairForAction("simulate", before, after);
+    }
     case "data_diff":
-    case "model_diff":
+    case "model_diff": {
       return null;
+    }
   }
 }

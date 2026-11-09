@@ -1,27 +1,27 @@
 "use client";
 
-import type { Point } from "@/lib/utils/dag-graph-layout";
 import { orthoPath } from "@/lib/dag/ortho-path";
+import type { Point } from "@/lib/utils/dag-graph-layout";
 
 interface DagEdgeProps {
   /** Routed polyline from the layout: [start, ...bends, end]. */
-  points: Point[];
-  color: string;
+  readonly points: readonly Point[];
+  readonly color: string;
   /** Stroke width in layout units. Highlighted edges render a touch thicker. */
-  width?: number;
-  dashed?: boolean;
-  opacity?: number;
+  readonly width?: number;
+  readonly dashed?: boolean;
+  readonly opacity?: number;
   /** Draw the arrowhead at the target end. */
-  markerEnd?: boolean;
-  highlighted?: boolean;
-  onHoverChange?: (hovered: boolean) => void;
+  readonly markerEnd?: boolean;
+  readonly highlighted?: boolean;
+  readonly onHoverChange?: (hovered: boolean) => void;
 }
 
 const ARROW_SIZE = 11;
 
 /** Stable marker id per color, so an edge's arrowhead matches its stroke. */
 function markerId(color: string): string {
-  return `dag-arrow-${color.replace(/[^a-z0-9]/gi, "")}`;
+  return `dag-arrow-${color.replaceAll(/[^a-z0-9]/gi, "")}`;
 }
 
 /**

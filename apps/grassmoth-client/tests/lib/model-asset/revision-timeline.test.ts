@@ -1,6 +1,7 @@
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import type { TimelineRevision } from "@grassmoth/api-types";
 import { describe, expect, it } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { applied, comparison, failedFit, revision, simulation } from "@/lib/__fixtures__/timeline";
 import { latestSeq } from "@/lib/model-asset/journal";
 import { revisionTimeline } from "@/lib/model-asset/revision-timeline";
 import {
@@ -8,8 +9,6 @@ import {
   timelinePoint,
   timelineTickLabel,
 } from "@/lib/model-asset/timeline-presentation";
-
-import { applied, comparison, failedFit, revision, simulation } from "@/lib/__fixtures__/timeline";
 
 describe("argument timeline", () => {
   it("orders actions by execution, lanes them by what they produce and links served dependencies", () => {

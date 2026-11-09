@@ -5,9 +5,12 @@ export function PlotNumberInput({
   value,
   onValue,
   ...props
-}: Omit<ComponentProps<"input">, "value" | "onChange" | "type"> & {
-  value: number;
-  onValue: (value: number) => void;
+}: Readonly<
+  // An input is a void element, so it takes no inner HTML.
+  Omit<ComponentProps<"input">, "value" | "onChange" | "type" | "dangerouslySetInnerHTML">
+> & {
+  readonly value: number;
+  readonly onValue: (value: number) => void;
 }) {
   return (
     <input
@@ -17,8 +20,9 @@ export function PlotNumberInput({
       defaultValue={value}
       onBlur={(event) => {
         const input = event.currentTarget;
-        if (input.value !== "" && input.validity.valid && Number.isFinite(input.valueAsNumber))
+        if (input.value !== "" && input.validity.valid && Number.isFinite(input.valueAsNumber)) {
           onValue(input.valueAsNumber);
+        }
         input.value = String(value);
       }}
       onKeyDown={(event) => {

@@ -29,14 +29,18 @@ export type ChartColor = (typeof CHART_COLORS)[keyof typeof CHART_COLORS] | Chai
 /** Chains and categories cycle through four hues; their legends name each one. */
 export function chainColor(index: number): ChainColor {
   switch (index % CHAIN_COLORS.length) {
-    case 0:
+    case 0: {
       return CHAIN_COLORS[0];
-    case 1:
+    }
+    case 1: {
       return CHAIN_COLORS[1];
-    case 2:
+    }
+    case 2: {
       return CHAIN_COLORS[2];
-    default:
+    }
+    default: {
       return CHAIN_COLORS[3];
+    }
   }
 }
 

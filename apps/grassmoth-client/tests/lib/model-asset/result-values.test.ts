@@ -1,12 +1,12 @@
 import type { ArrayVector, FitOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
-import { fittedResult } from "@/lib/__fixtures__/action-results";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { fittedResult } from "@/lib/__fixtures__/action-results";
 import { drawsView, inferenceView, scalarValues } from "@/lib/model-asset/result-values";
 
-function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
-  return { npy: new Uint8Array(dump(values, shape, { dtype })) };
+function array(shape: readonly number[], values: readonly number[], dtype: "f8" | "b1" = "f8") {
+  return { npy: new Uint8Array(dump([...values], [...shape], { dtype })) };
 }
 
 it("selects original joint posterior atoms and native chain evidence without reducing them", () => {

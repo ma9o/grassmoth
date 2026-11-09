@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { decay, modelFixture, outcome, treatment } from "@/lib/__fixtures__/model";
 import { authoredSnapshot, fittedSnapshot } from "@/lib/__fixtures__/snapshot";
-import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { entityFailures } from "@/lib/model-asset/inspector";
 import { modelConstructs, modelEdges } from "@/lib/model-accessors";
 import { indexModel, resolveEntity } from "@/lib/model-asset/entities";
+import { entityFailures } from "@/lib/model-asset/inspector";
 import type { EntitySelection } from "@/lib/model-asset/selection";
 
 /** Reorder the same document without changing entity identity or ownership. */
 function reversedGraph() {
   return {
     ...modelFixture,
-    constructs: Object.fromEntries(Object.entries(modelFixture.constructs).reverse()),
-    edges: Object.fromEntries(Object.entries(modelFixture.edges).reverse()),
+    constructs: Object.fromEntries(Object.entries(modelFixture.constructs).toReversed()),
+    edges: Object.fromEntries(Object.entries(modelFixture.edges).toReversed()),
   };
 }
 

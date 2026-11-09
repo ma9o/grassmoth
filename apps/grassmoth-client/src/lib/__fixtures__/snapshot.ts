@@ -90,7 +90,7 @@ export const fittedSnapshot: ModelSnapshot = {
   ...authoredSnapshot,
   commit_id: "4".repeat(40),
   selected_seq: 4,
-  fit: fit,
+  fit,
   state: { ...authoredSnapshot.state, data: { revision: "5".repeat(40), replicate_index: 0 } },
   fit_checks: {
     data: { indicators: {}, findings: [] },

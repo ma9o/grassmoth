@@ -2,6 +2,7 @@
 
 import type {
   ActionId,
+  ActionMessage,
   CallId,
   ExecutionMessage,
   FindingSubject,
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { traceToUIMessages } from "@/lib/utils/trace-to-ui-messages";
 import { Hint, RecordSection } from "./scope-primitives";
 
-function Conversation({ trace }: { trace: LLMTrace }) {
+function Conversation({ trace }: { readonly trace: LLMTrace }) {
   const messages = useMemo(() => traceToUIMessages(trace), [trace]);
   return (
     <div className="mt-2 [&_.prose]:text-[11.5px] [&_pre]:text-[10px]">
@@ -30,16 +31,17 @@ function Conversation({ trace }: { trace: LLMTrace }) {
   );
 }
 
-function ProgressDetails({ event }: { event: ProgressEvent }) {
+function ProgressDetails({ event }: { readonly event: ProgressEvent }) {
   switch (event.event) {
-    case "grassmoth.step":
+    case "grassmoth.step": {
       return (
         <span>
           extraction · {event.status}
           {event.error && ` · ${event.error.type}: ${event.error.message}`}
         </span>
       );
-    case "grassmoth.extraction.plan":
+    }
+    case "grassmoth.extraction.plan": {
       return (
         <span>
           {event.total_workers} workers planned
@@ -47,7 +49,8 @@ function ProgressDetails({ event }: { event: ProgressEvent }) {
             ` · ${event.max_concurrent_workers} maximum concurrent workers`}
         </span>
       );
-    case "grassmoth.extraction.worker":
+    }
+    case "grassmoth.extraction.worker": {
       return (
         <span>
           worker {event.worker_id} · {event.state} · {event.n_windows} windows
@@ -56,15 +59,15 @@ function ProgressDetails({ event }: { event: ProgressEvent }) {
           {event.error !== null && ` · ${event.error}`}
         </span>
       );
-    case "grassmoth.extraction.snapshot":
+    }
+    case "grassmoth.extraction.snapshot": {
       return (
         <span>
           {event.completed_workers}/{event.total_workers} completed · {event.running_workers}{" "}
           running · {event.pending_workers} pending · {event.failed_workers} failed
         </span>
       );
-    default:
-      throw new Error(`Unhandled progress event: ${event satisfies never}`);
+    }
   }
 }
 
@@ -77,20 +80,29 @@ export function clockTime(timestamp: string): string {
 function subjectText(subject: FindingSubject): string {
   if (typeof subject === "string") return subject;
   if ("id" in subject) return subject.id;
-  if ("construct_id" in subject)
+  if ("construct_id" in subject) {
     return [
       subject.construct_id,
       typeof subject.target === "string" ? subject.target : subject.target.id,
     ]
       .filter((part) => part !== null)
       .join(" · ");
+  }
   if ("parameter" in subject || "state" in subject) return subject.label;
   if ("outcome" in subject) return subject.outcome.id;
-  if ("kind" in subject && subject.kind === "query_target")
+  if ("kind" in subject && subject.kind === "query_target") {
     return `Core query · ${subject.target.id}`;
+  }
   if ("kind" in subject) return "Core query";
   return subject.target.id;
 }
+
+const SEVERITY_TONE: Record<ActionMessage["severity"], "plain" | "warning" | "error"> = {
+  debug: "plain",
+  info: "plain",
+  warning: "warning",
+  error: "error",
+};
 
 /**
  * One message as `[time] [level] [id] subject` above its text. Only the level carries color, so
@@ -104,12 +116,12 @@ function LogEntry({
   subject,
   children,
 }: {
-  timestamp: string;
-  level: string;
-  tone: "plain" | "warning" | "error";
-  id: string;
-  subject: string | null;
-  children: ReactNode;
+  readonly timestamp: string;
+  readonly level: string;
+  readonly tone: "plain" | "warning" | "error";
+  readonly id: string;
+  readonly subject: string | null;
+  readonly children: ReactNode;
 }) {
   return (
     <>
@@ -134,27 +146,22 @@ function LogEntry({
   );
 }
 
-function ExecutionEntry({ message }: { message: ExecutionMessage }) {
+function ExecutionEntry({ message }: { readonly message: ExecutionMessage }) {
   switch (message.kind) {
-    case "log":
+    case "log": {
       return (
         <LogEntry
           timestamp={message.timestamp}
           level={message.severity}
-          tone={
-            message.severity === "warning"
-              ? "warning"
-              : message.severity === "error"
-                ? "error"
-                : "plain"
-          }
+          tone={SEVERITY_TONE[message.severity]}
           id={message.code}
           subject={subjectText(message.subject)}
         >
           {message.detail}
         </LogEntry>
       );
-    case "progress":
+    }
+    case "progress": {
       return (
         <LogEntry
           timestamp={message.timestamp}
@@ -166,7 +173,8 @@ function ExecutionEntry({ message }: { message: ExecutionMessage }) {
           <ProgressDetails event={message.progress} />
         </LogEntry>
       );
-    case "trace":
+    }
+    case "trace": {
       return (
         <LogEntry
           timestamp={message.timestamp}
@@ -181,6 +189,7 @@ function ExecutionEntry({ message }: { message: ExecutionMessage }) {
           </details>
         </LogEntry>
       );
+    }
     case "failure": {
       const failure = message.failure;
       return failure.status === "rejected" ? (
@@ -203,6 +212,7 @@ function ExecutionEntry({ message }: { message: ExecutionMessage }) {
         >
           {failure.error_message}
           {failure.details.map((detail, index) => (
+            // eslint-disable-next-line react/no-array-index-key -- a failure's recorded details are positional
             <pre key={index} className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
               {detail}
             </pre>
@@ -210,25 +220,21 @@ function ExecutionEntry({ message }: { message: ExecutionMessage }) {
         </LogEntry>
       );
     }
-    default:
-      throw new Error(`Unhandled execution message: ${message satisfies never}`);
   }
 }
 
+function messageKey(message: ExecutionMessage, index: number): string {
+  if (message.kind === "trace") return `trace:${message.trace_id}`;
+  if (message.kind === "progress") return `progress:${message.progress.cursor}`;
+  return `${message.kind}:${message.timestamp}:${index}`;
+}
+
 /** Render the server's ordered accumulator intact for both active and completed calls. */
-export function ActionLog({ messages }: { messages: readonly ExecutionMessage[] }) {
+export function ActionLog({ messages }: { readonly messages: readonly ExecutionMessage[] }) {
   return (
     <ol aria-label="Action messages" className="space-y-3 font-mono text-[10px]">
       {messages.map((message, index) => (
-        <li
-          key={
-            message.kind === "trace"
-              ? `trace:${message.trace_id}`
-              : message.kind === "progress"
-                ? `progress:${message.progress.cursor}`
-                : `${message.kind}:${message.timestamp}:${index}`
-          }
-        >
+        <li key={messageKey(message, index)}>
           <ExecutionEntry message={message} />
         </li>
       ))}
@@ -241,9 +247,9 @@ export function ActionExecution({
   callId,
   useActionPoll,
 }: {
-  action: ActionId;
-  callId: CallId | null;
-  useActionPoll: UseActionPoll;
+  readonly action: ActionId;
+  readonly callId: CallId | null;
+  readonly useActionPoll: UseActionPoll;
 }) {
   const query = useActionPoll(action, callId);
   return (

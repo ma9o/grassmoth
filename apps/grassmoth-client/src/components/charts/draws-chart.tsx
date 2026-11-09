@@ -2,19 +2,18 @@
 
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { formatModelDate, formatSignificant } from "@/lib/utils/format";
-import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
-import { CHART_COLORS, type ChartColor, cssColor, resolveColor } from "./chart-tokens";
+import { CanvasChartFrame } from "./chart-frame";
+import { CHART_COLORS, type ChartColor, cssColor } from "./chart-tokens";
+import { paintDraws } from "./draws-canvas";
+import { ChartAxes, ObservedMarks } from "./draws-overlay";
 import {
   type Domain,
-  type PlotBox,
   extentOf,
-  linePath,
   linearScale,
+  linePath,
   marginBox,
+  type PlotBox,
   padDomain,
-  timeTicks,
-  traceLine,
-  valueTicks,
 } from "./plot-geometry";
 import { paintCanvas, useChartSize, useChartVisibility } from "./use-chart-size";
 
@@ -82,15 +81,6 @@ const COMPACT_MARGIN = { left: 1, right: 1, top: 2, bottom: 2 } as const;
 const NO_MARKERS: readonly TimeMarker[] = [];
 const NO_THRESHOLDS: readonly Threshold[] = [];
 
-/** Many draws are faint so their density shows; a few rows are drawn plainly. */
-function rowAlpha(layer: DrawLayer): number {
-  if (layer.strong) return 0.9;
-  const rows = layer.rows.length;
-  if (rows > 60) return 0.14;
-  if (rows > 12) return 0.28;
-  return rows > 1 ? 0.55 : 0.85;
-}
-
 function* plottedValues(
   layers: readonly DrawLayer[],
   observed: ObservedPoints | undefined,
@@ -130,6 +120,15 @@ interface Hover {
   readonly row: DrawRow | null;
 }
 
+/** The plot box, axis domains and pixel scales shared by the canvas and the SVG layer. */
+export interface DrawsGeometry {
+  readonly box: PlotBox;
+  readonly timeDomain: Domain;
+  readonly valueDomain: Domain;
+  readonly x: (time: number) => number;
+  readonly y: (value: number) => number;
+}
+
 /**
  * Draws over time: every draw is painted on a canvas without a DOM node per trajectory.
  * Axes, observations, markers and the hovered draw sit on an SVG layer above.
@@ -156,7 +155,7 @@ export function DrawsChart({
   const [hover, setHover] = useState<Hover | null>(null);
   const categorical = levels !== null && levels.length > 0;
 
-  const geometry = useMemo(() => {
+  const geometry = useMemo((): DrawsGeometry | null => {
     if (!size || !visible) return null;
     const box = marginBox(size.width, size.height, compact ? COMPACT_MARGIN : MARGIN);
     const span =
@@ -191,35 +190,8 @@ export function DrawsChart({
   useEffect(() => {
     const target = canvas.current;
     if (!target || !size || !geometry) return;
-    const { box, x, y } = geometry;
     paintCanvas(target, size, resolution, (context) => {
-      context.save();
-      context.beginPath();
-      context.rect(box.left, box.top, box.width, box.height);
-      context.clip();
-      for (const layer of layers) {
-        const color = resolveColor(target, layer.color);
-        context.globalAlpha = rowAlpha(layer);
-        if (layer.points) {
-          context.fillStyle = color;
-          for (const row of layer.rows)
-            row.values.forEach((value, index) => {
-              const time = times[index];
-              if (value == null || time === undefined || !Number.isFinite(value)) return;
-              context.fillRect(x(time) - 1.1, y(value) - 1.1, 2.2, 2.2);
-            });
-          continue;
-        }
-        context.strokeStyle = color;
-        context.lineWidth = layer.strong ? 1.5 : 1;
-        context.setLineDash(layer.dashed ? [4, 3] : []);
-        for (const row of layer.rows) {
-          context.beginPath();
-          traceLine(context, times, row.values, x, y);
-          context.stroke();
-        }
-      }
-      context.restore();
+      paintDraws(context, layers, times, geometry);
     });
   }, [size, geometry, layers, times, resolution]);
 
@@ -243,13 +215,14 @@ export function DrawsChart({
     const index = nearestIndex(times, timeDomain[0] + fraction * (timeDomain[1] - timeDomain[0]));
     const pointer = box.top + (event.clientY - bounds.top);
     let best: { layer: DrawLayer; row: DrawRow; distance: number } | null = null;
-    for (const layer of layers)
+    for (const layer of layers) {
       for (const row of layer.rows) {
         const value = row.values[index];
         if (value == null || !Number.isFinite(value)) continue;
         const distance = Math.abs(y(value) - pointer);
         if (distance < 10 && (!best || distance < best.distance)) best = { layer, row, distance };
       }
+    }
     setHover({ index, layer: best?.layer ?? null, row: best?.row ?? null });
   };
 
@@ -384,8 +357,9 @@ export function DrawsChart({
               fontSize={9.5}
               fill={cssColor(CHART_COLORS.axis)}
             >
-              {hoveredTime !== undefined
-                ? [
+              {hoveredTime === undefined
+                ? `${outside} of ${total} draws leave the frame`
+                : [
                     dateLabel(hoveredTime),
                     hover?.row && hover.layer && hoveredValue != null
                       ? `${hover.layer.label} · ${hover.row.label}: ${valueLabel(hoveredValue)}`
@@ -395,119 +369,11 @@ export function DrawsChart({
                       : null,
                   ]
                     .filter((part) => part !== null)
-                    .join(" · ")
-                : `${outside} of ${total} draws leave the frame`}
+                    .join(" · ")}
             </text>
           )}
         </>
       )}
     </CanvasChartFrame>
-  );
-}
-
-interface Geometry {
-  readonly box: PlotBox;
-  readonly timeDomain: Domain;
-  readonly valueDomain: Domain;
-  readonly x: (time: number) => number;
-  readonly y: (value: number) => number;
-}
-
-function ChartAxes({
-  geometry,
-  timeOrigin,
-  levels,
-  xLabel,
-}: {
-  geometry: Geometry;
-  timeOrigin: string | null;
-  levels: readonly string[] | null;
-  xLabel: string | null;
-}) {
-  const { box, timeDomain, valueDomain, x, y } = geometry;
-  const rows = levels
-    ? levels.flatMap((level, index) =>
-        index % Math.ceil(levels.length / 6) === 0 ? [{ value: index, label: level }] : [],
-      )
-    : valueTicks(valueDomain, Math.max(2, Math.round(box.height / 40)));
-  const columns = timeTicks(timeDomain, timeOrigin, Math.max(2, Math.round(box.width / 90)));
-  const bottom = box.top + box.height;
-  return (
-    <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-      <ValueGridlines box={box} y={y} ticks={rows} />
-      {columns.map((tick) => (
-        <g key={tick.value}>
-          <line
-            x1={x(tick.value)}
-            x2={x(tick.value)}
-            y1={box.top}
-            y2={bottom}
-            stroke={cssColor(CHART_COLORS.grid)}
-            strokeOpacity={0.6}
-          />
-          <text x={x(tick.value)} y={bottom + 14} textAnchor="middle">
-            {tick.label}
-          </text>
-        </g>
-      ))}
-      {xLabel && (
-        <text x={box.left + box.width} y={bottom + 14} textAnchor="end" fontSize={9}>
-          {xLabel}
-        </text>
-      )}
-    </g>
-  );
-}
-
-function ObservedMarks({
-  observed,
-  times,
-  geometry,
-  compact,
-  describe,
-}: {
-  observed: ObservedPoints;
-  times: readonly number[];
-  geometry: Geometry;
-  compact: boolean;
-  describe: (index: number, value: number) => string;
-}) {
-  const { x, y } = geometry;
-  const color = cssColor(CHART_COLORS.observed);
-  return (
-    <g>
-      {observed.values.map((value, index) => {
-        const time = times[index];
-        if (value == null || time === undefined || !Number.isFinite(value)) return null;
-        const start = observed.supportStart?.[index];
-        const end = observed.supportEnd?.[index];
-        return (
-          // biome-ignore lint/suspicious/noArrayIndexKey: observations are positional on the schedule
-          <g key={index}>
-            {start != null && end != null && end > start && (
-              <line
-                x1={x(start)}
-                x2={x(end)}
-                y1={y(value)}
-                y2={y(value)}
-                stroke={color}
-                strokeOpacity={0.35}
-                strokeWidth={2}
-              />
-            )}
-            <circle
-              cx={x(time)}
-              cy={y(value)}
-              r={compact ? 1.6 : 2.6}
-              fill={color}
-              stroke="var(--card)"
-              strokeWidth={compact ? 0.5 : 1}
-            >
-              {!compact && <title>{describe(index, value)}</title>}
-            </circle>
-          </g>
-        );
-      })}
-    </g>
   );
 }

@@ -1,6 +1,6 @@
-import { numericalRows, type PathSeriesView } from "@/lib/model-asset/result-values";
-import type { DataVariableView } from "@/lib/model-asset/data-comparison";
 import type { PPCOverlay } from "@grassmoth/api-types";
+import type { DataVariableView } from "@/lib/model-asset/data-comparison";
+import { numericalRows, type PathSeriesView } from "@/lib/model-asset/result-values";
 import { CHART_COLORS, chainColor } from "./chart-tokens";
 import type { DrawLayer, DrawRow, DrawsChartProps } from "./draws-chart";
 import { DAY_MS } from "./plot-geometry";
@@ -105,6 +105,15 @@ const CHANGE_COLORS = {
   revised: CHART_COLORS.revised,
 } as const;
 
+/** A changed point's value on one side, or null on the side that lacks the row. */
+function changeValue(
+  change: DataVariableView["changes"][number],
+  side: "left" | "right",
+): number | null {
+  if (side === "left") return change.kind === "added" ? null : change.before.value;
+  return change.kind === "removed" ? null : change.after.value;
+}
+
 /** Every saved history of one variable on the union of their anchors, with point changes. */
 export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChartProps, "height"> {
   const cached = comparisonCharts.get(variable);
@@ -116,7 +125,9 @@ export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChart
     const start = Date.parse(series.time_origin);
     return series.history.times.map((day) => Math.trunc(start + day * DAY_MS));
   };
-  const anchors = [...new Set(histories.flatMap(timestamps))].sort((a, b) => a - b);
+  const anchors = [...new Set(histories.flatMap((history) => timestamps(history)))].toSorted(
+    (a, b) => a - b,
+  );
   const origin = anchors.at(0) ?? null;
   const align = (series: NonNullable<DataVariableView["left"][number]>) => {
     const byAnchor = new Map(
@@ -187,13 +198,7 @@ export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChart
           Date.parse(
             change.kind === "removed" ? change.before.anchor_time : change.after.anchor_time,
           ),
-          side === "left"
-            ? change.kind === "added"
-              ? null
-              : change.before.value
-            : change.kind === "removed"
-              ? null
-              : change.after.value,
+          changeValue(change, side),
         ]),
       );
       return [

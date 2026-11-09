@@ -1,9 +1,9 @@
 import type { TimelineRevision } from "@grassmoth/api-types";
 import {
-  TIMELINE_LANES,
   type RevisionTimeline,
   type RevisionTimelineLink,
   type RevisionTimelineNode,
+  TIMELINE_LANES,
 } from "./revision-timeline";
 
 /** Each action has room for its icon, short commit hash and pin toggle. */
@@ -21,17 +21,26 @@ const SIDE = 36;
 
 /** Vertical positions in one lane: its track, its failures' side track and the corridors beside it. */
 interface TimelineLanePlacement {
-  name: string;
-  track: number;
-  side: number;
-  above: number;
-  below: number;
+  readonly name: string;
+  readonly track: number;
+  readonly side: number;
+  readonly above: number;
+  readonly below: number;
 }
 
 interface TimelineLayout {
-  lanes: TimelineLanePlacement[];
-  width: number;
-  height: number;
+  readonly lanes: readonly TimelineLanePlacement[];
+  readonly width: number;
+  readonly height: number;
+}
+
+function laneTracks(
+  failures: (typeof TIMELINE_LANES)[number]["failures"] | null,
+  first: number,
+): { track: number; side: number } {
+  if (failures === "above") return { track: first + SIDE, side: first };
+  if (failures === "below") return { track: first, side: first + SIDE };
+  return { track: first, side: first };
 }
 
 /**
@@ -42,15 +51,14 @@ export function timelineLayout(timeline: RevisionTimeline): TimelineLayout {
   const failing = new Set(timeline.nodes.filter((node) => node.failed).map((node) => node.lane));
   const lanes: TimelineLanePlacement[] = [];
   let bottom = TOP - 2 * CORRIDOR;
-  TIMELINE_LANES.forEach((lane, index) => {
+  for (const [index, lane] of TIMELINE_LANES.entries()) {
     const above = bottom + CORRIDOR;
     const first = bottom + 2 * CORRIDOR;
     const failures = failing.has(index) ? lane.failures : null;
-    const track = failures === "above" ? first + SIDE : first;
-    const side = failures === "above" ? first : failures === "below" ? track + SIDE : track;
+    const { track, side } = laneTracks(failures, first);
     bottom = Math.max(track, side);
     lanes.push({ name: lane.name, track, side, above, below: bottom + CORRIDOR });
-  });
+  }
   return {
     lanes,
     width: 2 * PAD + Math.max(1, timeline.nodes.length) * PITCH,

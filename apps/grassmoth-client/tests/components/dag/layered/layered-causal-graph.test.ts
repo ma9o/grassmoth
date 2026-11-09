@@ -1,15 +1,15 @@
+import type { SimulationReport } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { SimulationReport } from "@grassmoth/api-types";
+import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
 import { treatment as dose, outcome as symptoms } from "@/lib/__fixtures__/model";
 import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
-import type { SimulationPathsView } from "@/lib/model-asset/result-values";
 import { indexModel } from "@/lib/model-asset/entities";
+import type { SimulationPathsView } from "@/lib/model-asset/result-values";
 import type { DagGraphInput } from "@/lib/utils/dag-graph-layout";
 import { formatModelDate } from "@/lib/utils/format";
-import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
 
 // Only the asynchronous layout is stubbed; render the real graph and its overlays.
 vi.mock("@/lib/hooks/use-dag-layout", () => ({
@@ -103,14 +103,17 @@ function render(simulation: SimulationReport | null) {
       simulation,
       simulationPaths: simulation ? paths : null,
       selection: null,
-      onSelect: () => {},
+      onSelect: () => undefined,
     }),
   );
 }
 
+function arrows(markup: string) {
+  return markup.match(/<path\b[^>]*marker-end=[^>]*>/g) ?? [];
+}
+
 describe("dated intervention overlay", () => {
   it("preserves the model's arrows and their styling", () => {
-    const arrows = (markup: string) => markup.match(/<path\b[^>]*marker-end=[^>]*>/g) ?? [];
     const baseline = arrows(render(null));
     expect(baseline).toHaveLength(2);
     expect(arrows(render(report))).toEqual(baseline);

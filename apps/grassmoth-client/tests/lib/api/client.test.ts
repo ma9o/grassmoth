@@ -1,12 +1,14 @@
-import { modelFixture } from "@/lib/__fixtures__/model";
 import { describe, expect, it, vi } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { modelFixture } from "@/lib/__fixtures__/model";
 import { apiClient } from "@/lib/api/client";
 
 describe("generated facade client", () => {
   it("returns the endpoint's response and accepts custom headers", async () => {
     const body = { HEALTHDEMO: "Why?" };
-    const fetch = vi.fn<(request: Request) => Promise<Response>>(async () => Response.json(body));
+    const fetch = vi.fn<(request: Request) => Promise<Response>>(() =>
+      Promise.resolve(Response.json(body)),
+    );
     const result = await apiClient.GET("/api/workspaces", {
       baseUrl: "http://viewer",
       fetch,
@@ -20,8 +22,8 @@ describe("generated facade client", () => {
   });
 
   it("serializes the endpoint's action input as JSON", async () => {
-    const fetch = vi.fn<(request: Request) => Promise<Response>>(async () =>
-      Response.json({ attempt_id: "new-attempt" }, { status: 202 }),
+    const fetch = vi.fn<(request: Request) => Promise<Response>>(() =>
+      Promise.resolve(Response.json({ attempt_id: "new-attempt" }, { status: 202 })),
     );
     const body = {
       action: "edit_model",
@@ -44,7 +46,7 @@ describe("generated facade client", () => {
   it("retains unsuccessful transport status and payload for the caller", async () => {
     const result = await apiClient.GET("/api/workspaces", {
       baseUrl: "http://viewer",
-      fetch: async () => Response.json({ detail: "Unavailable" }, { status: 503 }),
+      fetch: () => Promise.resolve(Response.json({ detail: "Unavailable" }, { status: 503 })),
     });
     expect(result.data).toBeUndefined();
     expect(result.response.status).toBe(503);
@@ -55,9 +57,7 @@ describe("generated facade client", () => {
     await expect(
       apiClient.GET("/api/workspaces", {
         baseUrl: "http://viewer",
-        fetch: async () => {
-          throw new TypeError("Failed to fetch");
-        },
+        fetch: () => Promise.reject(new TypeError("Failed to fetch")),
       }),
     ).rejects.toThrow("Failed to fetch");
   });

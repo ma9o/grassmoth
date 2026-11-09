@@ -3,19 +3,25 @@
 import type { ReactNode } from "react";
 
 interface DagNodeShellProps {
-  width: number;
-  height: number;
-  title?: string;
-  subtitle?: string;
+  readonly width: number;
+  readonly height: number;
+  readonly title?: string;
+  readonly subtitle?: string;
   /** Card fill. Defaults to the theme card color. */
-  fill?: string;
+  readonly fill?: string;
   /** Border accent (e.g. sign color, status). Defaults to the theme border. */
-  accent?: string;
-  dashed?: boolean;
-  highlighted?: boolean;
+  readonly accent?: string;
+  readonly dashed?: boolean;
+  readonly highlighted?: boolean;
   /** Outcome nodes get a heavier border. */
-  outcome?: boolean;
-  children?: ReactNode;
+  readonly outcome?: boolean;
+  readonly children?: ReactNode;
+}
+
+function shellStrokeWidth(highlighted: boolean | undefined, outcome: boolean | undefined): number {
+  if (highlighted) return 3;
+  if (outcome) return 2;
+  return 1.4;
 }
 
 /**
@@ -35,7 +41,7 @@ export function DagNodeShell({
   outcome,
   children,
 }: DagNodeShellProps) {
-  const strokeWidth = highlighted ? 3 : outcome ? 2 : 1.4;
+  const strokeWidth = shellStrokeWidth(highlighted, outcome);
   return (
     <>
       <rect

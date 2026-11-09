@@ -1,15 +1,8 @@
-import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
+import type { AriaRole, CSSProperties, ReactNode } from "react";
 import { DAG_COLORS } from "@/lib/dag/palette";
 
-interface DagSvgProps
-  extends Omit<ComponentPropsWithoutRef<"svg">, "width" | "height" | "viewBox"> {
-  contentWidth: number;
-  contentHeight: number;
-  zoom: number;
-}
-
 /** The scrolling frame that fills its pane. */
-export function DagCanvasFrame({ children }: { children: ReactNode }) {
+export function DagCanvasFrame({ children }: { readonly children: ReactNode }) {
   return <div style={CANVAS_FRAME}>{children}</div>;
 }
 
@@ -20,7 +13,15 @@ export function DagSvg({
   children,
   style,
   ...svgProps
-}: DagSvgProps) {
+}: {
+  readonly contentWidth: number;
+  readonly contentHeight: number;
+  readonly zoom: number;
+  readonly role?: AriaRole;
+  readonly "aria-label"?: string;
+  readonly style?: CSSProperties;
+  readonly children?: ReactNode;
+}) {
   return (
     <svg
       width={Math.ceil(contentWidth * zoom)}

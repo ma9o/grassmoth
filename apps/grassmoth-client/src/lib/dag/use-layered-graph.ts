@@ -10,8 +10,8 @@ import type {
 } from "@grassmoth/api-types";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ModelEntities } from "@/lib/model-asset/entities";
 import { useDagLayout } from "@/lib/hooks/use-dag-layout";
+import type { ModelEntities } from "@/lib/model-asset/entities";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { EntitySelection } from "@/lib/model-asset/selection";
 import { causalEffect } from "@/lib/simulation-report";
@@ -20,18 +20,18 @@ import {
   GRAPH_DENSITIES,
   type LayeredGraphArrowMeta,
 } from "./build-layered-causal-graph";
-import { placeComparisonOverlay, type ModelComparison } from "./comparison-overlay";
+import { type ModelComparison, placeComparisonOverlay } from "./comparison-overlay";
 import { availableGraphLayers, graphEntities, graphStatus } from "./layered-model";
 import { BLOCKING, COMPARISON_COLORS, DAG_COLORS, LATENT } from "./palette";
 import { focusedParts, type GraphFocus } from "./selection";
 
 export interface LayeredGraphOptions {
-  modelSnapshot: ModelSnapshot;
-  entities: ModelEntities;
+  readonly modelSnapshot: ModelSnapshot;
+  readonly entities: ModelEntities;
   /** A simulation of the viewed model revision; its node histories replace the law charts. */
-  simulation?: SimulationReport | null;
-  comparison?: ModelComparison | null;
-  selection: EntitySelection | null;
+  readonly simulation?: SimulationReport | null;
+  readonly comparison?: ModelComparison | null;
+  readonly selection: EntitySelection | null;
 }
 
 /** Space around the laid-out graph inside the canvas, in layout units. */
@@ -42,6 +42,42 @@ const FRAME_INSET = 14;
 const RICH_FIT = 0.6;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 1.8;
+
+function edgeColor({
+  selected,
+  change,
+  blocking,
+  latent,
+}: {
+  readonly selected: boolean;
+  readonly change: keyof typeof COMPARISON_COLORS | undefined;
+  readonly blocking: boolean;
+  readonly latent: boolean;
+}): string {
+  if (selected) return "var(--primary)";
+  if (change !== undefined) return COMPARISON_COLORS[change];
+  if (blocking) return BLOCKING;
+  if (latent) return LATENT;
+  return DAG_COLORS.slate;
+}
+
+function edgeOpacity({
+  changed,
+  dimmed,
+  latent,
+  hasPosterior,
+}: {
+  readonly changed: boolean;
+  readonly dimmed: boolean;
+  readonly latent: boolean;
+  readonly hasPosterior: boolean;
+}): number {
+  if (changed) return 1;
+  if (dimmed) return 0.1;
+  if (latent) return 0.38;
+  if (hasPosterior) return 0.92;
+  return 0.78;
+}
 
 /** Derive graph display state from recorded model findings and user interaction. */
 export function useLayeredGraph({
@@ -170,28 +206,20 @@ export function useLayeredGraph({
       nodeStatuses.get(cause.id) === "blocking" || nodeStatuses.get(effect.id) === "blocking";
     const latent =
       nodeStatuses.get(cause.id) === "latent" || nodeStatuses.get(effect.id) === "latent";
-    const color = blocking ? BLOCKING : latent ? LATENT : DAG_COLORS.slate;
     // A coefficient's mean is not the strength or sign of a nonlinear state-dependent effect.
-    const width = 1.7;
+    const lineWidth = 1.7;
     const lit = focused?.edges.has(edge.id) ?? false;
     const change = difference.edgeChanges.get(edge.id);
+    const selected = selection?.kind === "edge" && selection.id === edge.id;
     return {
-      color:
-        selection?.kind === "edge" && selection.id === edge.id
-          ? "var(--primary)"
-          : change
-            ? COMPARISON_COLORS[change]
-            : color,
-      width: change ? Math.max(width, 3 / zoom) : width,
-      opacity: change
-        ? 1
-        : focused && !lit
-          ? 0.1
-          : latent
-            ? 0.38
-            : edgePosteriors.has(edge.id)
-              ? 0.92
-              : 0.78,
+      color: edgeColor({ selected, change, blocking, latent }),
+      width: change ? Math.max(lineWidth, 3 / zoom) : lineWidth,
+      opacity: edgeOpacity({
+        changed: change !== undefined,
+        dimmed: focused !== null && !lit,
+        latent,
+        hasPosterior: edgePosteriors.has(edge.id),
+      }),
       highlighted: lit,
       change,
     };

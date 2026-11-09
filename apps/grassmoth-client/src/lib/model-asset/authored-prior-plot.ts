@@ -14,7 +14,7 @@ export function authoredPriorPlot(law: NumPyroDistribution): DensityCurve {
   const density = x.map((value) => distribution.pdf(value));
   if (
     !(low < high) ||
-    !x.every(Number.isFinite) ||
+    !x.every((value) => Number.isFinite(value)) ||
     !density.every((value) => Number.isFinite(value) && value >= 0)
   ) {
     throw new Error(`Cannot plot a finite scalar density for the ${law.distribution} prior.`);

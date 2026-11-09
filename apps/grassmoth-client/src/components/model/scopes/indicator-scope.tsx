@@ -1,18 +1,24 @@
 import type { IndicatorId } from "@grassmoth/api-types";
-import { indicatorPresentation } from "@/lib/model-asset/inspector";
+import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { observationEquation } from "@/lib/model-asset/equations";
+import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
+import { indicatorPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
-import { formatFillNull, humanize } from "@/lib/model-asset/selection";
 import type { ScopeContext } from "@/lib/model-asset/scope";
+import { formatFillNull, humanize } from "@/lib/model-asset/selection";
 import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
+import { FlowSection } from "./flow-sections";
 import { LawSections, SimulatedHistory } from "./law-sections";
 import { Reasoning } from "./reasoning";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { ObservationPlots, ObservedProfile } from "./recorded-history";
-import { FlowSection } from "./flow-sections";
-import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 
-export function IndicatorScope({ context, id }: { context: ScopeContext; id: IndicatorId }) {
+export function IndicatorScope({
+  context,
+  id,
+}: {
+  readonly context: ScopeContext;
+  readonly id: IndicatorId;
+}) {
   const scope = indicatorPresentation(context, id);
   if (!scope) return null;
   const { indicator, audit, likelihood, findings } = scope;
@@ -44,7 +50,7 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
                   ? ([
                       ["Likelihood", likelihood.law.distribution],
                       ["Standardized", likelihood.standardized ? "Yes" : "No"],
-                    ] as Array<[string, string]>)
+                    ] as const)
                   : []),
               ]}
             />
@@ -80,7 +86,7 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
                 ).join(", "),
               ],
               ...(preparation.extraction.kind === "computed"
-                ? [["Null filling", formatFillNull(preparation.extraction)] as [string, string]]
+                ? [["Null filling", formatFillNull(preparation.extraction)] as const]
                 : []),
             ]}
           />

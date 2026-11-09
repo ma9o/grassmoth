@@ -1,19 +1,18 @@
 "use client";
 
-import type { InferenceDetailView } from "@/lib/model-asset/result-values";
-
 import type { RankHistogram } from "@grassmoth/api-types";
 import { useEffect, useMemo, useRef } from "react";
+import type { InferenceDetailView } from "@/lib/model-asset/result-values";
 import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, chainColor, cssColor, resolveColor } from "./chart-tokens";
 import {
   type Domain,
-  type PlotBox,
-  type Tick,
   extentOf,
   linearScale,
   marginBox,
+  type PlotBox,
   padDomain,
+  type Tick,
   valueTicks,
 } from "./plot-geometry";
 import { paintCanvas, useChartSize } from "./use-chart-size";
@@ -26,10 +25,10 @@ function Axes({
   yTicks,
   xLabels,
 }: {
-  box: PlotBox;
-  y: (value: number) => number;
-  yTicks: readonly Tick[];
-  xLabels: readonly [string, string];
+  readonly box: PlotBox;
+  readonly y: (value: number) => number;
+  readonly yTicks: readonly Tick[];
+  readonly xLabels: readonly [string, string];
 }) {
   const bottom = box.top + box.height;
   return (
@@ -51,9 +50,9 @@ export function TraceChart({
   label,
   height = 96,
 }: {
-  chains: readonly (readonly number[])[];
-  label: string;
-  height?: number;
+  readonly chains: readonly (readonly number[])[];
+  readonly label: string;
+  readonly height?: number;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -76,15 +75,15 @@ export function TraceChart({
     paintCanvas(target, size, 1, (context) => {
       context.lineWidth = 0.8;
       context.globalAlpha = 0.8;
-      chains.forEach((chain, index) => {
+      for (const [index, chain] of chains.entries()) {
         context.strokeStyle = resolveColor(target, chainColor(index));
         context.beginPath();
-        chain.forEach((value, draw) => {
-          if (draw) context.lineTo(geometry.x(draw), geometry.y(value));
+        for (const [draw, value] of chain.entries()) {
+          if (draw > 0) context.lineTo(geometry.x(draw), geometry.y(value));
           else context.moveTo(geometry.x(draw), geometry.y(value));
-        });
+        }
         context.stroke();
-      });
+      }
     });
   }, [size, geometry, chains]);
 
@@ -113,8 +112,8 @@ export function RankChart({
   histogram,
   height = 96,
 }: {
-  histogram: RankHistogram;
-  height?: number;
+  readonly histogram: RankHistogram;
+  readonly height?: number;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const rows = histogram.chains;
@@ -150,12 +149,12 @@ function RankSvg({
   width,
   height,
 }: {
-  rows: readonly (readonly number[])[];
-  bins: number;
-  peak: number;
-  expected: number;
-  width: number;
-  height: number;
+  readonly rows: readonly (readonly number[])[];
+  readonly bins: number;
+  readonly peak: number;
+  readonly expected: number;
+  readonly width: number;
+  readonly height: number;
 }) {
   const box = marginBox(width, height, MARGIN);
   const y = linearScale([0, peak], [box.top + box.height, box.top]);
@@ -167,7 +166,7 @@ function RankSvg({
       {rows.map((counts, chain) =>
         counts.map((count, bin) => (
           <rect
-            // biome-ignore lint/suspicious/noArrayIndexKey: chains and bins are positional
+            // eslint-disable-next-line react/no-array-index-key -- chains and bins are positional
             key={`${chain}-${bin}`}
             x={box.left + bin * binWidth + chain * barWidth}
             y={y(count)}
@@ -195,8 +194,8 @@ export function StepSizeChart({
   detail,
   height = 96,
 }: {
-  detail: InferenceDetailView;
-  height?: number;
+  readonly detail: InferenceDetailView;
+  readonly height?: number;
 }) {
   const [container, size] = useChartSize<HTMLDivElement>();
   const final = detail.final_latent_delta ?? [];
@@ -204,7 +203,7 @@ export function StepSizeChart({
   const positive = [...final.flat(), ...initial].filter((value) => value > 0);
   const first = initial.at(0);
   const start = first !== undefined && initial.every((value) => value === first) ? first : null;
-  const domain = extentOf(positive.map(Math.log10));
+  const domain = extentOf(positive.map((value) => Math.log10(value)));
   return (
     <div
       ref={container}
@@ -233,11 +232,11 @@ function StepSvg({
   width,
   height,
 }: {
-  rows: readonly (readonly number[])[];
-  start: number | null;
-  domain: Domain;
-  width: number;
-  height: number;
+  readonly rows: readonly (readonly number[])[];
+  readonly start: number | null;
+  readonly domain: Domain;
+  readonly width: number;
+  readonly height: number;
 }) {
   const box = marginBox(width, height, MARGIN);
   const length = Math.max(1, ...rows.map((row) => row.length));
@@ -263,7 +262,7 @@ function StepSvg({
       )}
       {rows.map((row, chain) => (
         <polyline
-          // biome-ignore lint/suspicious/noArrayIndexKey: rows are chains in engine order
+          // eslint-disable-next-line react/no-array-index-key -- rows are chains in engine order
           key={chain}
           fill="none"
           stroke={cssColor(chainColor(chain))}
@@ -277,11 +276,11 @@ function StepSvg({
   );
 }
 
-export function ChainLegend({ chains }: { chains: number }) {
+export function ChainLegend({ chains }: { readonly chains: number }) {
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
       {Array.from({ length: chains }, (_, chain) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: chains are numbered by position
+        // chains are numbered by position
         <span key={chain} className="inline-flex items-center gap-1">
           <span
             className="size-2 rounded-full"

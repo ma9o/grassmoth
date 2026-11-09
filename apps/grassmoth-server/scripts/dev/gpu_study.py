@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 import httpx
 import modal
 
-from grassmoth_server.compute.modal_images import ROOT, SERVER, gpu_image
+from grassmoth_server.compute.modal_images import SERVER, gpu_image
 
 if TYPE_CHECKING:
     from grassmoth.public import JsonObject
@@ -146,35 +146,7 @@ def run_study(
                     if item["artifact_id"] == artifact
                 )
 
-            initial = run(
-                "edit_model",
-                {
-                    "dynamical_model_spec": {
-                        "question": "How persistent is daily volatility?",
-                        "outcome": "construct:h",
-                        "time": {
-                            "window": {"start": "2020-01-01", "horizon": "2999d"},
-                            "step": "1d",
-                        },
-                        "core_query": {"window": {"start": "2020-01-01", "horizon": "2999d"}},
-                        "constructs": {
-                            "construct:h": {
-                                "name": "Daily volatility",
-                                "reasoning": {"text": "The modeled course of daily volatility."},
-                                "role": "endogenous",
-                                "temporal_status": "time_varying",
-                            }
-                        },
-                    }
-                },
-            )
-            truth = run(
-                "edit_model",
-                {
-                    "parent_ref": produced(initial.commit_id, "model"),
-                    "dynamical_model_spec": json.loads(truth_json),
-                },
-            )
+            truth = run("edit_model", {"dynamical_model_spec": json.loads(truth_json)})
             truth_ref = produced(truth.commit_id, "model")
             simulation = run(
                 "simulate",
@@ -238,7 +210,7 @@ def run_study(
 @app.local_entrypoint()
 def main(job: str, settings: str, source_patch: str = "") -> None:
     """Ship fixture documents and a fit-settings JSON file; execute nothing locally."""
-    case = ROOT / "benchmarks/cases/suite/SV-cubic"
+    case = SERVER / "scripts/dev/gpu_study"
     run_study.remote(
         job,
         (case / "truth.json").read_text(),

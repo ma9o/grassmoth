@@ -27,10 +27,10 @@ export function ActionMark({
   failed,
   size = 16,
 }: {
-  icon: LucideIcon;
-  color: string;
-  failed?: boolean;
-  size?: number;
+  readonly icon: LucideIcon;
+  readonly color: string;
+  readonly failed?: boolean;
+  readonly size?: number;
 }) {
   return (
     <span aria-hidden="true" className="relative flex-none">

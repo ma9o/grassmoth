@@ -10,12 +10,12 @@ export function FlowChart({
   compact = false,
   resolution = 1,
 }: {
-  plot: FlowPlot;
-  height: number;
-  compact?: boolean;
-  resolution?: number;
+  readonly plot: FlowPlot;
+  readonly height: number;
+  readonly compact?: boolean;
+  readonly resolution?: number;
 }) {
-  if (plot.kind === "unavailable")
+  if (plot.kind === "unavailable") {
     return (
       <p
         role="status"
@@ -27,9 +27,10 @@ export function FlowChart({
         {plot.reason}
       </p>
     );
+  }
   const color = plot.retained ? CHART_COLORS.posterior : CHART_COLORS.prior;
   if (plot.times.length === 1) {
-    const values = plot.rows.flatMap((row) => row);
+    const values = plot.rows.flat();
     const point = values[0];
     const fixed = point !== undefined && values.every((value) => value === point);
     return (

@@ -1,14 +1,14 @@
 import type { SimulationReport } from "@grassmoth/api-types";
 import { useState } from "react";
 import type { ArmChoice } from "@/components/charts/series-adapters";
-import { resolveEntity, type ModelEntities } from "@/lib/model-asset/entities";
+import { ALL_DRAWS, type DrawSelection } from "@/lib/hooks/use-visuals";
+import { type ModelEntities, resolveEntity } from "@/lib/model-asset/entities";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { formatPlain, humanize } from "@/lib/model-asset/selection";
 import { causalEffect } from "@/lib/simulation-report";
-import { ALL_DRAWS, type DrawSelection } from "@/lib/hooks/use-visuals";
 import { formatModelDate } from "@/lib/utils/format";
-import { SimulationHistory } from "./scopes/recorded-history";
 import { Hint, KeyValue, Section, StatusIcon } from "./scope-primitives";
+import { SimulationHistory } from "./scopes/recorded-history";
 
 type DrawMode = "all" | 24 | 1;
 
@@ -21,14 +21,20 @@ interface SimulationView {
 const selectionOf = (view: SimulationView): DrawSelection =>
   view.mode === "all" ? ALL_DRAWS : { start: view.start, count: view.mode };
 
+function drawModeLabel(mode: DrawMode, total: number): string {
+  if (mode === "all") return `All ${total}`;
+  if (mode === 1) return "One";
+  return `${mode}`;
+}
+
 function Choice({
   pressed,
   onClick,
   children,
 }: {
-  pressed: boolean;
-  onClick: () => void;
-  children: string;
+  readonly pressed: boolean;
+  readonly onClick: () => void;
+  readonly children: string;
 }) {
   return (
     <button
@@ -49,10 +55,10 @@ function SimulationControls({
   total,
   paired,
 }: {
-  view: SimulationView;
-  onChange: (view: SimulationView) => void;
-  total: number;
-  paired: boolean;
+  readonly view: SimulationView;
+  readonly onChange: (view: SimulationView) => void;
+  readonly total: number;
+  readonly paired: boolean;
 }) {
   const page = view.mode === "all" ? total : view.mode;
   return (
@@ -71,7 +77,7 @@ function SimulationControls({
             pressed={view.mode === mode}
             onClick={() => onChange({ ...view, mode, start: 0 })}
           >
-            {mode === "all" ? `All ${total}` : mode === 1 ? "One" : `${mode}`}
+            {drawModeLabel(mode, total)}
           </Choice>
         ))}
         {view.mode !== "all" && (
@@ -129,23 +135,24 @@ function SimulationControls({
  * The selected simulation: the question's outcome first, then every state and simulated
  * observation in the same chart, all following one draw and arm control.
  */
-export function SimulationEvidence({ context }: { context: ScopeContext }) {
+export function SimulationEvidence({ context }: { readonly context: ScopeContext }) {
   const { modelSnapshot, entities } = context;
   const simulation = modelSnapshot.simulation;
   const [view, setView] = useState<SimulationView>({ mode: "all", start: 0, arms: "both" });
   const selection = selectionOf(view);
-  if (!simulation)
+  if (!simulation) {
     return (
       <Section title="Simulation">
         <Hint>No simulation recorded at this version.</Hint>
       </Section>
     );
+  }
   const report = simulation;
   const names = new Map(entities.constructs.map((item) => [item.id, humanize(item.name)]));
   const effect = causalEffect(report);
   const outcome = effect?.outcome ?? modelSnapshot.dynamical_model_spec?.outcome ?? null;
   const simulatedOutcome =
-    outcome !== null && report.evidence.state_ids.some((id) => id === outcome) ? outcome : null;
+    outcome !== null && report.evidence.state_ids.includes(outcome) ? outcome : null;
   const timeLabel = (day: number) =>
     `${formatModelDate(day, report.evidence.time_origin)} (day ${day})`;
   const chart = { modelSnapshot, selection, arms: view.arms };
@@ -262,8 +269,8 @@ export function PredictiveFindings({
   findings,
   entities,
 }: {
-  findings: SimulationReport["findings"];
-  entities: ModelEntities;
+  readonly findings: SimulationReport["findings"];
+  readonly entities: ModelEntities;
 }) {
   const names = new Map<string, string>([
     ...[...entities.constructs, ...entities.indicators].map((entity): [string, string] => [

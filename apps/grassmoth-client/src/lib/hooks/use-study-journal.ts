@@ -15,10 +15,10 @@ export function journalPollIntervalMs(active: boolean): number {
 
 /** Timeline metadata and active call identities; action GETs own results and execution logs. */
 export interface StudyJournal {
-  seq: number;
-  running: readonly RunningAction[];
-  attempts: readonly TimelineRevision[];
-  dependencies: readonly RecordDependency[];
+  readonly seq: number;
+  readonly running: readonly RunningAction[];
+  readonly attempts: readonly TimelineRevision[];
+  readonly dependencies: readonly RecordDependency[];
 }
 
 export function getStudyJournalQueryKey(workspaceId: string) {
@@ -34,8 +34,9 @@ export async function readStudyJournal(
     params: { path: { workspace_id: workspaceId } },
     ...(signal === undefined ? {} : { signal }),
   });
-  if (data === undefined)
+  if (data === undefined) {
     throw new Error(`Cannot read the journal (${response.status}): ${JSON.stringify(error)}`);
+  }
   const seq = Math.max(0, ...data.attempts.map((entry) => entry.record.seq));
   return {
     seq,

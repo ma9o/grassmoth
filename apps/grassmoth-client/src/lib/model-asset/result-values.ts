@@ -1,21 +1,21 @@
-import { causalEffect } from "@/lib/simulation-report";
-import { readNumericalArray } from "@grassmoth/api-types";
 import type {
   ArrayVector,
+  DynamicalModelSpec,
+  EmpiricalDistribution,
   FitOutput,
-  NumericalArray,
   InferenceReport,
   InferenceReportDetail,
-  ObservationHistory,
-  EmpiricalDistribution,
-  ParameterRef,
-  NumPyroValue,
+  NumericalArray,
   NumPyroDistribution,
+  NumPyroValue,
+  ObservationHistory,
+  ParameterRef,
   ScalarValues,
   SimulateOutput,
-  DynamicalModelSpec,
   SimulationSummary,
 } from "@grassmoth/api-types";
+import { readNumericalArray } from "@grassmoth/api-types";
+import { causalEffect } from "@/lib/simulation-report";
 
 export type HistoryView = Omit<
   ObservationHistory,
@@ -72,7 +72,10 @@ export function scalarValues(value: ScalarValues): readonly (number | null)[] {
   const mask = selection.mask ? scalarValues(selection.mask) : null;
   const stop = selection.stop ?? required(array.shape[axis]);
   return Array.from({ length: stop - selection.start }, (_, index) => {
-    if (mask && !mask[index]) return null;
+    if (mask) {
+      const shown = mask[index];
+      if (shown == null || shown === 0) return null;
+    }
     const scalar = required(
       array.values[offset + (index + selection.start) * required(strides[axis])],
     );
@@ -164,15 +167,15 @@ export function pathsView(
       ]),
     ),
     effect:
-      causal !== undefined
-        ? {
+      causal === undefined
+        ? null
+        : {
             label: required(causal.labels[causal.outcome]),
             action: paths(causal.differences),
             reference: [],
             levels: null,
             frame: causal.frame,
-          }
-        : null,
+          },
     action_category_probabilities: summary.action_category_probabilities,
     reference_category_probabilities: summary.reference_category_probabilities,
   };
@@ -189,8 +192,9 @@ function object(value: NumPyroValue | undefined): NumPyroDistribution["params"] 
     typeof value !== "object" ||
     isArray(value) ||
     "npy" in value
-  )
+  ) {
     throw new Error("Saved posterior law has an invalid constructor");
+  }
   return value;
 }
 
@@ -210,8 +214,9 @@ export function drawsView(result: FitOutput): readonly DrawColumnView[] {
     typeof atoms !== "object" ||
     !("npy" in atoms) ||
     !(atoms.npy instanceof Uint8Array)
-  )
+  ) {
     throw new Error("Saved posterior law must own its retained joint atoms");
+  }
   const array = { npy: atoms.npy };
   const coordinates = layout.parameters.flatMap(([parameter, elements]) =>
     elements.map((element) => ({ parameter_id: parameter, element_id: element })),
@@ -220,7 +225,7 @@ export function drawsView(result: FitOutput): readonly DrawColumnView[] {
     label: required(layout.labels[subject.element_id]),
     subject,
     values: scalarValues({ array, indices: [null, column], start: 0, stop: null, mask: null }).map(
-      required,
+      (value) => required(value),
     ),
     empirical: required(
       result.inference.core.posterior_marginals.find(
@@ -234,9 +239,20 @@ export function drawsView(result: FitOutput): readonly DrawColumnView[] {
 
 /** Missing coordinates are a corrupt result, never an alternate scientific value. */
 function required<T>(value: T | null | undefined): T {
-  if (value === undefined || value === null)
+  if (value === undefined || value === null) {
     throw new Error("Saved numerical result has an invalid coordinate");
+  }
   return value;
+}
+
+function requiredRows(array: NumericalArray | null): readonly (readonly number[])[] | null {
+  return array === null
+    ? null
+    : numericalRows(array).map((row) => row.map((value) => required(value)));
+}
+
+function requiredValues(value: ScalarValues): readonly number[] {
+  return scalarValues(value).map((coordinate) => required(coordinate));
 }
 
 export type InferenceDetailView = Omit<InferenceReportDetail, "trace_data"> & {
@@ -257,22 +273,19 @@ export function inferenceView(result: FitOutput): InferenceView {
   const report = result.inference;
   const detail = report.detail;
   const evidence = report.evidence;
-  const rows = (array: NumericalArray | null): readonly (readonly number[])[] | null =>
-    array === null ? null : numericalRows(array).map((row) => row.map(required));
   const divergent = evidence.chain_extra_fields.diverging;
-  const vector = (value: ScalarValues) => scalarValues(value).map(required);
   return {
     ...report,
     detail: {
       ...detail,
       trace_data: detail.trace_data.map((trace) => ({
         ...trace,
-        chains: trace.chains.map(vector),
+        chains: trace.chains.map((chain) => requiredValues(chain)),
       })),
       divergent:
         divergent === undefined ? null : Array.from(readNumericalArray(divergent).values, Boolean),
-      initial_latent_delta: rows(evidence.initial_latent_delta),
-      final_latent_delta: rows(evidence.final_latent_delta),
+      initial_latent_delta: requiredRows(evidence.initial_latent_delta),
+      final_latent_delta: requiredRows(evidence.final_latent_delta),
     },
   };
 }

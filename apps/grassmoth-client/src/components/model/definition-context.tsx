@@ -1,15 +1,15 @@
+import { Fragment } from "react";
 import type { EntityLink, EntityPresentation } from "@/lib/model-asset/entities";
 import type { EntitySelection } from "@/lib/model-asset/selection";
 import { OwnerLink } from "./scope-primitives";
-import { Fragment } from "react";
 
 /** Render the selected entity and links to its related model entities. */
 export function DefinitionContext({
   entity,
   onSelect,
 }: {
-  entity: EntityPresentation;
-  onSelect: (selection: EntitySelection) => void;
+  readonly entity: EntityPresentation;
+  readonly onSelect: (selection: EntitySelection) => void;
 }) {
   const { selection, relationships } = entity;
   const relationship = (link: EntityLink) => (

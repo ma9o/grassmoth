@@ -10,7 +10,7 @@ function tex(latex: string, displayMode = true): string {
 }
 
 /** Inline KaTeX span. */
-export function Katex({ latex }: { latex: string }) {
+export function Katex({ latex }: { readonly latex: string }) {
   // biome-ignore lint/security/noDangerouslySetInnerHtml: KaTeX renders sanitized math
   return <span dangerouslySetInnerHTML={{ __html: tex(latex, false) }} />;
 }

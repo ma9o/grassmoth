@@ -6,15 +6,15 @@ import type {
 } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { describe, expect, it } from "vitest";
-import { modelFixture, outcome, decay } from "@/lib/__fixtures__/model";
+import { decay, modelFixture, outcome } from "@/lib/__fixtures__/model";
 import {
+  type ExpressionInputs,
   evaluateExpression,
   potentialDrift,
-  type ExpressionInputs,
 } from "@/lib/model-asset/expression-evaluation";
-import { modelFlowPlots, type FlowPlot } from "@/lib/model-asset/flow-plots";
-import { modelDraws } from "@/lib/model-asset/model-draws";
+import { type FlowPlot, modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { measurementDraw } from "@/lib/model-asset/measurement-draws";
+import { modelDraws } from "@/lib/model-asset/model-draws";
 
 const x = outcome.id;
 const theta = decay.id;
@@ -93,14 +93,15 @@ function values(plot: FlowPlot | undefined): readonly (readonly number[])[] {
   return plot.rows;
 }
 
+function array(flat: readonly number[], shape: readonly number[]) {
+  return { npy: new Uint8Array(dump([...flat], [...shape], { dtype: "f8" })) };
+}
+
 function retainedModel(): DynamicalModelSpec {
   const model = authoredModel();
   const construct = model.constructs[x];
   const definition = model.parameters[theta];
   if (!construct || !definition) throw new Error("Missing test definition.");
-  const array = (values: number[], shape: number[]) => ({
-    npy: new Uint8Array(dump(values, shape, { dtype: "f8" })),
-  });
   const element = "element:00000000000000000007" as const;
   return {
     ...model,
@@ -142,11 +143,11 @@ describe("local distributions at model seams", () => {
     const outputs = values(plots.intrinsic.get(x));
     const readings = values(plots.indicators.get(indicator));
     expect(states).toHaveLength(256);
-    states.forEach(([value], draw) => {
+    for (const [draw, [value]] of states.entries()) {
       if (value === undefined) throw new Error("Missing test state.");
       expect(outputs[draw]).toEqual([value ** 2]);
       expect(readings[draw]?.[0]).toBeCloseTo(3 * value, 12);
-    });
+    }
     expect(modelFlowPlots(structuredClone(model))).toEqual(plots);
     expect(model).toEqual(before);
   });

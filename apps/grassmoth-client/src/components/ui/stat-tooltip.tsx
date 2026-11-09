@@ -1,7 +1,7 @@
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export function StatTooltip({ explanation }: { explanation: string }) {
+export function StatTooltip({ explanation }: { readonly explanation: string }) {
   return (
     <Tooltip>
       <TooltipTrigger render={<span />} className="inline-flex cursor-help">

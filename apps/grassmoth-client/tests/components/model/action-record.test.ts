@@ -9,11 +9,11 @@ import type {
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ActionRecord } from "@/components/model/action-record";
 import { ActionExecution } from "@/components/model/action-log";
+import { ActionRecord } from "@/components/model/action-record";
 
-import { runningPoll, simulatedResult, failedPoll } from "@/lib/__fixtures__/action-results";
-import { executionMessages, executionFailure } from "@/lib/__fixtures__/execution-log";
+import { failedPoll, runningPoll, simulatedResult } from "@/lib/__fixtures__/action-results";
+import { executionFailure, executionMessages } from "@/lib/__fixtures__/execution-log";
 
 const intent = "Check <revised> assumptions.\nGoal: choose a model to fit.";
 const request: SimulateRequest<GitOid> = {
@@ -47,22 +47,24 @@ const tick: TimelineRevision = {
 const render = (
   selected: TimelineRevision | undefined,
   running: readonly RunningAction[] = [],
-  poll: ActionPoll = { ...runningPoll, messages: executionMessages },
-  journal: {
-    attempts: readonly TimelineRevision[];
-    dependencies: readonly RecordDependency[];
-  } = { attempts: selected ? [selected] : [], dependencies: [] },
-) =>
-  renderToStaticMarkup(
+  poll?: ActionPoll,
+  journal?: {
+    readonly attempts: readonly TimelineRevision[];
+    readonly dependencies: readonly RecordDependency[];
+  },
+) => {
+  const data: ActionPoll = poll ?? { ...runningPoll, messages: executionMessages };
+  return renderToStaticMarkup(
     createElement(ActionRecord, {
       tick: selected,
-      ...journal,
+      ...(journal ?? { attempts: selected ? [selected] : [], dependencies: [] }),
       running,
-      useActionPoll: () => ({ data: poll, error: null }),
+      useActionPoll: () => ({ data, error: null }),
       hrefAt: (seq) => `?seq=${seq}`,
-      onSelectVersion: () => {},
+      onSelectVersion: () => undefined,
     }),
   );
+};
 
 describe("action input", () => {
   it.each([

@@ -1,17 +1,17 @@
 "use client";
 
-import type { WorkspaceList } from "@/lib/server/workspaces";
-import { Skeleton } from "@/components/ui/skeleton";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { WorkspaceList } from "@/lib/server/workspaces";
 
 export function WorkspacesRail({
   data,
   error,
   isLoading,
 }: {
-  data: WorkspaceList | undefined;
-  error: string | null;
-  isLoading: boolean;
+  readonly data: WorkspaceList | undefined;
+  readonly error: string | null;
+  readonly isLoading: boolean;
 }) {
   const workspaces = Object.entries(data ?? {});
 
@@ -48,8 +48,8 @@ function WorkspaceCard({
   workspaceId,
   question,
 }: {
-  workspaceId: string;
-  question: string | null;
+  readonly workspaceId: string;
+  readonly question: string | null;
 }) {
   return (
     <Link

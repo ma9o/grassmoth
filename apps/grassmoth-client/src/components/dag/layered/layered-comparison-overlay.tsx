@@ -1,19 +1,25 @@
+import type { ReasoningSpec } from "@grassmoth/api-types";
 import { useState } from "react";
 import { ReasoningText } from "@/components/model/scopes/reasoning";
-import { humanize } from "@/lib/model-asset/selection";
 import type { placeComparisonOverlay } from "@/lib/dag/comparison-overlay";
 import { COMPARISON_COLORS } from "@/lib/dag/palette";
+import { humanize } from "@/lib/model-asset/selection";
 import { DagEdge } from "../core/dag-edge";
 import { DagNodeShell } from "../core/dag-node";
 
 const SYMBOLS = { added: "+", removed: "−", revised: "~" };
 
+function MarkDetail({ detail }: { readonly detail: string | ReasoningSpec }) {
+  if (typeof detail !== "string") return <ReasoningText value={detail} maxLength={25} />;
+  return detail.length > 25 ? `${detail.slice(0, 24)}…` : detail;
+}
+
 export function LayeredComparisonOverlay({
   overlay,
   zoom,
 }: {
-  overlay: ReturnType<typeof placeComparisonOverlay>;
-  zoom: number;
+  readonly overlay: ReturnType<typeof placeComparisonOverlay>;
+  readonly zoom: number;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   return (
@@ -87,15 +93,7 @@ export function LayeredComparisonOverlay({
                   {mark.title}
                 </text>
                 <text x={labelX + 10} y={labelY + 32} fontSize={12} fontWeight={600} fill="#1e293b">
-                  {typeof mark.detail === "string" ? (
-                    detail.length > 25 ? (
-                      `${detail.slice(0, 24)}…`
-                    ) : (
-                      detail
-                    )
-                  ) : (
-                    <ReasoningText value={mark.detail} maxLength={25} />
-                  )}
+                  <MarkDetail detail={mark.detail} />
                 </text>
               </g>
             )}

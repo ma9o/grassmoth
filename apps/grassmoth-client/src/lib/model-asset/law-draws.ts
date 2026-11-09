@@ -5,12 +5,14 @@ import { nativeObject, nativeScalar, scalarDensity } from "./scalar-law";
 
 /** A stable, open-unit display variate. Independent keys never share an RNG cursor. */
 export function displayProbability(key: string, draw: number): number {
-  let hash = 2166136261;
-  for (const character of `${key}:${draw}`)
-    hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-  hash = Math.imul(hash ^ (hash >>> 16), 0x21f0aaad);
-  hash = Math.imul(hash ^ (hash >>> 15), 0x735a2d97);
-  return ((hash ^ (hash >>> 15)) >>> 0) / 4294967296 + 0.5 / 4294967296;
+  let hash = 2_166_136_261;
+  for (const character of `${key}:${draw}`) {
+    // eslint-disable-next-line unicorn/prefer-code-point -- The display hash is defined over UTF-16 code units; codePointAt would change it for astral characters.
+    hash = Math.imul(hash ^ character.charCodeAt(0), 16_777_619);
+  }
+  hash = Math.imul(hash ^ (hash >>> 16), 0x21_f0_aa_ad);
+  hash = Math.imul(hash ^ (hash >>> 15), 0x73_5a_2d_97);
+  return ((hash ^ (hash >>> 15)) >>> 0) / 4_294_967_296 + 0.5 / 4_294_967_296;
 }
 
 /** Native constructor arrays are already decoded by the API client. */
@@ -58,10 +60,11 @@ export function jointAtoms(law: NumPyroDistribution): JointAtoms {
     law.distribution !== "MixtureSameFamily" ||
     component?.distribution !== "Delta" ||
     mixing?.distribution !== "CategoricalProbs"
-  )
+  ) {
     throw new PlotUnavailable(
       `Display sampling of the ${law.distribution} joint law is not supported.`,
     );
+  }
   const array = nativeArray(nativeObject(component.params)?.v);
   const probabilities = nativeArray(nativeObject(mixing.params)?.probs).values;
   const [count, width] = array.shape;
@@ -70,15 +73,17 @@ export function jointAtoms(law: NumPyroDistribution): JointAtoms {
     width === undefined ||
     array.shape.length !== 2 ||
     probabilities.length !== count
-  )
+  ) {
     throw new Error("Saved joint atoms do not match their mixture coordinates.");
+  }
   return { count, width, values: array.values, probabilities };
 }
 
 /** Keep every equally weighted retained draw in order when using its complete draw axis. */
 export function atomIndex(atoms: JointAtoms, key: string, draw: number, count: number): number {
-  if (atoms.count === count && atoms.probabilities.every((p) => Math.abs(p - 1 / count) < 1e-7))
+  if (atoms.count === count && atoms.probabilities.every((p) => Math.abs(p - 1 / count) < 1e-7)) {
     return draw;
+  }
   const probability = displayProbability(key, draw);
   let cumulative = 0;
   for (const [index, mass] of atoms.probabilities.entries()) {
@@ -104,11 +109,13 @@ export function scalarQuantile(law: NumPyroDistribution): (probability: number) 
     case "Exponential":
     case "LeftTruncatedDistribution":
     case "RightTruncatedDistribution":
-    case "TwoSidedTruncatedDistribution":
+    case "TwoSidedTruncatedDistribution": {
       return scalarDensity(law).quantile;
-    default:
+    }
+    default: {
       throw new PlotUnavailable(
         `Display sampling of the ${law.distribution} scalar law is not supported.`,
       );
+    }
   }
 }

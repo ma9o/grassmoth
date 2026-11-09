@@ -1,7 +1,7 @@
+import type { TimelineRevision } from "@grassmoth/api-types";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { TimelineRevision } from "@grassmoth/api-types";
 import { comparison, failedFit, revision, simulation } from "@/lib/__fixtures__/timeline";
 import { timelineHref, timelineSelection } from "@/lib/model-asset/timeline-location";
 import { useWorkbenchSnapshots } from "@/lib/model-asset/use-workbench";

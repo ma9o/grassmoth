@@ -7,10 +7,10 @@ import type {
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { simulatedResult } from "@/lib/__fixtures__/action-results";
 import { dataComparisonChart } from "@/components/charts/series-adapters";
+import { simulatedResult } from "@/lib/__fixtures__/action-results";
 import { outcome } from "@/lib/__fixtures__/model";
-import { dataComparisonView, type DataSourceResult } from "@/lib/model-asset/data-comparison";
+import { type DataSourceResult, dataComparisonView } from "@/lib/model-asset/data-comparison";
 
 const simulationReport = simulatedResult.report;
 
@@ -141,8 +141,9 @@ it("joins selected source histories in report order and retains computed evidenc
   expect(view.right).toBe(report.right);
   expect(variable.statistics).toBe(report.variables[0]?.statistics);
   const retained = fixtureValue(report.variables[0]);
-  if (variable.predictive === null || retained.predictive === null)
+  if (variable.predictive === null || retained.predictive === null) {
     throw new Error("Expected the recorded predictive comparison");
+  }
   expect(variable.predictive).toBe(retained.predictive);
   expect(variable.left[0]?.history.values).toEqual([1, 4, null]);
   expect(variable.right.map((series) => series?.history.values)).toEqual([

@@ -1,37 +1,36 @@
-import type { ActionId, RecordDependency } from "@grassmoth/api-types";
-import type { TimelineRevision } from "@grassmoth/api-types";
+import type { ActionId, RecordDependency, TimelineRevision } from "@grassmoth/api-types";
 
 /**
  * Lanes group actions by what they produce: diffs read histories, data makes them, and the
  * model lane starts from the question every model is built to answer. A failed attempt produces
  * nothing, so it hangs off its lane on the side its inputs arrive from.
  */
-export const TIMELINE_LANES: ReadonlyArray<{
+export const TIMELINE_LANES: readonly {
   name: string;
   actions: readonly ActionId[];
   failures: "above" | "below";
-}> = [
+}[] = [
   { name: "Diffs", actions: ["data_diff", "model_diff"], failures: "below" },
   { name: "Data", actions: ["prepare_data", "simulate"], failures: "below" },
   { name: "Model", actions: ["edit_model", "fit"], failures: "above" },
 ];
 
 export interface RevisionTimelineNode {
-  tick: TimelineRevision;
-  column: number;
-  lane: number;
-  failed: boolean;
+  readonly tick: TimelineRevision;
+  readonly column: number;
+  readonly lane: number;
+  readonly failed: boolean;
 }
 
 export interface RevisionTimelineLink {
-  from: RevisionTimelineNode;
-  to: RevisionTimelineNode;
-  argument: string;
+  readonly from: RevisionTimelineNode;
+  readonly to: RevisionTimelineNode;
+  readonly argument: string;
 }
 
 export interface RevisionTimeline {
-  nodes: RevisionTimelineNode[];
-  links: RevisionTimelineLink[];
+  readonly nodes: readonly RevisionTimelineNode[];
+  readonly links: readonly RevisionTimelineLink[];
 }
 
 /** Presentation only: execution order gives columns; the served dependencies give links. */

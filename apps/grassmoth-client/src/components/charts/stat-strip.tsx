@@ -6,7 +6,13 @@ import { CHART_COLORS } from "./chart-tokens";
 import { DistributionChart } from "./distribution-chart";
 
 /** One check statistic: every replicated value as a dot against the observed value. */
-export function StatStrip({ stat, height = 30 }: { stat: PPCTestStat; height?: number }) {
+export function StatStrip({
+  stat,
+  height = 30,
+}: {
+  readonly stat: PPCTestStat;
+  readonly height?: number;
+}) {
   return (
     <div className="min-w-0 space-y-0.5">
       <DistributionChart

@@ -1,41 +1,41 @@
 "use client";
 
-import {
-  type ActionSuccess,
-  type ModelSnapshot,
-  type RunningAction,
-  type TimelineRevision,
+import type {
+  ActionSuccess,
+  ModelSnapshot,
+  RunningAction,
+  TimelineRevision,
 } from "@grassmoth/api-types";
 import Link from "next/link";
-import { graphEntities } from "@/lib/dag/layered-model";
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
-import { Button } from "@/components/ui/button";
-import { useActionPoll, type UseActionPoll } from "@/lib/hooks/use-action-poll";
+import { graphEntities } from "@/lib/dag/layered-model";
+import { type UseActionPoll, useActionPoll as useActionPollFor } from "@/lib/hooks/use-action-poll";
 import { useDataComparison } from "@/lib/hooks/use-data-comparison";
 import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import type { StudyJournal } from "@/lib/hooks/use-study-journal";
 import { useTimelineNavigation } from "@/lib/hooks/use-timeline-navigation";
-import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import { useSimulationPaths } from "@/lib/hooks/use-visuals";
+import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import {
+  type SnapshotReader,
   useWorkbench,
   useWorkbenchSnapshots,
-  type SnapshotReader,
 } from "@/lib/model-asset/use-workbench";
 import { ActionRecord } from "./action-record";
+import { ComparisonPreview } from "./comparison-preview";
 import { DetailsPane } from "./details-pane";
 import { VersionScrubber } from "./version-scrubber";
 import { PaneToggle, WorkbenchPanes } from "./workbench-panes";
 
 export interface CausalModelAssetViewProps {
-  workspaceId: string;
-  useSnapshot: SnapshotReader;
-  attempts: readonly TimelineRevision[];
-  dependencies: StudyJournal["dependencies"];
-  useActionPoll: UseActionPoll;
-  running: readonly RunningAction[];
-  navigation: TimelineNavigation;
+  readonly workspaceId: string;
+  readonly useSnapshot: SnapshotReader;
+  readonly attempts: readonly TimelineRevision[];
+  readonly dependencies: StudyJournal["dependencies"];
+  readonly useActionPoll: UseActionPoll;
+  readonly running: readonly RunningAction[];
+  readonly navigation: TimelineNavigation;
 }
 
 /**
@@ -53,12 +53,13 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
     props.useSnapshot,
     navigation.seq,
   );
-  if (selected.error)
+  if (selected.error) {
     return (
       <div role="alert" className="p-6">
         {selected.error.message}
       </div>
     );
+  }
   if (!hasSelectedState || !hasCurrentState) {
     const tick =
       props.attempts.find((entry) => entry.record.seq === focusSeq) ?? props.attempts.at(-1);
@@ -75,13 +76,8 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
           dependencies={props.dependencies}
           playhead={tick?.record.seq ?? 0}
           latest={0}
-          comparedSeq={null}
           navigation={navigation}
           onPlayhead={navigation.viewAt}
-          onPreviewComparison={() => {}}
-          onEndPreview={() => {}}
-          onRetainPreview={() => {}}
-          onKeepComparison={() => {}}
         />
         <section className="mx-4 mb-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card">
           <ActionRecord
@@ -97,12 +93,13 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
       </div>
     );
   }
-  if (!selected.data)
+  if (!selected.data) {
     return (
       <div role="status" className="p-6">
         Loading model version…
       </div>
     );
+  }
   return (
     <ModelRevision
       {...props}
@@ -127,10 +124,10 @@ function ModelRevision({
   focusSeq,
   running,
 }: CausalModelAssetViewProps & {
-  modelSnapshot: ModelSnapshot;
-  result: ActionSuccess | undefined;
-  loadingRevision: boolean;
-  focusSeq: number;
+  readonly modelSnapshot: ModelSnapshot;
+  readonly result: ActionSuccess | undefined;
+  readonly loadingRevision: boolean;
+  readonly focusSeq: number;
 }) {
   const {
     selection,
@@ -164,28 +161,18 @@ function ModelRevision({
   const recordedPaths = useSimulationPaths(modelSnapshot);
   const tick = ticks.find((item) => item.record.seq === focusSeq);
   const dataReport =
-    tick?.record.attempt.action === "data_diff" && tick.record.attempt.outcome.status === "applied"
-      ? result?.action === "data_diff"
-        ? result.body.report
-        : null
+    tick?.record.attempt.action === "data_diff" &&
+    tick.record.attempt.outcome.status === "applied" &&
+    result?.action === "data_diff"
+      ? result.body.report
       : null;
   const dataComparison = useDataComparison(workspaceId, dataReport, attempts);
   const dataDiff = dataComparison.data;
   const context = { ...versionContext, dataDiff };
   const recordedComparison = result?.action === "model_diff" ? result.body : null;
+  const comparisonFailure = compared.error ?? comparisonError;
   // Nodes chart what the viewed version's action produced.
   const step = tick?.record.attempt.action ?? null;
-  const comparisonPane = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (activeComparison?.pinned) {
-      comparisonPane.current?.focus({ preventScroll: true });
-      comparisonPane.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [
-    activeComparison?.pinned,
-    activeComparison?.before.record.seq,
-    activeComparison?.after.record.seq,
-  ]);
 
   return (
     <div
@@ -211,13 +198,15 @@ function ModelRevision({
         dependencies={dependencies}
         playhead={focusSeq}
         latest={latest}
-        comparedSeq={activeComparison?.after.record.seq ?? null}
         navigation={navigation}
         onPlayhead={selectVersion}
-        onPreviewComparison={previewComparison}
-        onEndPreview={endPreview}
-        onRetainPreview={retainPreview}
-        onKeepComparison={(pair) => previewComparison(pair, true)}
+        compare={{
+          comparedSeq: activeComparison?.after.record.seq ?? null,
+          onPreview: previewComparison,
+          onEndPreview: endPreview,
+          onRetainPreview: retainPreview,
+          onKeep: (pair) => previewComparison(pair, true),
+        }}
       />
       <main
         aria-busy={loadingRevision}
@@ -233,52 +222,15 @@ function ModelRevision({
               <div className="flex min-h-11 flex-none flex-wrap items-center gap-2 border-b px-4 py-1.5">
                 <h1 className="mr-auto text-sm font-semibold">Causal model</h1>
                 {activeComparison ? (
-                  <div
-                    ref={comparisonPane}
-                    id="model-comparison-preview"
-                    role="region"
-                    aria-label="Model comparison preview"
-                    tabIndex={-1}
-                    className="flex min-w-0 flex-wrap items-center gap-2 text-[11px]"
-                    onPointerEnter={retainPreview}
-                    onPointerLeave={endPreview}
-                    onFocus={retainPreview}
-                  >
-                    <span className="whitespace-nowrap font-medium text-amber-700">
-                      Spec · {playhead} → {activeComparison.after.record.seq}
-                    </span>
-                    {compared.data &&
-                      (Object.keys(compared.data.changes).length === 0 ? (
-                        <span className="whitespace-nowrap text-muted-foreground">
-                          No spec changes
-                        </span>
-                      ) : (
-                        <span className="hidden items-center gap-2 text-[10px] text-muted-foreground sm:flex">
-                          <span className="text-amber-700">~ changed</span>
-                          <span className="text-emerald-700">+ added</span>
-                          <span className="text-rose-700">− removed</span>
-                        </span>
-                      ))}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={activeComparison.pinned ? "secondary" : "ghost"}
-                      aria-label="Keep comparison"
-                      aria-pressed={activeComparison.pinned}
-                      onClick={toggleComparison}
-                    >
-                      Keep
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label="Close comparison"
-                      onClick={dismissComparison}
-                    >
-                      ×
-                    </Button>
-                  </div>
+                  <ComparisonPreview
+                    playhead={playhead}
+                    comparison={activeComparison}
+                    report={compared.data}
+                    onRetainPreview={retainPreview}
+                    onEndPreview={endPreview}
+                    onToggle={toggleComparison}
+                    onDismiss={dismissComparison}
+                  />
                 ) : null}
                 <PaneToggle title="causal model" />
               </div>
@@ -297,14 +249,13 @@ function ModelRevision({
                 )}
                 {activeComparison && !modelComparison && (
                   <p
-                    role={compared.error || comparisonError ? "alert" : "status"}
+                    role={comparisonFailure ? "alert" : "status"}
                     className="absolute top-3 left-3 z-20 rounded border bg-card px-3 py-2 text-xs"
                   >
-                    {compared.error || comparisonError
-                      ? (compared.error ?? comparisonError)?.message
-                      : compared.isLoading || compared.data
+                    {comparisonFailure?.message ??
+                      (compared.isLoading || compared.data
                         ? "Reading differences…"
-                        : "No saved comparison for these model versions."}
+                        : "No saved comparison for these model versions.")}
                   </p>
                 )}
                 {graphEntities(context.entities).constructs.length > 0 ||
@@ -370,8 +321,8 @@ export function CausalModelAsset({
   workspaceId,
   journal,
 }: {
-  workspaceId: string;
-  journal: StudyJournal;
+  readonly workspaceId: string;
+  readonly journal: StudyJournal;
 }) {
   const { selection, hrefAt, viewAt } = useTimelineNavigation(journal.attempts);
   const useSnapshot = useMemo(
@@ -384,7 +335,7 @@ export function CausalModelAsset({
   const useWorkspaceActionPoll = useMemo<UseActionPoll>(
     () =>
       function useWorkspacePoll(action, callId) {
-        return useActionPoll(workspaceId, action, callId);
+        return useActionPollFor(workspaceId, action, callId);
       },
     [workspaceId],
   );

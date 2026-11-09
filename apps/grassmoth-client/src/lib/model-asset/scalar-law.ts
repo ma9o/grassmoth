@@ -1,11 +1,11 @@
-import type { NumPyroValue, NumPyroDistribution } from "@grassmoth/api-types";
+import type { NumPyroDistribution, NumPyroValue } from "@grassmoth/api-types";
 import { readNumericalArray } from "@grassmoth/api-types";
 import { jStat } from "jstat";
 import { PlotUnavailable } from "./expression-evaluation";
 
 export interface ScalarDensity {
-  pdf(value: number): number;
-  quantile(probability: number): number;
+  pdf: (value: number) => number;
+  quantile: (probability: number) => number;
 }
 
 const isArray: (value: NumPyroValue) => value is readonly NumPyroValue[] = Array.isArray;
@@ -32,8 +32,9 @@ export function nativeScalar(value: NumPyroValue | undefined): number {
     value.npy instanceof Uint8Array
   ) {
     const array = readNumericalArray({ npy: value.npy });
-    if (array.shape.length !== 0)
+    if (array.shape.length > 0) {
       throw new PlotUnavailable("This display sampler requires scalar constructor arguments.");
+    }
     return Number(array.values[0]);
   }
   const encoded = nativeObject(value);
@@ -44,7 +45,7 @@ export function nativeScalar(value: NumPyroValue | undefined): number {
 }
 
 function twoParameters(
-  family: Pick<typeof jStat.normal, "pdf" | "inv">,
+  family: Readonly<Pick<typeof jStat.normal, "pdf" | "inv">>,
   first: number,
   second: number,
 ): ScalarDensity {
@@ -80,24 +81,29 @@ function truncatedNormal(loc: number, scale: number, low: number, high: number):
 export function scalarDensity(law: NumPyroDistribution): ScalarDensity {
   const p = law.params;
   switch (law.distribution) {
-    case "Normal":
+    case "Normal": {
       return twoParameters(jStat.normal, nativeScalar(p.loc), nativeScalar(p.scale));
-    case "HalfNormal":
+    }
+    case "HalfNormal": {
       return truncatedNormal(0, nativeScalar(p.scale), 0, Infinity);
-    case "Beta":
+    }
+    case "Beta": {
       return twoParameters(
         jStat.beta,
         nativeScalar(p.concentration1),
         nativeScalar(p.concentration0),
       );
-    case "Uniform":
+    }
+    case "Uniform": {
       return twoParameters(jStat.uniform, nativeScalar(p.low), nativeScalar(p.high));
+    }
     case "Gamma": {
       const rate = nativeScalar(p.rate);
       return twoParameters(jStat.gamma, nativeScalar(p.concentration), 1 / rate);
     }
-    case "LogNormal":
+    case "LogNormal": {
       return twoParameters(jStat.lognormal, nativeScalar(p.loc), nativeScalar(p.scale));
+    }
     case "Exponential": {
       const rate = nativeScalar(p.rate);
       return {
@@ -122,9 +128,10 @@ export function scalarDensity(law: NumPyroDistribution): ScalarDensity {
         law.distribution === "LeftTruncatedDistribution" ? Infinity : nativeScalar(p.high),
       );
     }
-    default:
+    default: {
       throw new PlotUnavailable(
         `Authored prior plots do not support the ${law.distribution} constructor.`,
       );
+    }
   }
 }

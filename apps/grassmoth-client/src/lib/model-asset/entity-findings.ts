@@ -66,7 +66,7 @@ export function recordedEntityFailures(
           ...ownLawUses(construct),
           ...entities.edges
             .filter((edge) => edge.cause.id === construct.id || edge.effect.id === construct.id)
-            .flatMap(ownLawUses),
+            .flatMap((edge) => ownLawUses(edge)),
         ];
         return [
           construct.id,

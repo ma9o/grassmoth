@@ -1,11 +1,11 @@
-import type { ModelDiffOutput, DynamicalModelSpec } from "@grassmoth/api-types";
+import type { DynamicalModelSpec, ModelDiffOutput, ModelSnapshot } from "@grassmoth/api-types";
+import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import {
   modelConstructs,
   modelEdges,
   modelParameters,
   presentEntries,
 } from "@/lib/model-accessors";
-import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import { producingCall } from "@/lib/model-asset/call-dependencies";
 import { parameterOwner } from "@/lib/model-asset/entities";
 import type { ScopeContext } from "@/lib/model-asset/scope";
@@ -19,11 +19,11 @@ function DefinitionChange({
   selection,
   value,
 }: {
-  context: ScopeContext;
-  title: string;
-  label: string;
-  selection: EntitySelection | null;
-  value: unknown;
+  readonly context: ScopeContext;
+  readonly title: string;
+  readonly label: string;
+  readonly selection: EntitySelection | null;
+  readonly value: unknown;
 }) {
   return (
     <div>
@@ -47,19 +47,23 @@ function DefinitionChange({
   );
 }
 
+function status(removed: boolean, existed: boolean) {
+  if (removed) return "Removed";
+  if (existed) return "Updated";
+  return "Added";
+}
+
 function ModelChanges({
   context,
   report,
   before,
 }: {
-  context: ScopeContext;
-  report: ModelDiffOutput;
-  before: DynamicalModelSpec | null;
+  readonly context: ScopeContext;
+  readonly report: ModelDiffOutput;
+  readonly before: DynamicalModelSpec | null;
 }) {
   const { changes } = report;
   const after = context.modelSnapshot.dynamical_model_spec;
-  const status = (removed: boolean, existed: boolean) =>
-    removed ? "Removed" : existed ? "Updated" : "Added";
   if (Object.keys(changes).length === 0) return <Hint>No spec changes.</Hint>;
   return (
     <>
@@ -153,7 +157,32 @@ function ModelChanges({
   );
 }
 
-export function ModelComparisonDetails({ context }: { context: ScopeContext }) {
+/** The saved patch against its recorded base, once both are read. */
+function ModelComparisonContent({
+  context,
+  report,
+  error,
+  base,
+}: {
+  readonly context: ScopeContext;
+  readonly report: ModelDiffOutput | null;
+  readonly error: Readonly<Error> | null;
+  readonly base: ModelSnapshot | undefined;
+}) {
+  if (error) {
+    return (
+      <p role="alert" className="text-destructive">
+        Unable to read the comparison base: {error.message}
+      </p>
+    );
+  }
+  if (report && base) {
+    return <ModelChanges context={context} report={report} before={base.dynamical_model_spec} />;
+  }
+  return <Hint>Reading the saved comparison…</Hint>;
+}
+
+export function ModelComparisonDetails({ context }: { readonly context: ScopeContext }) {
   const report = context.result?.action === "model_diff" ? context.result.body : null;
   const request = producingCall(context.ticks, context.result?.commit_id)?.record.attempt.request;
   const before = useModelSnapshot(
@@ -163,15 +192,12 @@ export function ModelComparisonDetails({ context }: { context: ScopeContext }) {
   );
   return (
     <Section title="Model comparison" wide>
-      {before.error ? (
-        <p role="alert" className="text-destructive">
-          Unable to read the comparison base: {before.error.message}
-        </p>
-      ) : report && before.data ? (
-        <ModelChanges context={context} report={report} before={before.data.dynamical_model_spec} />
-      ) : (
-        <Hint>Reading the saved comparison…</Hint>
-      )}
+      <ModelComparisonContent
+        context={context}
+        report={report}
+        error={before.error}
+        base={before.data}
+      />
     </Section>
   );
 }

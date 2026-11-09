@@ -10,22 +10,29 @@ export function useTableKeyboardNav(rowCount: number) {
       if (rowCount === 0) return;
 
       switch (e.key) {
-        case "ArrowDown":
+        case "ArrowDown": {
           e.preventDefault();
           setFocusedRowIndex((prev) => (prev === null ? 0 : Math.min(prev + 1, rowCount - 1)));
           break;
-        case "ArrowUp":
+        }
+        case "ArrowUp": {
           e.preventDefault();
           setFocusedRowIndex((prev) => (prev === null ? 0 : Math.max(prev - 1, 0)));
           break;
-        case "Home":
+        }
+        case "Home": {
           e.preventDefault();
           setFocusedRowIndex(0);
           break;
-        case "End":
+        }
+        case "End": {
           e.preventDefault();
           setFocusedRowIndex(rowCount - 1);
           break;
+        }
+        default: {
+          break;
+        }
       }
     },
     [rowCount],

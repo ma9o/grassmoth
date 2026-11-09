@@ -2,9 +2,9 @@
 
 import type { ModelSnapshot, TimelineRevision } from "@grassmoth/api-types";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { recordedCallQuery, successfulResult } from "./use-action-poll";
 import { callDependencies, producingCall } from "@/lib/model-asset/call-dependencies";
 import { composeCallView } from "@/lib/model-asset/compose-call-view";
+import { recordedCallQuery, successfulResult } from "./use-action-poll";
 import { useStudyJournal } from "./use-study-journal";
 
 function callQuery(workspaceId: string, call: TimelineRevision | undefined, enabled: boolean) {
@@ -50,7 +50,11 @@ export function useModelSnapshot(workspaceId: string, identity?: string, enabled
   return {
     data:
       selected && journal.data && results.size === calls.length
-        ? composeCallView(workspaceId, selected, journal.data.attempts, dependencies, results)
+        ? composeCallView(workspaceId, selected, {
+            attempts: journal.data.attempts,
+            dependencies,
+            results,
+          })
         : undefined,
     error: queries.find((query) => query.error)?.error ?? journal.error,
     result: selected ? results.get(selected.record.seq) : undefined,

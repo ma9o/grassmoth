@@ -1,15 +1,21 @@
 import type { EdgeId } from "@grassmoth/api-types";
+import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
+import { edgeEquation } from "@/lib/model-asset/equations";
+import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { Section } from "../scope-primitives";
+import { FlowInputs, FlowSection } from "./flow-sections";
 import { LawSections } from "./law-sections";
 import { Reasoning } from "./reasoning";
-import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
-import { FlowInputs, FlowSection } from "./flow-sections";
-import { edgeEquation } from "@/lib/model-asset/equations";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 
-export function EdgeScope({ context, id }: { context: ScopeContext; id: EdgeId }) {
+export function EdgeScope({
+  context,
+  id,
+}: {
+  readonly context: ScopeContext;
+  readonly id: EdgeId;
+}) {
   const edge = context.entities.edgeById.get(id);
   if (!edge) return null;
   const model = context.modelSnapshot.dynamical_model_spec;

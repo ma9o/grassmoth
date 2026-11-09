@@ -9,10 +9,10 @@ describe("isMockMode", () => {
   const original = process.env.NEXT_PUBLIC_MOCK_DATA;
 
   afterEach(() => {
-    if (original !== undefined) {
-      process.env.NEXT_PUBLIC_MOCK_DATA = original;
-    } else {
+    if (original === undefined) {
       unsetEnv("NEXT_PUBLIC_MOCK_DATA");
+    } else {
+      process.env.NEXT_PUBLIC_MOCK_DATA = original;
     }
   });
 
@@ -37,10 +37,10 @@ describe("getMockFixture", () => {
   const original = process.env.NEXT_PUBLIC_MOCK_DATA;
 
   afterEach(() => {
-    if (original !== undefined) {
-      process.env.NEXT_PUBLIC_MOCK_DATA = original;
-    } else {
+    if (original === undefined) {
       unsetEnv("NEXT_PUBLIC_MOCK_DATA");
+    } else {
+      process.env.NEXT_PUBLIC_MOCK_DATA = original;
     }
   });
 

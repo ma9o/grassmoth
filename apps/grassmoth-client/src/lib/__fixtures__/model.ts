@@ -117,12 +117,14 @@ function constructEntry({ id, indicators, dynamics, ...value }: ConstructSpec) {
     {
       ...value,
       indicators: Object.fromEntries(
-        indicators.map(({ observation: { id, ...observation }, ...indicator }) => [
-          id,
+        indicators.map(({ observation: { id: indicatorId, ...observation }, ...indicator }) => [
+          indicatorId,
           { ...indicator, observation },
         ]),
       ),
-      dynamics: Object.fromEntries(dynamics.map(({ id, ...mechanism }) => [id, mechanism])),
+      dynamics: Object.fromEntries(
+        dynamics.map(({ id: mechanismId, ...mechanism }) => [mechanismId, mechanism]),
+      ),
     },
   ] as const;
 }
@@ -131,7 +133,9 @@ function parameterEntry({ id, ...value }: ParameterSpec) {
 }
 
 export const modelFixture: DynamicalModelSpec = {
-  constructs: Object.fromEntries([baseline, treatment, outcome].map(constructEntry)),
+  constructs: Object.fromEntries(
+    [baseline, treatment, outcome].map((construct) => constructEntry(construct)),
+  ),
   edges: {
     "edge:00000000000000000001": {
       cause: baseline.id,
@@ -146,7 +150,7 @@ export const modelFixture: DynamicalModelSpec = {
       reasoning: { text: "Treatment affects the outcome.", reference_urls: [] },
     },
   },
-  parameters: Object.fromEntries([decay, diffusion].map(parameterEntry)),
+  parameters: Object.fromEntries([decay, diffusion].map((parameter) => parameterEntry(parameter))),
   distributions: {
     "distribution:00000000000000000001": {
       distribution: "Beta",

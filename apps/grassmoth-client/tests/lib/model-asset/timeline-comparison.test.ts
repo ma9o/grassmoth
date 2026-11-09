@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { comparisonRevisions, failedFit, rejectedFit } from "@/lib/__fixtures__/timeline";
-import { timelineComparison, type TimelineComparison } from "@/lib/model-asset/timeline-comparison";
+import { type TimelineComparison, timelineComparison } from "@/lib/model-asset/timeline-comparison";
 
 type Expect<T extends true> = T;
 type FitComparison = Extract<TimelineComparison, { action: "fit" }>;

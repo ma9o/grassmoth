@@ -2,6 +2,8 @@ import type {
   ActionSuccess,
   EditModelOutput,
   FitOutput,
+  FitTarget,
+  GitOid,
   ModelSnapshot,
   PrepareDataOutput,
   RecordDependency,
@@ -9,14 +11,21 @@ import type {
 } from "@grassmoth/api-types";
 
 interface ViewParts {
-  artifacts: ModelSnapshot["state"]["current"];
-  modelOutput: EditModelOutput | null;
-  dynamicalModelSpec: ModelSnapshot["dynamical_model_spec"];
-  fitOutput: FitOutput | null;
-  prepared: PrepareDataOutput | null;
-  data: ModelSnapshot["state"]["data"];
-  fit: ModelSnapshot["fit"];
-  simulation: ModelSnapshot["simulation"];
+  readonly artifacts: ModelSnapshot["state"]["current"];
+  readonly modelOutput: EditModelOutput | null;
+  readonly dynamicalModelSpec: ModelSnapshot["dynamical_model_spec"];
+  readonly fitOutput: FitOutput | null;
+  readonly prepared: PrepareDataOutput | null;
+  readonly data: ModelSnapshot["state"]["data"];
+  readonly fit: ModelSnapshot["fit"];
+  readonly simulation: ModelSnapshot["simulation"];
+}
+
+/** The study's recorded calls, the inputs each call named, and their saved results by seq. */
+interface RecordedCalls {
+  readonly attempts: readonly TimelineRevision[];
+  readonly dependencies: readonly RecordDependency[];
+  readonly results: ReadonlyMap<number, ActionSuccess>;
 }
 
 const empty: ViewParts = {
@@ -34,9 +43,7 @@ const empty: ViewParts = {
 export function composeCallView(
   workspaceId: string,
   selected: TimelineRevision,
-  attempts: readonly TimelineRevision[],
-  dependencies: readonly RecordDependency[],
-  results: ReadonlyMap<number, ActionSuccess>,
+  { attempts, dependencies, results }: RecordedCalls,
 ): ModelSnapshot {
   const bySeq = new Map(attempts.map((entry) => [entry.record.seq, entry]));
   const views = new Map<number, ViewParts>();
@@ -53,6 +60,49 @@ export function composeCallView(
 
   function input(entry: TimelineRevision, argument: string): ViewParts {
     return parts(inputCall(entry, argument));
+  }
+
+  function fitView(
+    entry: TimelineRevision,
+    target: FitTarget<GitOid>,
+    body: FitOutput,
+    produced: ModelSnapshot["state"]["current"],
+  ): ViewParts {
+    if (target.kind === "continue") {
+      const parent = input(entry, "fit");
+      return {
+        ...parent,
+        artifacts: { ...parent.artifacts, ...produced },
+        dynamicalModelSpec: body.dynamical_model_spec ?? parent.dynamicalModelSpec,
+        fitOutput: body,
+        fit: body.inference.core,
+      };
+    }
+    const dataCall = inputCall(entry, "data");
+    const data = parts(dataCall);
+    const modelView = input(entry, "dynamical_model_spec");
+    return {
+      ...empty,
+      artifacts: {
+        ...Object.fromEntries(
+          Object.entries(modelView.artifacts).filter(([key]) => key === "model"),
+        ),
+        ...(dataCall.record.attempt.action === "prepare_data"
+          ? Object.fromEntries(
+              Object.entries(data.artifacts).filter(
+                ([key]) => key === "panel" || key === "raw_data",
+              ),
+            )
+          : {}),
+        ...produced,
+      },
+      modelOutput: modelView.modelOutput,
+      dynamicalModelSpec: body.dynamical_model_spec ?? modelView.dynamicalModelSpec,
+      fitOutput: body,
+      prepared: dataCall.record.attempt.action === "prepare_data" ? data.prepared : null,
+      data: target.data_ref,
+      fit: body.inference.core,
+    };
   }
 
   function parts(entry: TimelineRevision): ViewParts {
@@ -99,47 +149,13 @@ export function composeCallView(
       }
       case "fit": {
         if (request?.action !== "fit") throw new Error("Saved fit is missing its input references");
-        if (request.input.target.kind === "continue") {
-          const parent = input(entry, "fit");
-          view = {
-            ...parent,
-            artifacts: { ...parent.artifacts, ...produced },
-            dynamicalModelSpec: result.body.dynamical_model_spec ?? parent.dynamicalModelSpec,
-            fitOutput: result.body,
-            fit: result.body.inference.core,
-          };
-          break;
-        }
-        const dataCall = inputCall(entry, "data");
-        const data = parts(dataCall);
-        const modelView = input(entry, "dynamical_model_spec");
-        view = {
-          ...empty,
-          artifacts: {
-            ...Object.fromEntries(
-              Object.entries(modelView.artifacts).filter(([key]) => key === "model"),
-            ),
-            ...(dataCall.record.attempt.action === "prepare_data"
-              ? Object.fromEntries(
-                  Object.entries(data.artifacts).filter(
-                    ([key]) => key === "panel" || key === "raw_data",
-                  ),
-                )
-              : {}),
-            ...produced,
-          },
-          modelOutput: modelView.modelOutput,
-          dynamicalModelSpec: result.body.dynamical_model_spec ?? modelView.dynamicalModelSpec,
-          fitOutput: result.body,
-          prepared: dataCall.record.attempt.action === "prepare_data" ? data.prepared : null,
-          data: request.input.target.data_ref,
-          fit: result.body.inference.core,
-        };
+        view = fitView(entry, request.input.target, result.body, produced);
         break;
       }
       case "simulate": {
-        if (request?.action !== "simulate")
+        if (request?.action !== "simulate") {
           throw new Error("Saved simulation is missing its input references");
+        }
         const modelView = input(entry, "dynamical_model_spec");
         view = {
           ...modelView,
@@ -154,12 +170,14 @@ export function composeCallView(
         };
         break;
       }
-      case "model_diff":
+      case "model_diff": {
         view = input(entry, "after");
         break;
-      case "data_diff":
+      }
+      case "data_diff": {
         view = input(entry, "right");
         break;
+      }
     }
     views.set(seq, view);
     return view;

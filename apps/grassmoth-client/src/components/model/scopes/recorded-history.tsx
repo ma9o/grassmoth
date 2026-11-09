@@ -1,4 +1,3 @@
-import type { PathSeriesView } from "@/lib/model-asset/result-values";
 import type {
   EmpiricalDistribution,
   IndicatorEmpiricalProfile,
@@ -13,16 +12,23 @@ import { type DrawLayer, DrawsChart } from "@/components/charts/draws-chart";
 import { type Domain, extentOf } from "@/components/charts/plot-geometry";
 import { ProfileStrip } from "@/components/charts/profile-strip";
 import { type ArmChoice, effectLayers, pathLayers } from "@/components/charts/series-adapters";
-import { presentEntries } from "@/lib/model-accessors";
 import {
   ALL_DRAWS,
   type DrawSelection,
   useObservationHistory,
   useSimulationPaths,
 } from "@/lib/hooks/use-visuals";
+import { presentEntries } from "@/lib/model-accessors";
+import type { PathSeriesView } from "@/lib/model-asset/result-values";
 import { Hint } from "../scope-primitives";
 
-function ArmLegend({ series, arms }: { series: PathSeriesView; arms: ArmChoice }) {
+function ArmLegend({
+  series,
+  arms,
+}: {
+  readonly series: PathSeriesView;
+  readonly arms: ArmChoice;
+}) {
   if (series.reference.length === 0) return null;
   return (
     <span className="flex items-center gap-2">
@@ -57,17 +63,17 @@ export function SimulationHistory({
   arms = "both",
   height = 150,
 }: {
-  modelSnapshot: ModelSnapshot;
-  id: string;
-  kind: "states" | "indicators" | "effect";
-  title: string;
-  selection?: DrawSelection;
-  arms?: ArmChoice;
-  height?: number;
+  readonly modelSnapshot: ModelSnapshot;
+  readonly id: string;
+  readonly kind: "states" | "indicators" | "effect";
+  readonly title: string;
+  readonly selection?: DrawSelection;
+  readonly arms?: ArmChoice;
+  readonly height?: number;
 }) {
   const paths = useSimulationPaths(modelSnapshot, selection);
   if (paths.error) return <Hint issue>{paths.error.message}</Hint>;
-  if (!paths.data)
+  if (!paths.data) {
     return (
       <Hint>
         {paths.isLoading
@@ -75,6 +81,7 @@ export function SimulationHistory({
           : "No saved paths of this model revision's simulation."}
       </Hint>
     );
+  }
   const data = paths.data;
   const series =
     kind === "effect" ? data.effect : presentEntries(data[kind]).find(([key]) => key === id)?.[1];
@@ -164,17 +171,18 @@ export function ObservationPlots({
   modelSnapshot,
   id,
 }: {
-  modelSnapshot: ModelSnapshot;
-  id: IndicatorId;
+  readonly modelSnapshot: ModelSnapshot;
+  readonly id: IndicatorId;
 }) {
   const history = useObservationHistory(modelSnapshot, id);
   if (history.error) return <Hint issue>{history.error.message}</Hint>;
-  if (!history.data)
+  if (!history.data) {
     return (
       <Hint>
         {history.isLoading ? "Loading observations…" : "No prepared observations at this revision."}
       </Hint>
     );
+  }
   const data = history.data;
   const span = timeline(
     [
@@ -223,9 +231,9 @@ export function ObservedProfile({
   id,
   profile,
 }: {
-  modelSnapshot: ModelSnapshot;
-  id: IndicatorId;
-  profile: IndicatorEmpiricalProfile;
+  readonly modelSnapshot: ModelSnapshot;
+  readonly id: IndicatorId;
+  readonly profile: IndicatorEmpiricalProfile;
 }) {
   const history = useObservationHistory(modelSnapshot, id);
   return (
@@ -243,9 +251,9 @@ export function EmpiricalPlot({
   label,
   xLabel,
 }: {
-  points: EmpiricalDistribution;
-  label: string;
-  xLabel: string;
+  readonly points: EmpiricalDistribution;
+  readonly label: string;
+  readonly xLabel: string;
 }) {
   const values = readNumericalArray(points.values).values;
   const probabilities = readNumericalArray(points.probabilities).values;
