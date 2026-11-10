@@ -8,7 +8,7 @@
 
 **grassmoth** is an opinionated LLM harness for end-to-end Bayesian causal inference on longitudinal data.
 
-![The FRANCE1940SIMPLE study after a prior-predictive simulate: action history, causal model from the legal hours cap to cumulative aircraft with simulated draws in each node, the question's outcome, simulated states and observations, simulation checks and the action log](/docs/assets/screenshots/france1940-model.png)
+<kbd>![The FRANCE1940SIMPLE study after a prior-predictive simulate: action history, causal model from the legal hours cap to cumulative aircraft with simulated draws in each node, the question's outcome, simulated states and observations, simulation checks and the action log](/docs/assets/screenshots/france1940-model.png)</kbd>
 
 > Would the Battle of France have gone differently had the French not limited the work week to 40 hours? ([Willemyns & McClements, 2026](https://juliawillemyns.substack.com/p/nobody-decides-to-decline))
 
