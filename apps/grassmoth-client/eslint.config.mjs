@@ -187,7 +187,9 @@ const eslintConfig = defineConfig([
       "prefer-arrow-callback": ["error", { allowNamedFunctions: true }],
       "import/first": "error",
       "import/newline-after-import": "error",
-      "import/no-cycle": ["error", { ignoreExternal: true }],
+      // The SCC pre-pass parses every imported library despite ignoreExternal, about ten times
+      // the cost of the cycle search; the search alone skips libraries.
+      "import/no-cycle": ["error", { ignoreExternal: true, disableScc: true }],
       "import/no-duplicates": "error",
       "react/button-has-type": "error",
       "react/jsx-no-constructed-context-values": "error",
