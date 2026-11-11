@@ -10,9 +10,9 @@ from pydantic import Field
 from grassmoth.models.ssm.inference.samplers.particle.guided_random import (
     KillingNoise,
     TailRandomKeys,
-    _gumbel,
     _threefry,
     _uniform_bits,
+    conditional_rotation,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
     _diagonal_integral_terms,
@@ -159,19 +159,24 @@ def diagonal_mixture_tail(
         maximum = jnp.max(values)
         survival = jnp.exp(values - maximum)
         cumulative = jnp.cumsum(survival / jnp.sum(survival))
-        rotation_mass = jnp.where((p > 0) & (p < count), (1.0 - survival) / count, 0.0)
-        rotation_mass = jnp.where(p == 0, 1.0 - jnp.sum(rotation_mass), rotation_mass)
-        rotation_noise = (
-            jnp.where(p < count, _gumbel(draw(2, p)), -jnp.inf)
-            if generate_random and not interpret
-            else pt.load(rotation_ref.at[noise_index, p], mask=p < count, other=-jnp.inf)
-        )
-        rotation_logits = jnp.log(rotation_mass) + rotation_noise
-        rotation = jnp.min(jnp.where(rotation_logits == jnp.max(rotation_logits), p, block))
-        source = (p + rotation) % count
         pt.store(cumulative_out.at[p], cumulative, mask=p < count)
         if not interpret:
             pt.debug_barrier()
+        index_uniform = (
+            draw(2, jnp.asarray(0, dtype=jnp.uint32))
+            if generate_random and not interpret
+            else rotation_ref[noise_index, 0]
+        )
+        coin = (
+            draw(2, jnp.asarray(1, dtype=jnp.uint32))
+            if generate_random and not interpret
+            else rotation_ref[noise_index, min(1, count - 1)]
+        )
+        selected = jnp.minimum((index_uniform * count).astype(jnp.int32), count - 1)
+        rotation = conditional_rotation(
+            selected, jnp.exp(pt.load(weights_out.at[selected]) - maximum), coin
+        )
+        source = (p + rotation) % count
         chosen_logits = pt.load(weights_out.at[source])
         survival_noise = (
             draw(0, source)

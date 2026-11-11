@@ -77,6 +77,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_random import (
     MIXTURE_DRAW_FOLD_IN,
     KillingNoise,
     TailRandomKeys,
+    conditional_rotation,
     killing_draws,
     particle_normal,
     particle_uniform,
@@ -139,9 +140,8 @@ def _killing_reference(logits: Float[Array, " P"], noise: KillingNoise) -> Int[A
         jnp.sum(cumulative[None, :] <= noise.replacement[:, None], axis=-1), count - 1
     )
     indices = jnp.where(noise.survival < survival, jnp.arange(count), replacements)
-    rotation_mass = ((1.0 - survival) / count).at[0].set(0.0)
-    rotation_mass = rotation_mass.at[0].set(1.0 - jnp.sum(rotation_mass))
-    rotation = jnp.argmax(jnp.log(rotation_mass) + noise.rotation)
+    selected = jnp.minimum((noise.rotation[0] * count).astype(jnp.int32), count - 1)
+    rotation = conditional_rotation(selected, survival[selected], noise.rotation[min(1, count - 1)])
     return jnp.roll(indices, -rotation).at[0].set(0).astype(jnp.int32)
 
 
@@ -161,11 +161,12 @@ def _killing_fused(
         maximum = jnp.max(values)
         survival = jnp.exp(values - maximum)
         cumulative = jnp.cumsum(survival / jnp.sum(survival))
-        rotation_mass = jnp.where((p > 0) & (p < count), (1.0 - survival) / count, 0.0)
-        rotation_mass = jnp.where(p == 0, 1.0 - jnp.sum(rotation_mass), rotation_mass)
-        rotation_noise = plt.load(rotation_ref.at[p], mask=p < count, other=-jnp.inf)
-        rotation_logits = jnp.log(rotation_mass) + rotation_noise
-        rotation = jnp.min(jnp.where(rotation_logits == jnp.max(rotation_logits), p, block))
+        selected = jnp.minimum((rotation_ref[0] * count).astype(jnp.int32), count - 1)
+        rotation = conditional_rotation(
+            selected,
+            jnp.exp(plt.load(logits_ref.at[selected]) - maximum),
+            rotation_ref[min(1, count - 1)],
+        )
         source = (p + rotation) % count
         chosen_logits = plt.load(logits_ref.at[source])
         survival_noise = plt.load(survival_ref.at[source])

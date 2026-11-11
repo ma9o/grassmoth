@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class KillingNoise(NamedTuple):
-    """Independent survival, replacement and cyclic-rotation draws for conditional killing."""
+    """Survival/replacement uniforms and two alternating independent rotation uniforms."""
 
     survival: jax.Array
     replacement: jax.Array
@@ -94,14 +94,14 @@ def _killing_draws_reference(
     return (
         jax.random.uniform(survival, (count,), dtype=dtype),
         jax.random.uniform(replacement, (count,), dtype=dtype),
-        jax.random.gumbel(rotation, (count,), dtype=dtype),
+        jax.random.uniform(rotation, (2,), dtype=dtype)[jnp.arange(count) % 2],
     )
 
 
 def _killing_pallas(
     key: jax.Array, count: int, dtype: DTypeLike, *, interpret: bool = False
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Fuse JAX's three-way split and two uniforms plus one Gumbel for float32 GPU work."""
+    """Fuse survival/replacement draws and the two scalar rotation counters in float32."""
     from jax.experimental import pallas as pl
     from jax.experimental.pallas import triton as pt
 
@@ -112,10 +112,8 @@ def _killing_pallas(
         k0, k1 = key_ref[0], key_ref[1]
         for component, out in enumerate((survival_ref, replacement_ref, rotation_ref)):
             a, b = _threefry(k0, k1, jnp.uint32(0), jnp.uint32(component))
-            high, low = _threefry(a, b, jnp.zeros_like(p), p)
+            high, low = _threefry(a, b, jnp.zeros_like(p), p % 2 if component == 2 else p)
             value = _uniform_bits(high, low)
-            if component == 2:
-                value = _gumbel(value)
             pt.store(out.at[p], value.astype(dtype), mask=p < count)
 
     shape = jax.ShapeDtypeStruct((count,), dtype)
@@ -227,3 +225,12 @@ def particle_gumbel(key: jax.Array, shape: tuple[int, ...], dtype: DTypeLike) ->
             cuda=partial(_point_pallas, shape=shape, dtype=dtype, kind="gumbel"),
         ),
     )
+
+
+def conditional_rotation(selected, survival_at_selected, coin):
+    """Exact conditional killing rotation using a uniform index and independent coin.
+
+    For j>0, P(R=j)=(1-survival[j])/N; all remaining mass goes to zero.
+    This is the current conditional rotation law without a categorical reduction.
+    """
+    return jnp.where(coin >= survival_at_selected, selected, 0).astype(jnp.int32)
