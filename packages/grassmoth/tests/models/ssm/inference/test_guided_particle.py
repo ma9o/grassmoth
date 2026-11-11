@@ -1102,20 +1102,20 @@ def test_vector_tail_carries_across_unrolled_scan(dimension, steps, unroll):
             target.state_space, initial_covariance="dense", transition_covariance="dense"
         ),
     )
-    labels = jnp.array([[-0.3], [0.0], [0.4]])
+    labels = jnp.array([[-0.3], [0.0], [0.4], [0.6]])
     reference = jnp.broadcast_to(jnp.asarray(readings), (steps, dimension))
 
     def run(bound, scan_unroll):
         setup = build_smoother_setup(
             bound,
-            num_parameter_particles=3,
+            num_parameter_particles=4,
             free_mask=bound.independent_mask,
             diagnostic_metrics=(),
         )
         ctx = build_smoother_context(
             setup,
             labels,
-            jnp.zeros(3),
+            jnp.zeros(4),
             reference=reference,
             delta=jnp.full((steps, dimension), 0.2),
             trajectory_dtype=reference.dtype,
@@ -1202,3 +1202,27 @@ def test_streamed_backward_fault_is_detected_on_compiled_route(monkeypatch):
         for a, b in zip(jax.tree.leaves(broken.result), jax.tree.leaves(actual.result), strict=True)
     ]
     assert max(errors) > 2e-4
+
+
+@pytest.mark.parametrize("fault", ["zero", "ungathered"])
+def test_persistent_forward_fault_is_detected_on_compiled_route(monkeypatch, fault):
+    from grassmoth.models.ssm.inference.samplers.particle import forward_stream
+
+    dense, diagonal, labels, reference = _point_kernel_fixture()
+    expected = _trace_point_kernel_fixture(dense, labels, reference)
+    actual = _trace_point_kernel_fixture(diagonal, labels, reference)
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, atol=3e-5, rtol=3e-5)
+    calls = []
+
+    def bad_correction(prior, _gathered, ungathered):
+        calls.append(True)
+        return jnp.zeros_like(prior) if fault == "zero" else prior - ungathered
+
+    monkeypatch.setattr(forward_stream, "correct_label", bad_correction)
+    broken = _trace_point_kernel_fixture(diagonal, labels, reference)
+    assert calls, "The fault must be planted inside the selected persistent kernel"
+    weights = broken.trace.filter_log_weights
+    original = actual.trace.filter_log_weights
+    error = (weights - weights[:, :1]) - (original - original[:, :1])
+    assert np.max(np.abs(np.asarray(error))) > 2e-4

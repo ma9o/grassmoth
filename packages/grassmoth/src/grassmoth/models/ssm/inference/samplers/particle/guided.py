@@ -344,7 +344,7 @@ def _guided_step(
         return cast("jax.Array", observed), cast("jax.Array", derivatives)
 
     point_kernels = (
-        compile_point_kernels(memory, steps, reference.dtype)
+        compile_point_kernels(memory, raw_observe, steps, reference.dtype)
         if fused_tail
         and components.selector == "backward"
         and memory.windows is None
@@ -747,22 +747,54 @@ def _guided_step(
         if prepare_parent_law
         else jnp.zeros((count,), dtype=reference.dtype)
     )
-    _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
-        jax.lax.scan(
-            forward,
-            (
+    if isinstance(point_kernels, CompiledPointKernels) and steps > 1:
+        assert isinstance(geometry, _DiagonalProposalGeometry)
+        assert isinstance(tail_noise, TailRandomKeys)
+        from grassmoth.models.ssm.inference.samplers.particle.forward_stream import (
+            persistent_forward,
+        )
+
+        tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed = (
+            persistent_forward(
+                memory,
+                point_kernels,
+                geometry,
+                reference,
+                reference_observed,
+                gradients,
+                variance,
+                mask,
+                ctx.initial_label_log_probs,
+                reference_running,
                 first_memory,
-                first_weights,
                 first_parent_scores,
-                first_twists,
                 initial_ancestors,
                 first_labels,
                 first_correction,
-            ),
-            jnp.minimum(jnp.arange(1, scan_steps + 1), steps - 1),
-            unroll=method.scan_unroll,
+                jax.vmap(lambda key: jax.random.split(key, 2)[1])(step_keys),
+                tail_noise.values,
+                kappa=method.kappa != 0,
+                record_trace=record_trace,
+                keep_observations=not stream_backward,
+            )
         )
-    )
+    else:
+        _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
+            jax.lax.scan(
+                forward,
+                (
+                    first_memory,
+                    first_weights,
+                    first_parent_scores,
+                    first_twists,
+                    initial_ancestors,
+                    first_labels,
+                    first_correction,
+                ),
+                jnp.minimum(jnp.arange(1, scan_steps + 1), steps - 1),
+                unroll=method.scan_unroll,
+            )
+        )
     # A distinct history shape prevents CSE from turning the two fills into a fill plus copy.
     tail_observed = tail_observed[..., 0]
     memory_bank = jnp.concatenate((first_memory[None], tail[:forward_steps]))

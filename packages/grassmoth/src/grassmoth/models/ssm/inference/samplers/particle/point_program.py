@@ -88,6 +88,7 @@ class CompiledPointKernels(Value):
     observation: CompiledPointProgram[jax.Array]
     transition: CompiledPointProgram[jax.Array]
     state: CompiledPointProgram[jax.Array]
+    forward_observation: CompiledPointProgram[tuple[jax.Array, jax.Array]]
 
 
 type PointKernelRoute = CompiledPointKernels | ExistingPointKernels
@@ -178,6 +179,7 @@ def existing_point_kernels() -> ExistingPointKernels:
 
 def compile_point_kernels(
     memory: SequentialObservationRuntime,
+    raw_observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     steps: int,
     dtype: DTypeLike,
 ) -> PointKernelRoute:
@@ -194,7 +196,8 @@ def compile_point_kernels(
     state = inspect_point_program(
         lambda value, _index: memory.state(value), memory.dimension, steps, dtype
     )
-    programs = (observation, transition, state)
+    forward = inspect_point_program(raw_observe, memory.dimension, steps, dtype)
+    programs = (observation, transition, state, forward)
     failures = tuple(
         reason for p in programs if isinstance(p, ExistingPointKernels) for reason in p.reason
     )
@@ -203,4 +206,7 @@ def compile_point_kernels(
     assert isinstance(observation, CompiledPointProgram)
     assert isinstance(transition, CompiledPointProgram)
     assert isinstance(state, CompiledPointProgram)
-    return CompiledPointKernels(observation=observation, transition=transition, state=state)
+    assert isinstance(forward, CompiledPointProgram)
+    return CompiledPointKernels(
+        observation=observation, transition=transition, state=state, forward_observation=forward
+    )
