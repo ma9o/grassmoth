@@ -7,11 +7,16 @@ import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
 
+from grassmoth.models.ssm.inference.samplers.particle.backward_stream import streamed_backward
 from grassmoth.models.ssm.inference.samplers.particle.guided_random import particle_gumbel
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     TRITON_NUM_WARPS,
     _masked_normal_log_prob,
     label_logsumexp,
+)
+from grassmoth.models.ssm.inference.samplers.particle.point_program import (
+    CompiledPointKernels,
+    PointKernelRoute,
 )
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
@@ -359,8 +364,8 @@ def select_path(
     first_scores: Float[Array, "P K"],
     scores: Float[Array, "S P K"],
     first_observations: Float[Array, "P K"],
-    observation_bank: Float[Array, "S P K"],
-    ancestors: Int[Array, "T-1 P"],
+    observation_bank: Float[Array, "S Q K"],
+    ancestors: Int[Array, "T-1 A"],
     last: Int[Array, ""],
     earlier_key: PRNGKeyArray,
     auxiliary: Float[Array, "T D"],
@@ -370,6 +375,9 @@ def select_path(
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
     reference_dtype: DTypeLike,
     unroll: int,
+    *,
+    point_kernels: PointKernelRoute,
+    stream_backward: bool,
 ) -> tuple[Float[Array, "T D"], Int[Array, " T"], Float[Array, " K"]]:
     """Recover a path with the selector authorized by the compiled memory support."""
     steps, count, _ = bank.shape
@@ -409,39 +417,51 @@ def select_path(
         else:
             trajectory_scores = memory.path_log_probs(path)
     else:
-        # The point-reading predecessor bank is fixed before backward selection.
-        # Evaluate its exact nonlinear means over all times in parallel; only the
-        # successor choice and label suffix remain sequential. Window replay above
-        # cannot reuse this table because its reconstructed predecessors change.
-        means = jax.vmap(
-            lambda values, index: jax.vmap(memory.transition_means, in_axes=(0, None))(
-                values, index
+        if isinstance(point_kernels, CompiledPointKernels) and stream_backward:
+            picks, suffix = streamed_backward(
+                memory,
+                point_kernels,
+                memory_bank,
+                backward_weights,
+                first_scores,
+                scores,
+                last,
+                earlier_key,
             )
-        )(memory_bank[:-1], jnp.arange(1, steps))
+        else:
+            # The point-reading predecessor bank is fixed before backward selection.
+            # Evaluate its exact nonlinear means over all times in parallel; only the
+            # successor choice and label suffix remain sequential. Window replay above
+            # cannot reuse this table because its reconstructed predecessors change.
+            means = jax.vmap(
+                lambda values, index: jax.vmap(memory.transition_means, in_axes=(0, None))(
+                    values, index
+                )
+            )(memory_bank[:-1], jnp.arange(1, steps))
 
-        gumbels = jax.vmap(lambda k: particle_gumbel(k, (count,), dtype=reference_dtype))(
-            jax.random.split(earlier_key, steps - 1)
-        )
-        coordinates = jnp.asarray(memory.target.state_space.transition, dtype=jnp.int32)
+            gumbels = jax.vmap(lambda k: particle_gumbel(k, (count,), dtype=reference_dtype))(
+                jax.random.split(earlier_key, steps - 1)
+            )
+            coordinates = jnp.asarray(memory.target.state_space.transition, dtype=jnp.int32)
 
-        # Transition coordinates are independent at t>=1, including those with
-        # label-specific deterministic initial states. Static projections never
-        # change transition coordinates; replay preserves these shared draws.
-        points = memory.state(memory_bank[1:])[..., coordinates]
-        normalizers = jnp.swapaxes(memory.noise.transitions.log_normalizer[:, 1:], 0, 1)
-        picks, suffix = _backward_from_moments(
-            backward_weights,
-            means,
-            points,
-            jnp.swapaxes(memory.noise.transitions.whitener[:, 1:], 0, 1),
-            normalizers,
-            first_scores,
-            scores,
-            first_observations,
-            observation_bank,
-            gumbels,
-            last,
-        )
+            # Transition coordinates are independent at t>=1, including those with
+            # label-specific deterministic initial states. Static projections never
+            # change transition coordinates; replay preserves these shared draws.
+            points = memory.state(memory_bank[1:])[..., coordinates]
+            normalizers = jnp.swapaxes(memory.noise.transitions.log_normalizer[:, 1:], 0, 1)
+            picks, suffix = _backward_from_moments(
+                backward_weights,
+                means,
+                points,
+                jnp.swapaxes(memory.noise.transitions.whitener[:, 1:], 0, 1),
+                normalizers,
+                first_scores,
+                scores,
+                first_observations,
+                observation_bank,
+                gumbels,
+                last,
+            )
         initial_selected = picks[0]
         # The backward suffix already contains every selected exact observation and
         # transition factor. Only the initial density remains; do not rescore the path.

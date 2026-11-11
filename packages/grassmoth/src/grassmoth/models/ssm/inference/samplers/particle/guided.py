@@ -102,6 +102,15 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     gather_particles,
     label_logsumexp,
 )
+from grassmoth.models.ssm.inference.samplers.particle.persistent_launch import (
+    compiled_point_workload,
+    stream_backward_workload,
+)
+from grassmoth.models.ssm.inference.samplers.particle.point_program import (
+    CompiledPointKernels,
+    compile_point_kernels,
+    existing_point_kernels,
+)
 from grassmoth.models.ssm.inference.samplers.particle.prefix_mixture import (
     _mixture_geometry,
     _mixture_particles,
@@ -334,6 +343,20 @@ def _guided_step(
         )(ctx.contexts, memory.noise, memory.state(value))
         return cast("jax.Array", observed), cast("jax.Array", derivatives)
 
+    point_kernels = (
+        compile_point_kernels(memory, steps, reference.dtype)
+        if fused_tail
+        and components.selector == "backward"
+        and memory.windows is None
+        and not target.state_space.requires_replay
+        and compiled_point_workload(count, ctx.num_parameter_particles, dimension)
+        else existing_point_kernels()
+    )
+    stream_points = isinstance(point_kernels, CompiledPointKernels)
+    stream_backward = stream_points and stream_backward_workload(
+        steps, count, ctx.num_parameter_particles
+    )
+
     initial_mean = target.initial_moments(guide)[0]
 
     def local_factors(
@@ -465,7 +488,7 @@ def _guided_step(
             Float[Array, " P"] | None,
             Int[Array, " P"],
             Float[Array, "P D"],
-            Float[Array, "P K 1"],
+            Float[Array, "Q K 1"],
         ],
     ]:
         (
@@ -642,7 +665,7 @@ def _guided_step(
             current_twists,
             ancestors,
             cast("Float[Array, 'P D']", centers),
-            observed[..., None],
+            observed[..., None] if not stream_backward else observed[:0, :, None],
         )
 
     def forward_noise(
@@ -776,6 +799,8 @@ def _guided_step(
         transition,
         reference.dtype,
         method.scan_unroll,
+        point_kernels=point_kernels,
+        stream_backward=stream_backward,
     )
     norms = jnp.linalg.norm(jnp.where(mask, gradients, 0.0), axis=-1)
     measurements = weight_history_fields(

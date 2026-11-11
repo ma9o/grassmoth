@@ -1142,3 +1142,63 @@ def test_vector_tail_carries_across_unrolled_scan(dimension, steps, unroll):
                 np.testing.assert_array_equal(actual, expected)
             else:
                 np.testing.assert_allclose(actual, expected, atol=5e-5, rtol=5e-5)
+
+
+def _trace_point_kernel_fixture(target, labels, reference):
+    setup = build_smoother_setup(
+        target, num_parameter_particles=2, free_mask=target.independent_mask, diagnostic_metrics=()
+    )
+    context = build_smoother_context(
+        setup,
+        labels,
+        jnp.zeros(2),
+        reference=reference,
+        delta=jnp.full(reference.shape, 0.2),
+        trajectory_dtype=reference.dtype,
+    )
+    guide = target.context(jnp.mean(labels, axis=0), target.times)
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=16, kappa=1),
+        proposal=ParameterMixtureProposalSpec(),
+    )
+    return jax.jit(
+        lambda: trace_guided_step(target, context, guide, spec, jax.random.key(71), reference)
+    )()
+
+
+def _point_kernel_fixture():
+    dense, labels, *_ = _case(0.7, pinned=True)
+    diagonal = replace(
+        dense,
+        state_space=replace(
+            dense.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
+        ),
+    )
+    reference = 0.2 * jnp.cos(jnp.arange(3.0)[:, None])
+    return dense, diagonal, labels, reference
+
+
+def test_streamed_backward_fault_is_detected_on_compiled_route(monkeypatch):
+    from grassmoth.models.ssm.inference.samplers.particle import backward_stream, guided
+
+    dense, diagonal, labels, reference = _point_kernel_fixture()
+    monkeypatch.setattr(guided, "stream_backward_workload", lambda *_args: True)
+    expected = _trace_point_kernel_fixture(dense, labels, reference)
+    actual = _trace_point_kernel_fixture(diagonal, labels, reference)
+    for a, b in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(a, b, atol=3e-5, rtol=3e-5)
+    original = backward_stream.observe_point
+    calls = []
+
+    def drop_observation(program, state, values):
+        calls.append(True)
+        return jnp.zeros_like(original(program, state, values))
+
+    monkeypatch.setattr(backward_stream, "observe_point", drop_observation)
+    broken = _trace_point_kernel_fixture(diagonal, labels, reference)
+    assert calls, "The fault must be planted inside the selected streamed kernel"
+    errors = [
+        np.max(np.abs(np.asarray(a, dtype=float) - np.asarray(b, dtype=float)))
+        for a, b in zip(jax.tree.leaves(broken.result), jax.tree.leaves(actual.result), strict=True)
+    ]
+    assert max(errors) > 2e-4
