@@ -426,7 +426,7 @@ def point_problem(exact_model):
         bind_panel_fixture(
             inputs.compiled_dynamical_model,
             jnp.array([[1.0, jnp.nan], [jnp.nan, jnp.nan], [2.0, jnp.nan]]),
-            jnp.array([0.0, 0.4, 1.0]),
+            jnp.arange(3.0),
         ),
         trace_key=jax.random.key(0),
         reparam=None,

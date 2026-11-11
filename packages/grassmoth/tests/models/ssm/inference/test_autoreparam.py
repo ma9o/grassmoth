@@ -509,8 +509,8 @@ class TestAutoReparamSSM:
         from grassmoth.models.ssm.parameterization import build_site_registry
 
         model = compile_fit_fixture(two_state_gaussian_model())
-        observations = jnp.zeros((5, 2))
-        times = jnp.linspace(0, 1, 5)
+        observations = jnp.zeros((3, 2))
+        times = jnp.arange(3.0)
         parameters, _, public_sites = prepare_model_parameters(
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),

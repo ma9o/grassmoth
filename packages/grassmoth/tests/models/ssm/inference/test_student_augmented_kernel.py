@@ -22,7 +22,10 @@ from grassmoth.artifacts.sampling import (
     WholePathUpdateSpec,
 )
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
-from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+from grassmoth.models.ssm.execution.dynamical_model import (
+    DynamicalModelRuntime,
+    HeterogeneousObservation,
+)
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -54,7 +57,7 @@ def _target(dimension=1):
     def model(z):
         df = 3 * jnp.exp(0.7 * z[0])
         scale = jnp.exp(-0.3 + 0.3 * z[1])
-        return dsx.DynamicalModel(
+        return DynamicalModelRuntime(
             initial_condition=dist.MultivariateNormal(jnp.zeros(dimension), jnp.eye(dimension)),
             state_evolution=dsx.LinearGaussianStateEvolution(
                 jnp.eye(dimension) * 0.7, jnp.eye(dimension) * 0.3
@@ -72,7 +75,7 @@ def _target(dimension=1):
                 ),
                 structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
-            t0=0.0,
+            t0=jnp.asarray(0.0),
         )
 
     _, static = eqx.partition(model(jnp.zeros(3)), eqx.is_array)

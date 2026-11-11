@@ -38,7 +38,7 @@ def test_sampled_components_pay_normalized_mixture_including_reference():
     )
     weights = np.array([[0.7, 0.3], [0.2, 0.8], [0.6, 0.4], [0.4, 0.6]])
     noise = np.array([[0.3, -0.2], [-0.8, 0.5], [0.1, 0.6]])
-    component_noise = np.array([[3.0, 0.0], [0.0, 2.0], [0.0, 0.0]])
+    component_noise = np.array([0.1, 0.8, 0.7])
     reference = np.array([0.1, -0.2])
     particles, density, _centers = _mixture_particles(
         proposal,
@@ -49,7 +49,7 @@ def test_sampled_components_pay_normalized_mixture_including_reference():
         jnp.asarray(reference, jnp.float32),
         jnp.ones(2, dtype=bool),
     )
-    components = np.argmax(np.log(weights[1:]) + component_noise, axis=1)
+    components = np.sum(component_noise[:, None] >= np.cumsum(weights[1:], axis=1), axis=1)
     expected_free = np.array(
         [
             centers[i + 1, k] + np.linalg.cholesky(expected_covariances[k]) @ noise[i]
