@@ -92,10 +92,12 @@ function indicatorParts(id: IndicatorId, topology: LayeredGraphBundle): FocusedP
 export function focusedParts(focus: GraphFocus, topology: LayeredGraphBundle): FocusedParts {
   switch (focus.kind) {
     case "construct": {
-      return constructParts(focus.id, topology);
+      return focus.glyph
+        ? mechanismParts(focus.glyph, topology)
+        : constructParts(focus.id, topology);
     }
     case "edge": {
-      return edgeParts(focus.id, topology);
+      return focus.glyph ? mechanismParts(focus.glyph, topology) : edgeParts(focus.id, topology);
     }
     case "mechanism": {
       return mechanismParts(focus.id, topology);

@@ -76,7 +76,7 @@ export function VersionScrubber({
   readonly compare?: ComparisonControls;
 }) {
   const timelineId = useId();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const viewport = useRef<HTMLDivElement>(null);
   const links = useRef(new Map<number, HTMLAnchorElement>());
   const timeline = useMemo(() => revisionTimeline(ticks, dependencies), [ticks, dependencies]);

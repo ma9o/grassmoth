@@ -10,6 +10,7 @@ import {
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { type EntitySelection, humanize, mechanismName } from "@/lib/model-asset/selection";
+import { glyphKey, type SpecPlots } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
 import { distributionArgumentText, distributionText } from "@/lib/utils/distribution-format";
 import { formatModelDate } from "@/lib/utils/format";
@@ -50,7 +51,10 @@ function selectedEntity(entities: ModelEntities, selection: EntitySelection) {
 function namedParameters(
   entities: ModelEntities,
   selection: EntitySelection | null,
+  plots: SpecPlots | null,
 ): ReadonlySet<ParameterId> {
+  const glyph = selection ? plots?.get(glyphKey(selection)) : undefined;
+  if (glyph) return new Set(glyph.uses.map((use) => use.parameterId));
   const entity = selection ? selectedEntity(entities, selection) : undefined;
   return new Set(entity ? ownLawUses(entity).map((use) => use.parameterId) : []);
 }
@@ -192,12 +196,15 @@ function Drift({
     <>
       {block.terms.map(({ term, equation }, index) => {
         const edge = term.owner.kind === "edge" ? resolveEntity(view.entities, term.owner) : null;
+        const selected = view.selection?.glyph
+          ? view.selection.glyph === term.mechanism.id
+          : edge && isSelected(view.selection, term.owner);
         return (
           <Line
             key={term.mechanism.id}
             view={view}
             target={term.owner}
-            mark={edge && isSelected(view.selection, term.owner) ? "selected" : null}
+            mark={selected ? "selected" : null}
           >
             <Caption view={view} target={term.owner}>
               {mechanismName(term.mechanism.id)}
@@ -307,7 +314,7 @@ function ConstructBlock({
 }) {
   const { construct } = block;
   const own = { kind: "construct", id: construct.id } as const;
-  const selected = isSelected(view.selection, own);
+  const selected = !view.selection?.glyph && isSelected(view.selection, own);
   const student = construct.innovation_family === "student_t";
   return (
     <div
@@ -375,16 +382,21 @@ export function AuthoredEquations({
   model,
   context,
   selection,
+  plots,
 }: {
   readonly model: DynamicalModelSpec;
   readonly context: ScopeContext;
   readonly selection: EntitySelection | null;
+  readonly plots: SpecPlots | null;
 }) {
   const { entities, select } = context;
   const blocks = useMemo(() => modelEquations(model, entities), [model, entities]);
-  const named = useMemo(() => namedParameters(entities, selection), [entities, selection]);
+  const named = useMemo(
+    () => namedParameters(entities, selection, plots),
+    [entities, selection, plots],
+  );
   const root = useRef<HTMLDivElement>(null);
-  const selected = selection ? `${selection.kind}:${selection.id}` : null;
+  const selected = selection ? glyphKey(selection) : null;
   useEffect(() => {
     if (selected === null) return;
     root.current?.querySelector("[data-selected]")?.scrollIntoView({ block: "nearest" });
@@ -393,7 +405,7 @@ export function AuthoredEquations({
     entities,
     selection,
     named,
-    toggle: (target) => select(isSelected(selection, target) ? null : target),
+    toggle: (target) => select(selected === glyphKey(target) ? null : target),
   };
   return (
     <Section title="Authored equations">

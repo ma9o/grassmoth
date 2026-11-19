@@ -11,7 +11,6 @@ import { type Box, ChartFrame, SimulatedDraws } from "./layered-card-strip";
 import {
   activateOnKeyboard,
   assignmentLabel,
-  CarryMark,
   CHIP_PILL_WIDTH,
   LayerPill,
   pillWidth,
@@ -147,16 +146,16 @@ export function ExogenousChip({
   const chartX = chipWidth - 9 - (failures.length > 0 ? 15 : 0) - chart;
   const badge = assignments.length > 0 ? String(assignments.length) : null;
   const labelEnd = (badge ? chartX - 6 - pillWidth(badge, CHIP_PILL_WIDTH) : chartX) - 6;
-  const carry = construct.temporal_status === "time_varying" ? 14 : 0;
   const label = truncate(
     humanize(construct.name),
-    Math.max(4, Math.floor((labelEnd - 10 - carry) / (size * 0.56))),
+    Math.max(4, Math.floor((labelEnd - 10) / (size * 0.56))),
   );
   const accent = badge ? DAG_COLORS.intervention : (statusAccent(status) ?? "var(--border)");
   return (
     <g
       opacity={dimmed ? 0.18 : 1}
       role="button"
+      aria-pressed={selected}
       aria-label={humanize(construct.name)}
       tabIndex={0}
       style={{ cursor: "pointer" }}
@@ -179,7 +178,6 @@ export function ExogenousChip({
         fill="var(--foreground)"
       >
         {label}
-        <CarryMark construct={construct} size={size - 1} />
       </text>
       {badge && timeOrigin !== null && (
         <LayerPill

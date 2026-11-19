@@ -8,9 +8,13 @@ import type {
 
 /** The graph entity shown in the details pane. */
 export type EntitySelection =
-  | { readonly kind: "construct"; readonly id: ConstructId }
-  | { readonly kind: "edge"; readonly id: EdgeId }
-  | { readonly kind: "indicator"; readonly id: IndicatorId };
+  | {
+      readonly kind: "construct";
+      readonly id: ConstructId;
+      readonly glyph?: MechanismId;
+    }
+  | { readonly kind: "edge"; readonly id: EdgeId; readonly glyph?: MechanismId }
+  | { readonly kind: "indicator"; readonly id: IndicatorId; readonly glyph?: "response" };
 
 export function humanize(value: string): string {
   return value.replaceAll("_", " ");

@@ -19,11 +19,14 @@ import {
   StripOverflow,
   StripRow,
 } from "./layered-card-strip";
-import { activateOnKeyboard, plotTitle, truncate } from "./layered-graph-marks";
+import { graphButton, plotTitle, truncate } from "./layered-graph-marks";
+import { type SpecView, StateLawStrip } from "./layered-spec-glyphs";
 
 /** What every card and chip shows of the viewed state. */
 export interface StateView {
   readonly geometry: StateGeometry;
+  readonly editing: boolean;
+  readonly spec: SpecView | null;
   readonly zoom: number;
   readonly flows: ModelFlowPlots | null;
   readonly simulationPaths: SimulationPathsView | null;
@@ -62,19 +65,7 @@ function ComparisonRow({
   );
   const select = () => view.selectIndicator(indicator.observation.id);
   return (
-    <g
-      role="button"
-      tabIndex={0}
-      aria-label={`${humanize(indicator.observation.name)} comparison`}
-      onClick={(event) => {
-        event.stopPropagation();
-        select();
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        activateOnKeyboard(event, select);
-      }}
-    >
+    <g {...graphButton(select)} aria-label={`${humanize(indicator.observation.name)} comparison`}>
       <StripRow
         geometry={geometry}
         index={index}
@@ -143,6 +134,7 @@ function StateStrip({ view, state }: { readonly view: StateView; readonly state:
       />
     );
   }
+  if (view.spec) return <StateLawStrip spec={view.spec} id={construct.id} box={geometry.strip} />;
   if (prepared.length > 0) return <DataStrip geometry={geometry} rows={prepared} />;
   return (
     <ChartFrame box={geometry.strip}>
@@ -202,17 +194,8 @@ function ReadingRow({
   const top = geometry.indicator.top + index * geometry.indicator.height;
   return (
     <g
-      role="button"
-      tabIndex={0}
+      {...graphButton(view.editing ? null : select)}
       aria-label={`${humanize(indicator.observation.name)} reading law`}
-      onClick={(event) => {
-        event.stopPropagation();
-        select();
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        activateOnKeyboard(event, select);
-      }}
     >
       <title>{reading.title}</title>
       <text
@@ -244,6 +227,7 @@ export function StateColumn({
   readonly view: StateView;
   readonly state: ConstructState;
 }) {
+  if (view.spec) return <StateStrip view={view} state={state} />;
   const { indicators, prepared } = state;
   return (
     <>

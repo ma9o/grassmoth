@@ -2,8 +2,28 @@ import type { AriaRole, CSSProperties, ReactNode } from "react";
 import { DAG_COLORS } from "@/lib/dag/palette";
 
 /** The scrolling frame that fills its pane. */
-export function DagCanvasFrame({ children }: { readonly children: ReactNode }) {
-  return <div style={CANVAS_FRAME}>{children}</div>;
+export function DagCanvasFrame({
+  children,
+  onBackgroundClick,
+}: {
+  readonly children: ReactNode;
+  readonly onBackgroundClick: () => void;
+}) {
+  return (
+    <div
+      style={CANVAS_FRAME}
+      onClick={({ target, currentTarget }) => {
+        if (
+          target === currentTarget ||
+          (target instanceof SVGSVGElement && target.parentElement === currentTarget)
+        ) {
+          onBackgroundClick();
+        }
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function DagSvg({

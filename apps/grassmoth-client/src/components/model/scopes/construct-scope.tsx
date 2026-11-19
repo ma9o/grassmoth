@@ -3,7 +3,7 @@ import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { constructPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
-import { humanize } from "@/lib/model-asset/selection";
+import { humanize, mechanismName } from "@/lib/model-asset/selection";
 import { Callout, KeyValue, OwnerLink, Prose, Section, StatusIcon } from "../scope-primitives";
 import { FlowSection } from "./flow-sections";
 import { LawSections, SimulatedHistory } from "./law-sections";
@@ -12,9 +12,11 @@ import { Reasoning } from "./reasoning";
 export function ConstructScope({
   context,
   id,
+  showCardRows = false,
 }: {
   readonly context: ScopeContext;
   readonly id: ConstructId;
+  readonly showCardRows?: boolean;
 }) {
   const scope = constructPresentation(context, id);
   if (!scope) return null;
@@ -59,6 +61,29 @@ export function ConstructScope({
         </Section>
       )}
       <FlowSection title="State distribution" plot={flows?.constructs.get(id)} />
+      {showCardRows && flows && (
+        <>
+          {[
+            ...construct.dynamics,
+            ...context.entities.edges
+              .filter((edge) => edge.effect.id === id)
+              .flatMap((edge) => edge.mechanisms),
+          ].map((term) => (
+            <FlowSection
+              key={term.id}
+              title={mechanismName(term.id)}
+              plot={flows.mechanisms.get(term.id)}
+            />
+          ))}
+          {indicators.map(({ observation }) => (
+            <FlowSection
+              key={observation.id}
+              title={humanize(observation.name)}
+              plot={flows.indicators.get(observation.id)}
+            />
+          ))}
+        </>
+      )}
       {construct.dynamics.length > 0 && (
         <FlowSection title="Intrinsic drift" plot={flows?.intrinsic.get(id)} />
       )}

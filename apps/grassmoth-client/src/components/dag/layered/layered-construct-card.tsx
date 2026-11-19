@@ -9,9 +9,8 @@ import { humanize, mechanismName } from "@/lib/model-asset/selection";
 import { DagNodeShell } from "../core/dag-node";
 import type { StateGeometry } from "./layered-card-strip";
 import {
-  activateOnKeyboard,
   assignmentLabel,
-  CarryMark,
+  graphButton,
   LayerPill,
   statusAccent,
   truncate,
@@ -44,6 +43,7 @@ export function ConstructCard({
   selected,
   dimmed,
   onSelect,
+  onHover,
   rows,
   children,
 }: {
@@ -61,6 +61,7 @@ export function ConstructCard({
   readonly selected: boolean;
   readonly dimmed: boolean;
   readonly onSelect: () => void;
+  readonly onHover: (active: boolean) => void;
   readonly rows: ReactNode;
   readonly children: ReactNode;
 }) {
@@ -78,12 +79,13 @@ export function ConstructCard({
   return (
     <g
       opacity={cardOpacity(dimmed, status)}
-      role="button"
+      {...graphButton(onSelect)}
+      aria-pressed={selected}
       aria-label={humanize(construct.name)}
-      tabIndex={0}
-      style={{ cursor: "pointer" }}
-      onClick={onSelect}
-      onKeyDown={(event) => activateOnKeyboard(event, onSelect)}
+      onPointerEnter={() => onHover(true)}
+      onPointerLeave={() => onHover(false)}
+      onFocus={() => onHover(true)}
+      onBlur={() => onHover(false)}
     >
       <DagNodeShell
         width={width}
@@ -97,7 +99,6 @@ export function ConstructCard({
       <g transform={`translate(${rowsWidth},0)`}>
         <text x={geometry.strip.x} y={y} fontSize={size} fontWeight={650} fill="var(--foreground)">
           {title}
-          <CarryMark construct={construct} size={size - 2} />
         </text>
         {badge ? (
           <LayerPill
@@ -118,6 +119,39 @@ export function ConstructCard({
         <WarningMark x={geometry.width - 15} y={band - 10} failures={failures} />
       </g>
     </g>
+  );
+}
+
+function MechanismRowChart({
+  density,
+  name,
+  plot,
+  zoom,
+}: {
+  readonly density: GraphDensity;
+  readonly name: string;
+  readonly plot: FlowPlot | undefined;
+  readonly zoom: number;
+}) {
+  const { width, height } = density.row;
+  const rich = density.key === "rich";
+  const label = rich ? { y: 12.5, size: 8, characters: 31 } : { y: 9.5, size: 7, characters: 26 };
+  const chartTop = rich ? 17 : 12;
+  return (
+    <>
+      <text x={10} y={label.y} fontSize={label.size} fontWeight={600} fill={DAG_COLORS.slate}>
+        {truncate(name, label.characters)}
+      </text>
+      <foreignObject
+        x={8}
+        y={chartTop}
+        width={width - 24}
+        height={height - chartTop - 4}
+        pointerEvents="none"
+      >
+        {plot && <FlowChart plot={plot} height={height - chartTop - 4} compact resolution={zoom} />}
+      </foreignObject>
+    </>
   );
 }
 
@@ -142,32 +176,21 @@ export function MechanismRowView({
   readonly zoom: number;
   readonly selected: boolean;
   readonly dimmed: boolean;
-  readonly onSelect: () => void;
+  readonly onSelect: (() => void) | null;
   readonly onHover: (hovered: boolean) => void;
 }) {
-  const rich = density.key === "rich";
   const { width, height } = density.row;
   const name = mechanismName(row.mechanism.id);
-  const chartTop = rich ? 17 : 12;
+  const highlighted = selected;
   return (
     <g
       transform={`translate(0,${row.top})`}
       opacity={dimmed ? 0.25 : 1}
-      role="button"
-      tabIndex={0}
+      {...graphButton(onSelect)}
       aria-label={`Mechanism ${name}`}
       data-mechanism-id={row.mechanism.id}
-      style={{ cursor: "pointer" }}
-      onClick={(event) => {
-        event.stopPropagation();
-        onSelect();
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        activateOnKeyboard(event, onSelect);
-      }}
-      onPointerEnter={() => onHover(true)}
-      onPointerLeave={() => onHover(false)}
+      onPointerEnter={onSelect ? () => onHover(true) : undefined}
+      onPointerLeave={onSelect ? () => onHover(false) : undefined}
     >
       <title>{description}</title>
       <rect
@@ -177,27 +200,10 @@ export function MechanismRowView({
         height={height - 3}
         rx={6}
         fill={DAG_COLORS.col}
-        stroke={selected ? "var(--primary)" : DAG_COLORS.line}
-        strokeWidth={selected ? 1.6 : 0.8}
+        stroke={highlighted ? "var(--primary)" : DAG_COLORS.line}
+        strokeWidth={highlighted ? 1.6 : 0.8}
       />
-      <text
-        x={10}
-        y={rich ? 12.5 : 9.5}
-        fontSize={rich ? 8 : 7}
-        fontWeight={600}
-        fill={DAG_COLORS.slate}
-      >
-        {truncate(name, rich ? 31 : 26)}
-      </text>
-      <foreignObject
-        x={8}
-        y={chartTop}
-        width={width - 24}
-        height={height - chartTop - 4}
-        pointerEvents="none"
-      >
-        {plot && <FlowChart plot={plot} height={height - chartTop - 4} compact resolution={zoom} />}
-      </foreignObject>
+      <MechanismRowChart density={density} name={name} plot={plot} zoom={zoom} />
       <path
         d={`M${width - 9} ${height / 2 - 4} l4 4 l-4 4`}
         fill="none"

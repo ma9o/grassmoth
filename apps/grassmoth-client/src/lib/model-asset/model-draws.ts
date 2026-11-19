@@ -28,12 +28,19 @@ import {
 } from "./law-draws";
 import { nativeObject, nativeScalar } from "./scalar-law";
 
+/** Authored medians are evaluated from the saved laws before applying their transforms. */
+type DrawCoordinate = number | "median";
+
 export interface ModelDraws {
   readonly count: number;
   readonly times: readonly number[];
   readonly timeOrigin: string;
   readonly retained: boolean;
-  readonly inputs: (draw: number, time: number, indicator?: IndicatorSpec) => ExpressionInputs;
+  readonly inputs: (
+    draw: DrawCoordinate,
+    time: number,
+    indicator?: IndicatorSpec,
+  ) => ExpressionInputs;
 }
 
 const DURATION_UNIT_DAYS: Readonly<Record<string, number>> = {
@@ -226,7 +233,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
   const times = drawTimes(trajectory, initialOnly);
   const timeOrigin = trajectory?.time_origin ?? "relative";
   const jointRows = new Map<DistributionId, readonly number[]>();
-  const readJoint = (id: DistributionId, draw: number, column: number): number => {
+  const readJoint = (id: DistributionId, draw: DrawCoordinate, column: number): number => {
     let lawAtoms = atoms.get(id);
     if (!lawAtoms) {
       const law = model.distributions[id];
@@ -245,7 +252,10 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
       );
       jointRows.set(id, rows);
     }
-    const row = rows[draw];
+    if (draw === "median" && lawAtoms.count !== 1) {
+      throw new PlotUnavailable("A retained joint law has no authored reference coordinate.");
+    }
+    const row = draw === "median" ? 0 : rows[draw];
     if (row === undefined) throw new Error("Missing saved draw index.");
     const value = lawAtoms.values[row * lawAtoms.width + column];
     if (column < 0 || column >= lawAtoms.width || value === undefined) {
@@ -254,7 +264,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
     return value;
   };
   const quantiles = new Map<ParameterId, (p: number) => number>();
-  const parameter = (id: ParameterId, draw: number, elementKey: string = id): number => {
+  const parameter = (id: ParameterId, draw: DrawCoordinate, elementKey: string = id): number => {
     const specification = model.parameters[id];
     if (!specification) throw new Error("An expression references a missing parameter.");
     const identity = specification.distribution;
@@ -276,7 +286,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
         quantile = parameterQuantile(model.distributions[identity], specification.transform);
         quantiles.set(id, quantile);
       }
-      value = quantile(displayProbability(elementKey, draw));
+      value = quantile(draw === "median" ? 0.5 : displayProbability(elementKey, draw));
     }
     switch (specification.transform.kind) {
       case "identity":
@@ -293,7 +303,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
   };
 
   const initialCache = new Map<string, number>();
-  const coefficient = (expression: Expression, draw: number) =>
+  const coefficient = (expression: Expression, draw: DrawCoordinate) =>
     scalarValue(
       evaluateExpression(expression, {
         parameter: (id) => parameter(id, draw),
@@ -335,7 +345,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
   };
 
   const stateColumns = new Map<string, number>();
-  const state = (id: ConstructId, draw: number, time: number): number => {
+  const state = (id: ConstructId, draw: DrawCoordinate, time: number): number => {
     const construct = byId.get(id);
     if (!construct) throw new Error("An expression references a missing construct.");
     if (!construct.distribution) {
@@ -344,7 +354,7 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
           "Generate trajectories with simulate to view this state beyond its initial law.",
         );
       }
-      return initial(id, draw);
+      return draw === "median" ? coefficient(initialLaw(construct).mean, draw) : initial(id, draw);
     }
     const key = `${id}:${time}`;
     const cachedColumn = stateColumns.get(key);

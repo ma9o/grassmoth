@@ -82,7 +82,12 @@ export function scalarDensity(law: NumPyroDistribution): ScalarDensity {
   const p = law.params;
   switch (law.distribution) {
     case "Normal": {
-      return twoParameters(jStat.normal, nativeScalar(p.loc), nativeScalar(p.scale));
+      const loc = nativeScalar(p.loc);
+      const normal = twoParameters(jStat.normal, loc, nativeScalar(p.scale));
+      return {
+        pdf: normal.pdf,
+        quantile: (probability) => (probability === 0.5 ? loc : normal.quantile(probability)),
+      };
     }
     case "HalfNormal": {
       return truncatedNormal(0, nativeScalar(p.scale), 0, Infinity);

@@ -18,11 +18,13 @@ export interface Point {
 
 export type DagDirection = "RIGHT" | "DOWN" | "LEFT" | "UP";
 
-/** A fixed point on its node's west side where edges end, measured from the node's top. */
-export interface DagLayoutPortInput {
-  readonly id: string;
-  readonly y: number;
-}
+/**
+ * A fixed point on its node's border where edges start or end: on the west or east side, `y`
+ * below the node's top, or on the north side, `x` from its left.
+ */
+export type DagLayoutPortInput =
+  | { readonly id: string; readonly side: "WEST" | "EAST"; readonly y: number }
+  | { readonly id: string; readonly side: "NORTH"; readonly x: number };
 
 export interface DagLayoutNodeInput {
   readonly id: string;
@@ -30,14 +32,15 @@ export interface DagLayoutNodeInput {
   readonly height: number;
   /** Per-node ELK options (e.g. partitions for the interactive glyph columns). */
   readonly layoutOptions?: Readonly<Record<string, string>>;
-  /** Fixed west-side ports; edges may target a port id instead of the node. */
+  /** Fixed ports; edges may start or end on a port id instead of the node. */
   readonly ports?: readonly DagLayoutPortInput[];
 }
 
 export interface DagLayoutEdgeInput {
   readonly id: string;
+  /** A node id, or a port id of the source node. */
   readonly source: string;
-  /** A node id, or a port id of the target node. */
+  /** A node id, or a port id of the target node. An edge may end on the node it starts from. */
   readonly target: string;
 }
 
@@ -93,18 +96,32 @@ const DEFAULT_OPTIONS: Record<string, string> = {
   "elk.layered.nodePlacement.strategy": "BRANDES_KOEPF",
 };
 
-/** A node's own ELK options, with its fixed west-side ports when it has any. */
+/** Where a port sits on its node's border, from the node's top-left corner. */
+function portPoint(port: DagLayoutPortInput, width: number): Point {
+  switch (port.side) {
+    case "WEST": {
+      return { x: 0, y: port.y };
+    }
+    case "EAST": {
+      return { x: width, y: port.y };
+    }
+    case "NORTH": {
+      return { x: port.x, y: 0 };
+    }
+  }
+}
+
+/** A node's own ELK options, with its fixed ports when it has any. */
 function elkNodeOptions(node: DagLayoutNodeInput): Pick<ElkNode, "layoutOptions" | "ports"> {
   if (node.ports) {
     return {
       layoutOptions: { ...node.layoutOptions, "elk.portConstraints": "FIXED_POS" },
       ports: node.ports.map((port) => ({
         id: port.id,
-        x: 0,
-        y: port.y,
+        ...portPoint(port, node.width),
         width: 0,
         height: 0,
-        layoutOptions: { "elk.port.side": "WEST" },
+        layoutOptions: { "elk.port.side": port.side },
       })),
     };
   }

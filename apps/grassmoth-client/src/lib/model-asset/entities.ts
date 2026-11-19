@@ -80,7 +80,7 @@ export function resolveEntity(
       if (!cause || !effect) return undefined;
       const relationships = [constructLink(cause), constructLink(effect)];
       return {
-        selection,
+        selection: { kind: "edge", id: edge.id },
         label: relationships.map((link) => link.label).join(" → "),
         relationships,
       };
@@ -90,7 +90,7 @@ export function resolveEntity(
       const owner = entities.indicatorOwnerById.get(selection.id);
       return indicator && owner
         ? {
-            selection,
+            selection: { kind: "indicator", id: indicator.observation.id },
             label: humanize(indicator.observation.name),
             relationships: [constructLink(owner)],
           }
@@ -98,7 +98,7 @@ export function resolveEntity(
     }
     case "construct": {
       const entity = entities.constructById.get(selection.id);
-      return entity ? { selection, label: humanize(entity.name), relationships: [] } : undefined;
+      return entity ? { ...constructLink(entity), relationships: [] } : undefined;
     }
   }
 }

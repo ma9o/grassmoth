@@ -2,6 +2,7 @@ import type {
   BinaryOperator,
   CoefficientRole,
   ConstructId,
+  DynamicsMechanismSpec,
   Expression,
   ParameterId,
 } from "@grassmoth/api-types";
@@ -215,4 +216,15 @@ export function potentialDrift(
     }
   };
   return -dual(expression)[1];
+}
+
+/** One mechanism's contribution in target units per day. */
+export function mechanismDrift(
+  mechanism: DynamicsMechanismSpec,
+  inputs: ExpressionInputs,
+  target: ConstructId,
+): number {
+  return mechanism.kind === "potential"
+    ? potentialDrift(mechanism.expression, inputs, target)
+    : scalarValue(evaluateExpression(mechanism.expression, inputs));
 }

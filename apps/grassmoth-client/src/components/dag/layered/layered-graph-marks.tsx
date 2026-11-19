@@ -1,7 +1,7 @@
-import type { ConstructSpec, StateAssignment } from "@grassmoth/api-types";
-import type { KeyboardEvent } from "react";
+import type { StateAssignment } from "@grassmoth/api-types";
+import type { KeyboardEvent, MouseEvent } from "react";
 import type { ConstructStatus } from "@/lib/dag/construct-statuses";
-import { BLOCKING, DAG_COLORS, LATENT } from "@/lib/dag/palette";
+import { BLOCKING, LATENT } from "@/lib/dag/palette";
 import type { FlowPlot } from "@/lib/model-asset/flow-plots";
 import { formatModelDate } from "@/lib/utils/format";
 
@@ -14,6 +14,24 @@ export function activateOnKeyboard(event: KeyboardEvent<SVGGElement>, action: ()
     event.preventDefault();
     action();
   }
+}
+
+/** A passive row leaves pointer and keyboard activation to its enclosing node. */
+export function graphButton(select: (() => void) | null, tabIndex = 0) {
+  if (!select) return {};
+  return {
+    role: "button" as const,
+    tabIndex,
+    style: { cursor: "pointer" },
+    onClick(event: MouseEvent<SVGGElement>) {
+      event.stopPropagation();
+      select();
+    },
+    onKeyDown(event: KeyboardEvent<SVGGElement>) {
+      event.stopPropagation();
+      activateOnKeyboard(event, select);
+    },
+  };
 }
 
 export function statusAccent(status: ConstructStatus | undefined): string | undefined {
@@ -84,19 +102,4 @@ export function WarningMark({
       </text>
     </g>
   );
-}
-
-/** Follows a time-varying construct's name: its state carries over from one moment to the next. */
-export function CarryMark({
-  construct,
-  size,
-}: {
-  readonly construct: ConstructSpec;
-  readonly size: number;
-}) {
-  return construct.temporal_status === "time_varying" ? (
-    <tspan dx={4} fontSize={size} fontWeight={400} fill={DAG_COLORS.muted}>
-      <title>time varying</title>↻
-    </tspan>
-  ) : null;
 }

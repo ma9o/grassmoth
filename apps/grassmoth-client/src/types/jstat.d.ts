@@ -13,6 +13,7 @@ declare module "jstat" {
     readonly lognormal: DistributionFunctions;
     readonly uniform: DistributionFunctions;
     readonly studentt: {
+      readonly pdf: (value: number, degreesOfFreedom: number) => number;
       readonly inv: (probability: number, degreesOfFreedom: number) => number;
     };
     readonly lowRegGamma: (shape: number, value: number) => number;

@@ -87,11 +87,22 @@ export interface LayeredGraphArrowMeta {
   readonly row: MechanismRow | null;
 }
 
+/**
+ * A time-varying construct's arrow to itself: its state leaves the current time slice for the
+ * next. It ends on a row of its own card that reads the state, or on the node when none does.
+ * Every other arrow is instantaneous: a mechanism reads its cause's current state.
+ */
+export interface LayeredGraphCarryMeta {
+  readonly construct: ConstructSpec;
+  readonly row: MechanismRow | null;
+}
+
 export interface LayeredGraphBundle {
   readonly density: GraphDensity;
   readonly graph: DagGraphInput;
   readonly nodeMeta: ReadonlyMap<string, LayeredGraphNodeMeta>;
   readonly arrowMeta: ReadonlyMap<string, LayeredGraphArrowMeta>;
+  readonly carryMeta: ReadonlyMap<string, LayeredGraphCarryMeta>;
   /** Each mechanism's row and the construct whose card holds it. */
   readonly rows: ReadonlyMap<
     MechanismId,
@@ -101,6 +112,20 @@ export interface LayeredGraphBundle {
 
 const portOf = (row: MechanismRow) => `${row.mechanism.id}#in`;
 const cardPortOf = (id: ConstructId) => `${id}#card`;
+const chipOutletOf = (id: ConstructId) => `${id}#out`;
+const carryStartOf = (id: ConstructId) => `${id}#carry`;
+const carryEndOf = (id: ConstructId) => `${id}#carried`;
+
+/** A carry arrow leaves the top of its node this far along, and returns this much nearer. */
+const CARRY_START = 40;
+const CARRY_SPAN = 28;
+
+/** A time-varying construct's state leaves each time slice for the next. */
+const carriesOver = (construct: ConstructSpec) => construct.temporal_status === "time_varying";
+
+/** Where a construct's arrows leave it: a chip's ports are fixed, so from the one at its middle. */
+const outletOf = (construct: ConstructSpec) =>
+  construct.role === "exogenous" ? chipOutletOf(construct.id) : construct.id;
 
 /** Each construct's direct causes, or its direct effects. */
 type Neighbours = ReadonlyMap<ConstructId, readonly ConstructId[]>;
@@ -197,12 +222,55 @@ interface PlacedArrow {
   readonly target: string;
 }
 
+/** One carry arrow of the layout graph: where it leaves its node and where it returns. */
+interface PlacedCarry {
+  readonly id: string;
+  readonly meta: LayeredGraphCarryMeta;
+  readonly source: string;
+  readonly target: string;
+}
+
 /** One construct's node, its card rows, and the arrows that end on it. */
 interface PlacedNode {
   readonly meta: LayeredGraphNodeMeta;
   readonly node: DagLayoutNodeInput;
   readonly rows: readonly MechanismRow[];
   readonly arrows: readonly PlacedArrow[];
+  readonly carries: readonly PlacedCarry[];
+}
+
+/**
+ * A time-varying construct's carry arrows and the ports on its top edge they use: one arrow into
+ * each row that reads the construct's own state, or a short loop on the node when none does.
+ */
+function placeCarry(
+  construct: ConstructSpec,
+  rows: readonly MechanismRow[],
+  left: number,
+): { readonly ports: readonly DagLayoutPortInput[]; readonly carries: readonly PlacedCarry[] } {
+  if (!carriesOver(construct)) return { ports: [], carries: [] };
+  const start = carryStartOf(construct.id);
+  const end = carryEndOf(construct.id);
+  const readers = rows.filter((row) => row.reads.includes(construct.id));
+  const leave: DagLayoutPortInput = { id: start, side: "NORTH", x: left + CARRY_START };
+  if (readers.length === 0) {
+    const loop = { id: `${construct.id}>carry`, meta: { construct, row: null } };
+    const back: DagLayoutPortInput = {
+      id: end,
+      side: "NORTH",
+      x: left + CARRY_START - CARRY_SPAN,
+    };
+    return { ports: [leave, back], carries: [{ ...loop, source: start, target: end }] };
+  }
+  return {
+    ports: [leave],
+    carries: readers.map((row) => ({
+      id: `${construct.id}>carry>${row.mechanism.id}`,
+      meta: { construct, row },
+      source: start,
+      target: portOf(row),
+    })),
+  };
 }
 
 /** An exogenous construct is a chip, and the arrows into it end on the chip itself. */
@@ -211,15 +279,23 @@ function placeChip(
   links: readonly Link[],
   density: GraphDensity,
 ): PlacedNode {
+  const { width, height } = density.chip;
+  const carry = placeCarry(construct, [], 0);
   return {
     meta: { kind: "exogenous", construct },
-    node: { id: construct.id, width: density.chip.width, height: density.chip.height },
+    node: {
+      id: construct.id,
+      width,
+      height,
+      ports: [{ id: chipOutletOf(construct.id), side: "EAST", y: height / 2 }, ...carry.ports],
+    },
     rows: [],
     arrows: links.map((link) => ({
       id: link.edge.id,
       meta: { ...link, row: null },
       target: construct.id,
     })),
+    carries: carry.carries,
   };
 }
 
@@ -275,7 +351,11 @@ function linkArrows(link: Link, ends: readonly MechanismRow[], cardTarget: strin
   }));
 }
 
-/** A card: a port per mechanism row, and one under the rows for arrows that end on none. */
+/**
+ * A card: a port per mechanism row, one for arrows that end on no row, and the carry arrow's on
+ * its top edge. A card with any port has all of them fixed, so only a card with none lets an
+ * arrow end on the card itself.
+ */
 function placeCard(
   construct: ConstructSpec,
   rows: readonly MechanismRow[],
@@ -283,28 +363,42 @@ function placeCard(
   density: GraphDensity,
 ): PlacedNode {
   const incoming = links.map((link) => ({ link, ends: endsOf(link.edge, rows) }));
-  const cardPort = rows.length > 0 && incoming.some(({ ends }) => ends.length === 0);
+  const rowsWidth = rows.length > 0 ? density.row.width : 0;
+  const carry = placeCarry(construct, rows, rowsWidth);
+  const fixed = rows.length > 0 || carry.ports.length > 0;
+  const cardPort = fixed && incoming.some(({ ends }) => ends.length === 0);
   const rowsHeight = 2 * ROW_INSET + rows.length * density.row.height;
-  const width = (rows.length > 0 ? density.row.width : 0) + density.state.width;
-  const height = Math.max(density.state.height, rowsHeight + (cardPort ? CARD_PORT_ROOM : 0));
+  const width = rowsWidth + density.state.width;
+  const height = Math.max(
+    density.state.height,
+    rowsHeight + (cardPort && rows.length > 0 ? CARD_PORT_ROOM : 0),
+  );
+  // Under the rows when the card has any, else at the middle of its west side.
+  const cardPortY = rows.length > 0 ? height - CARD_PORT_ROOM / 2 : height / 2;
   const ports: DagLayoutPortInput[] = [
-    ...rows.map((row) => ({ id: portOf(row), y: row.top + density.row.height / 2 })),
-    ...(cardPort ? [{ id: cardPortOf(construct.id), y: height - CARD_PORT_ROOM / 2 }] : []),
+    ...rows.map((row) => ({
+      id: portOf(row),
+      side: "WEST" as const,
+      y: row.top + density.row.height / 2,
+    })),
+    ...(cardPort ? [{ id: cardPortOf(construct.id), side: "WEST" as const, y: cardPortY }] : []),
+    ...carry.ports,
   ];
-  const cardTarget = rows.length > 0 ? cardPortOf(construct.id) : construct.id;
+  const cardTarget = fixed ? cardPortOf(construct.id) : construct.id;
   return {
     meta: { kind: "construct", construct, rows, width, height },
     node: { id: construct.id, width, height, ...(ports.length > 0 ? { ports } : {}) },
     rows,
     arrows: incoming.flatMap(({ link, ends }) => linkArrows(link, ends, cardTarget)),
+    carries: carry.carries,
   };
 }
 
 /**
- * Lay out one card per construct. A mechanism is a term of the construct it drives, so it is a
- * row of that card, never a node: the construct's own dynamics first, then the mechanisms its
- * incoming edges declare. Each edge ends on the rows that read its cause. Exogenous constructs
- * are chips. Comparisons decorate this layout without moving its nodes.
+ * Group terms by the construct they drive. The authored view places each term in a separate
+ * function box along its arrows. Result and comparison views use rows of the effect card. Each edge ends on the rows that read its cause, and each time-varying
+ * construct sends a carry arrow to itself. Exogenous constructs are chips. Comparisons decorate
+ * this layout without moving its nodes.
  */
 export function buildLayeredCausalGraph(
   constructs: readonly ConstructSpec[],
@@ -337,16 +431,21 @@ export function buildLayeredCausalGraph(
       : placeCard(construct, rowsOf(construct), incoming, density);
   });
   const arrows = placed.flatMap((item) => item.arrows);
+  const carries = placed.flatMap((item) => item.carries);
 
   return {
     density,
     graph: {
       nodes: placed.map((item) => item.node),
-      edges: arrows.map((arrow) => ({
-        id: arrow.id,
-        source: arrow.meta.cause.id,
-        target: arrow.target,
-      })),
+      // Carry arrows follow the model's edges, so they never reorder them.
+      edges: [
+        ...arrows.map((arrow) => ({
+          id: arrow.id,
+          source: outletOf(arrow.meta.cause),
+          target: arrow.target,
+        })),
+        ...carries.map(({ id, source, target }) => ({ id, source, target })),
+      ],
       direction: "RIGHT",
       layoutOptions: {
         "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
@@ -362,6 +461,7 @@ export function buildLayeredCausalGraph(
     },
     nodeMeta: new Map(placed.map((item) => [item.meta.construct.id, item.meta])),
     arrowMeta: new Map(arrows.map((arrow) => [arrow.id, arrow.meta])),
+    carryMeta: new Map(carries.map((carry) => [carry.id, carry.meta])),
     rows: new Map(
       placed.flatMap((item) =>
         item.rows.map(

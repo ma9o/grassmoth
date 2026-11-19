@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { type EntityPresentation, resolveEntity } from "@/lib/model-asset/entities";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import type { EntitySelection } from "@/lib/model-asset/selection";
-import { humanize } from "@/lib/model-asset/selection";
+import { humanize, mechanismName } from "@/lib/model-asset/selection";
+import { glyphKey, viewedSpecPlots } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
 import { AuthoredEquations } from "./authored-equations";
 import { DefinitionContext } from "./definition-context";
@@ -15,6 +16,7 @@ import { ModelComparisonDetails } from "./scopes/edit-details";
 import { FitDetails } from "./scopes/fit-details";
 import { IndicatorScope } from "./scopes/indicator-scope";
 import { QuestionChecks, QuestionDetails } from "./scopes/question-details";
+import { SpecSections } from "./scopes/spec-sections";
 import { SimulationEvidence } from "./simulation-evidence";
 import { PaneToggle } from "./workbench-panes";
 
@@ -96,12 +98,14 @@ function DetailsContent({
   context,
   loading,
   tick,
+  showCardRows,
 }: {
   readonly selection: EntitySelection | null;
   readonly entity: EntityPresentation | null | undefined;
   readonly context: ScopeContext;
   readonly loading: boolean;
   readonly tick: TimelineRevision | undefined;
+  readonly showCardRows: boolean;
 }) {
   if (loading) {
     return (
@@ -117,9 +121,29 @@ function DetailsContent({
   }
   if (!selection) return <ModelScope context={context} tick={tick} />;
   if (!entity) return <Hint>This {selection.kind} is absent from this revision.</Hint>;
-  if (selection.kind === "construct") return <ConstructScope context={context} id={selection.id} />;
+  if (selection.glyph) {
+    // The function is a node of its own. Its full relationship or measurement is one click away.
+    return (
+      <Section title={selection.kind === "indicator" ? "Measurement" : "Defined on"}>
+        <OwnerLink onClick={() => context.select(entity.selection)}>{entity.label}</OwnerLink>
+      </Section>
+    );
+  }
+  if (selection.kind === "construct") {
+    return <ConstructScope context={context} id={selection.id} showCardRows={showCardRows} />;
+  }
   if (selection.kind === "edge") return <EdgeScope context={context} id={selection.id} />;
   return <IndicatorScope context={context} id={selection.id} />;
+}
+
+function detailsTitle(
+  selection: EntitySelection | null,
+  owner: EntityPresentation | null | undefined,
+) {
+  if (!selection) return "Model state";
+  if (!owner) return "Absent entity";
+  if (selection.glyph === "response") return `Expected reading for ${owner.label}`;
+  return selection.glyph ? mechanismName(selection.glyph) : owner.label;
 }
 
 /**
@@ -163,6 +187,8 @@ export function DetailsPane({
   readonly tick: TimelineRevision | undefined;
 }) {
   const entity = selection ? resolveEntity(context.entities, selection) : null;
+  const step = tick?.record.attempt.action ?? null;
+  const plots = viewedSpecPlots(context.modelSnapshot, step);
   const model = context.modelSnapshot.dynamical_model_spec;
   const text = model && context.entities.constructs.length > 0 ? model : null;
   const related = entity && entity.relationships.length > 0 ? entity : null;
@@ -172,9 +198,7 @@ export function DetailsPane({
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-card"
     >
       <div className="flex min-h-11 flex-none items-center gap-2 border-b px-3 py-1.5 text-xs">
-        <h2 className="min-w-0 flex-1 font-semibold">
-          {selection ? (entity?.label ?? "Absent entity") : "Model state"}
-        </h2>
+        <h2 className="min-w-0 flex-1 font-semibold">{detailsTitle(selection, entity)}</h2>
         {selection && (
           <Button
             type="button"
@@ -191,11 +215,11 @@ export function DetailsPane({
       <div className="flex min-h-0 flex-1 gap-3 p-3">
         {text && (
           <div className="flex min-h-0 min-w-[440px] flex-1 border-r pr-3 pb-2 [&>section]:max-h-full [&>section]:w-full [&>section>div:last-child]:overflow-y-auto">
-            <AuthoredEquations model={text} context={context} selection={selection} />
+            <AuthoredEquations model={text} context={context} selection={selection} plots={plots} />
           </div>
         )}
         <div
-          key={selection?.id ?? tick?.record.seq}
+          key={selection ? glyphKey(selection) : tick?.record.seq}
           className={cn(
             SCOPE,
             text ? "max-w-[calc(100%-464px)] flex-none" : "flex-1",
@@ -207,12 +231,16 @@ export function DetailsPane({
               <DefinitionContext entity={related} onSelect={context.select} />
             </div>
           )}
+          {!loading && plots && selection && entity && (
+            <SpecSections context={context} selection={selection} plots={plots} />
+          )}
           <DetailsContent
             selection={selection}
             entity={entity}
             context={context}
             loading={loading}
             tick={tick}
+            showCardRows={step === "edit_model" && !plots}
           />
         </div>
       </div>

@@ -43,69 +43,120 @@ function countQuantile(cdf: (value: number) => number, probability: number): num
   return low;
 }
 
-/** Draw from the local conditional reading law; windowed predictive histories remain saved results. */
-export function measurementDraw(
+export type ReadingMeasure =
+  | { readonly kind: "density"; readonly height: (x: number) => number }
+  | { readonly kind: "mass"; readonly lastCategory?: number; readonly cdf: (x: number) => number }
+  | { readonly kind: "point"; readonly value: number };
+
+export interface ConditionalReading {
+  readonly measure: ReadingMeasure;
+  /** Expected reading, in level-index units for a discrete codebook. */
+  readonly mean: () => number;
+  readonly quantile: (probability: number) => number;
+}
+
+function discreteReading(mass: readonly number[]): ConditionalReading {
+  return {
+    measure: {
+      kind: "mass",
+      lastCategory: mass.length - 1,
+      cdf: (x) => mass.slice(0, Math.max(0, Math.floor(x) + 1)).reduce((a, b) => a + b, 0),
+    },
+    mean: () => mass.reduce((sum, p, i) => sum + p * i, 0),
+    quantile: (p) => category(mass, p),
+  };
+}
+
+/** Evaluate the authored family once for both its response and its conditional noise. */
+export function conditionalReading(
   law: ObservationLawSpec,
   inputs: ExpressionInputs,
-  probability: number,
-): number {
+): ConditionalReading {
   const evaluate = (expression: Parameters<typeof evaluateExpression>[0]) =>
     evaluateExpression(expression, inputs);
   const scalar = (expression: Parameters<typeof evaluateExpression>[0]) =>
     finiteValue(scalarValue(evaluate(expression)));
   switch (law.distribution) {
     case "Delta": {
-      return scalar(law.v);
+      const value = scalar(law.v);
+      return { measure: { kind: "point", value }, mean: () => value, quantile: () => value };
     }
     case "Normal": {
-      return jStat.normal.inv(probability, scalar(law.loc), positive(scalar(law.scale)));
+      const loc = scalar(law.loc);
+      const scale = positive(scalar(law.scale));
+      return {
+        measure: { kind: "density", height: (x) => jStat.normal.pdf(x, loc, scale) },
+        mean: () => loc,
+        quantile: (p) => jStat.normal.inv(p, loc, scale),
+      };
     }
     case "StudentT": {
-      return (
-        scalar(law.loc) +
-        positive(scalar(law.scale)) * jStat.studentt.inv(probability, positive(scalar(law.df)))
-      );
+      const loc = scalar(law.loc);
+      const scale = positive(scalar(law.scale));
+      const df = positive(scalar(law.df));
+      return {
+        measure: {
+          kind: "density",
+          height: (x) => jStat.studentt.pdf((x - loc) / scale, df) / scale,
+        },
+        mean: () => {
+          if (df <= 1) throw new PlotUnavailable("The StudentT mean is undefined for df ≤ 1.");
+          return loc;
+        },
+        quantile: (p) => loc + scale * jStat.studentt.inv(p, df),
+      };
     }
     case "Poisson": {
       const rate = scalar(law.rate);
       if (rate < 0) throw new PlotUnavailable("Some input draws give a negative Poisson rate.");
-      return rate === 0
-        ? 0
-        : countQuantile((value) => 1 - jStat.lowRegGamma(value + 1, rate), probability);
+      const cdf = (k: number) => (k < 0 ? 0 : 1 - jStat.lowRegGamma(k + 1, rate));
+      return {
+        measure: { kind: "mass", cdf },
+        mean: () => rate,
+        quantile: (p) => (rate === 0 ? 0 : countQuantile(cdf, p)),
+      };
     }
     case "Gamma": {
-      return jStat.gamma.inv(
-        probability,
-        positive(scalar(law.concentration)),
-        1 / positive(scalar(law.rate)),
-      );
+      const shape = positive(scalar(law.concentration));
+      const rate = positive(scalar(law.rate));
+      return {
+        measure: { kind: "density", height: (x) => jStat.gamma.pdf(x, shape, 1 / rate) },
+        mean: () => shape / rate,
+        quantile: (p) => jStat.gamma.inv(p, shape, 1 / rate),
+      };
     }
     case "Beta": {
-      return jStat.beta.inv(
-        probability,
-        positive(scalar(law.concentration1)),
-        positive(scalar(law.concentration0)),
-      );
+      const a = positive(scalar(law.concentration1));
+      const b = positive(scalar(law.concentration0));
+      return {
+        measure: { kind: "density", height: (x) => jStat.beta.pdf(x, a, b) },
+        mean: () => a / (a + b),
+        quantile: (p) => jStat.beta.inv(p, a, b),
+      };
     }
-    case "BernoulliLogits": {
-      return category([1 - sigmoid(scalar(law.logits)), sigmoid(scalar(law.logits))], probability);
-    }
+    case "BernoulliLogits":
     case "BernoulliProbs": {
-      const p = scalar(law.probs);
-      return category([1 - p, p], probability);
+      const p =
+        law.distribution === "BernoulliLogits" ? sigmoid(scalar(law.logits)) : scalar(law.probs);
+      return discreteReading([1 - p, p]);
     }
     case "NegativeBinomial2": {
       const size = positive(scalar(law.concentration));
-      const p = size / (size + positive(scalar(law.mean)));
-      return countQuantile((value) => jStat.ibeta(p, size, value + 1), probability);
+      const mean = positive(scalar(law.mean));
+      const prob = size / (size + mean);
+      const cdf = (k: number) => (k < 0 ? 0 : jStat.ibeta(prob, size, k + 1));
+      return {
+        measure: { kind: "mass", cdf },
+        mean: () => mean,
+        quantile: (p) => countQuantile(cdf, p),
+      };
     }
     case "OrderedLogistic": {
       const cutpoints = evaluate(law.cutpoints);
       const values = typeof cutpoints === "number" ? [cutpoints] : cutpoints;
       const cumulative = [0, ...values.map((value) => sigmoid(value - scalar(law.predictor))), 1];
-      return category(
+      return discreteReading(
         cumulative.slice(1).map((value, index) => value - (cumulative[index] ?? 0)),
-        probability,
       );
     }
     case "Categorical": {
@@ -116,10 +167,16 @@ export function measurementDraw(
       const peak = Math.max(...logits);
       const mass = logits.map((value) => Math.exp(value - peak));
       const total = mass.reduce((sum, value) => sum + value, 0);
-      return category(
-        mass.map((value) => value / total),
-        probability,
-      );
+      return discreteReading(mass.map((value) => value / total));
     }
   }
+}
+
+/** A single display draw on the same conditional law as the reading glyph. */
+export function measurementDraw(
+  law: ObservationLawSpec,
+  inputs: ExpressionInputs,
+  probability: number,
+): number {
+  return conditionalReading(law, inputs).quantile(probability);
 }

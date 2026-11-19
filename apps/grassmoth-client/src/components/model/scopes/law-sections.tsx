@@ -74,7 +74,7 @@ function findingText(item: ConvergenceFinding): string {
 }
 
 /** One section per law an entity's own terms name, with its prior and any posterior. */
-function ParameterLawSections({
+export function ParameterLawSections({
   context,
   uses,
 }: {

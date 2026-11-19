@@ -37,13 +37,37 @@ describe("buildLayeredCausalGraph", () => {
       [outcome.dynamics[0]?.id, "construct"],
       [response.id, "edge"],
     ]);
-    expect(built.graph.edges).toEqual([
-      expect.objectContaining({ source: baseline.id, target: treatment.id }),
+    expect(built.graph.edges.slice(0, 2)).toEqual([
+      expect.objectContaining({ source: `${baseline.id}#out`, target: `${treatment.id}#card` }),
       expect.objectContaining({ source: treatment.id, target: `${response.id}#in` }),
     ]);
     expect([...built.arrowMeta.values()].map(({ row }) => row?.mechanism.id ?? null)).toEqual([
       null,
       response.id,
+    ]);
+  });
+
+  it("sends each time-varying construct a carry arrow, into the rows that read its own state", () => {
+    const built = build();
+    const own = outcome.dynamics[0]?.id;
+    // The time-invariant input has none; the state no row reads loops on its own node.
+    expect(built.graph.edges.slice(2)).toEqual([
+      expect.objectContaining({
+        source: `${treatment.id}#carry`,
+        target: `${treatment.id}#carried`,
+      }),
+      expect.objectContaining({ source: `${outcome.id}#carry`, target: `${own}#in` }),
+      expect.objectContaining({ source: `${outcome.id}#carry`, target: `${response.id}#in` }),
+    ]);
+    expect(
+      [...built.carryMeta.values()].map(({ construct, row }) => [
+        construct.id,
+        row?.mechanism.id ?? null,
+      ]),
+    ).toEqual([
+      [treatment.id, null],
+      [outcome.id, own],
+      [outcome.id, response.id],
     ]);
   });
 

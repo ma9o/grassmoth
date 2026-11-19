@@ -15,7 +15,7 @@ interface UseDagLayoutResult extends DagLayoutResult {
  * serialized graph changes and ignores results that arrive after a newer input.
  * A failed layout is a bug, so it is rethrown during render for React to surface.
  */
-export function useDagLayout(graph: DagGraphInput): UseDagLayoutResult {
+export function useDagLayout(graph: DagGraphInput | null): UseDagLayoutResult {
   const [result, setResult] = useState<{ data: DagLayoutResult; key: string }>({
     data: EMPTY_LAYOUT,
     key: "",
@@ -30,6 +30,7 @@ export function useDagLayout(graph: DagGraphInput): UseDagLayoutResult {
   });
 
   useEffect(() => {
+    if (!graph) return;
     const currentKey = inputKey;
     runDagLayout(graph)
       .then((layout) => {

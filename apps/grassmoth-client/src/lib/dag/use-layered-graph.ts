@@ -14,16 +14,20 @@ import { useDagLayout } from "@/lib/hooks/use-dag-layout";
 import type { ModelEntities } from "@/lib/model-asset/entities";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { EntitySelection } from "@/lib/model-asset/selection";
+import type { SpecPlots } from "@/lib/model-asset/spec-plots";
 import { causalEffect } from "@/lib/simulation-report";
 import {
   buildLayeredCausalGraph,
   GRAPH_DENSITIES,
+  type GraphDensity,
   type LayeredGraphArrowMeta,
+  type LayeredGraphCarryMeta,
 } from "./build-layered-causal-graph";
 import { type ModelComparison, placeComparisonOverlay } from "./comparison-overlay";
 import { availableGraphLayers, graphEntities, graphStatus } from "./layered-model";
 import { BLOCKING, COMPARISON_COLORS, DAG_COLORS, LATENT } from "./palette";
 import { focusedParts, type GraphFocus } from "./selection";
+import { specLayout } from "./spec-layout";
 
 export interface LayeredGraphOptions {
   readonly modelSnapshot: ModelSnapshot;
@@ -39,6 +43,11 @@ export const CANVAS_PADDING = 36;
 /** The canvas frame's border and padding, in pixels. */
 const FRAME_INSET = 14;
 /** Cards stay rich while the whole rich layout fits its pane at this zoom or larger. */
+const SPEC_DENSITY = {
+  ...GRAPH_DENSITIES.rich,
+  state: { ...GRAPH_DENSITIES.rich.state, width: 278, height: 112 },
+};
+
 const RICH_FIT = 0.6;
 const MIN_ZOOM = 0.08;
 const MAX_ZOOM = 1.8;
@@ -80,18 +89,21 @@ function edgeOpacity({
 }
 
 /** Derive graph display state from recorded model findings and user interaction. */
-export function useLayeredGraph({
-  modelSnapshot,
-  entities: indexed,
-  simulation = null,
-  comparison = null,
-  selection,
-}: LayeredGraphOptions) {
+export function useLayeredGraph(
+  {
+    modelSnapshot,
+    entities: indexed,
+    simulation = null,
+    comparison = null,
+    selection,
+  }: LayeredGraphOptions,
+  plots: SpecPlots | null,
+) {
   const visible = useMemo(
     () => new Set(availableGraphLayers(modelSnapshot, simulation)),
     [modelSnapshot, simulation],
   );
-  const [manualZoom, setManualZoom] = useState<number | null>(null);
+  const [manualZoom, setManualZoom] = useState<number | "fit" | null>(null);
   const [hovered, setHovered] = useState<GraphFocus | null>(null);
   const paneRef = useRef<HTMLDivElement>(null);
   const [pane, setPane] = useState({ width: 0, height: 0 });
@@ -99,25 +111,21 @@ export function useLayeredGraph({
   const entities = useMemo(() => graphEntities(indexed), [indexed]);
   const outcome =
     causalEffect(simulation)?.outcome ?? modelSnapshot.dynamical_model_spec?.outcome ?? null;
-  const topologies = useMemo(
-    () => ({
-      rich: buildLayeredCausalGraph(
-        entities.constructs,
-        entities.edges,
-        outcome,
-        GRAPH_DENSITIES.rich,
-      ),
-      compact: buildLayeredCausalGraph(
-        entities.constructs,
-        entities.edges,
-        outcome,
-        GRAPH_DENSITIES.compact,
-      ),
-    }),
-    [entities, outcome],
+  const topologies = useMemo(() => {
+    const build = (density: GraphDensity) =>
+      buildLayeredCausalGraph(entities.constructs, entities.edges, outcome, density);
+    if (plots) {
+      const spec = build(SPEC_DENSITY);
+      return { rich: spec, compact: spec };
+    }
+    return { rich: build(GRAPH_DENSITIES.rich), compact: build(GRAPH_DENSITIES.compact) };
+  }, [entities, outcome, plots]);
+  const authored = useMemo(
+    () => (plots ? specLayout(topologies.rich, plots, entities.edges) : null),
+    [plots, topologies.rich, entities.edges],
   );
-  const rich = useDagLayout(topologies.rich.graph);
-  const compact = useDagLayout(topologies.compact.graph);
+  const rich = useDagLayout(authored ? null : topologies.rich.graph);
+  const compact = useDagLayout(authored ? null : topologies.compact.graph);
   useEffect(() => {
     const element = paneRef.current;
     if (!element) return;
@@ -131,6 +139,7 @@ export function useLayeredGraph({
     return () => observer.disconnect();
   }, []);
   const richFits =
+    plots !== null ||
     pane.width === 0 ||
     rich.isLayouting ||
     Math.min(
@@ -138,7 +147,13 @@ export function useLayeredGraph({
       (pane.height - FRAME_INSET) / (rich.height + 2 * CANVAS_PADDING),
     ) >= RICH_FIT;
   const topology = richFits ? topologies.rich : topologies.compact;
-  const { nodes, edges: arrows, width, height, isLayouting } = richFits ? rich : compact;
+  const {
+    nodes,
+    edges: arrows,
+    width,
+    height,
+    isLayouting,
+  } = authored ?? (richFits ? rich : compact);
   const difference = useMemo(
     () =>
       placeComparisonOverlay(isLayouting ? null : comparison, topology, {
@@ -149,7 +164,7 @@ export function useLayeredGraph({
       }),
     [comparison, topology, nodes, arrows, width, height, isLayouting],
   );
-  // The graph opens fitted to its pane, never above full size, until the viewer zooms.
+  // Authored functions open at reading size. Fit remains available when the graph needs scrolling.
   const fitZoom =
     pane.width === 0 || isLayouting
       ? 1
@@ -161,9 +176,9 @@ export function useLayeredGraph({
             (pane.height - FRAME_INSET) / (difference.height + 2 * CANVAS_PADDING),
           ),
         );
-  const zoom = manualZoom ?? fitZoom;
+  const zoom = manualZoom === "fit" ? fitZoom : (manualZoom ?? (plots ? 1 : fitZoom));
   const setZoom = (value: number) => setManualZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value)));
-  const fitToPane = () => setManualZoom(null);
+  const fitToPane = () => setManualZoom("fit");
 
   const designVisible = visible.has("design");
   const fitVisible = visible.has("fit");
@@ -225,6 +240,27 @@ export function useLayeredGraph({
     };
   };
 
+  /** A carry arrow belongs to its construct: it lights, recedes and is selected with its node. */
+  const carryVisual = ({ construct }: LayeredGraphCarryMeta) => {
+    const status = nodeStatuses.get(construct.id);
+    const selected = selection?.kind === "construct" && selection.id === construct.id;
+    return {
+      color: edgeColor({
+        selected,
+        change: undefined,
+        blocking: status === "blocking",
+        latent: status === "latent",
+      }),
+      opacity: edgeOpacity({
+        changed: false,
+        dimmed: focused !== null && !focused.constructs.has(construct.id),
+        latent: status === "latent",
+        hasPosterior: false,
+      }),
+      highlighted: selected,
+    };
+  };
+
   return {
     visible,
     setHovered,
@@ -235,6 +271,7 @@ export function useLayeredGraph({
     pane,
     outcome,
     topology,
+    authored,
     nodes,
     arrows,
     width,
@@ -245,5 +282,6 @@ export function useLayeredGraph({
     simulationResult,
     focused,
     edgeVisual,
+    carryVisual,
   };
 }

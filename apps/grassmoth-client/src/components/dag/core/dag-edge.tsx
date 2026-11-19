@@ -14,6 +14,7 @@ interface DagEdgeProps {
   /** Draw the arrowhead at the target end. */
   readonly markerEnd?: boolean;
   readonly highlighted?: boolean;
+  readonly interactive?: boolean;
   readonly onHoverChange?: (hovered: boolean) => void;
 }
 
@@ -37,6 +38,7 @@ export function DagEdge({
   opacity = 0.95,
   markerEnd = true,
   highlighted,
+  interactive = false,
   onHoverChange,
 }: DagEdgeProps) {
   if (points.length < 2) return null;
@@ -71,16 +73,17 @@ export function DagEdge({
         </defs>
       ) : null}
 
-      {/* Fat invisible hover target. */}
-      <path
-        d={d}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={Math.max(16, strokeWidth + 12)}
-        style={{ cursor: "pointer" }}
-        onPointerEnter={() => onHoverChange?.(true)}
-        onPointerLeave={() => onHoverChange?.(false)}
-      />
+      {interactive && (
+        <path
+          d={d}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={Math.max(16, strokeWidth + 12)}
+          style={{ cursor: "pointer" }}
+          onPointerEnter={() => onHoverChange?.(true)}
+          onPointerLeave={() => onHoverChange?.(false)}
+        />
+      )}
 
       <path
         d={d}

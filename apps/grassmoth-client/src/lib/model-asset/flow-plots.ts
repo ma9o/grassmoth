@@ -12,11 +12,9 @@ import { modelConstructs, modelEdges } from "@/lib/model-accessors";
 import { formatModelDate } from "@/lib/utils/format";
 import {
   type ExpressionInputs,
-  evaluateExpression,
   finiteValue,
+  mechanismDrift,
   PlotUnavailable,
-  potentialDrift,
-  scalarValue,
 } from "./expression-evaluation";
 import { displayProbability } from "./law-draws";
 import { measurementDraw } from "./measurement-draws";
@@ -161,14 +159,7 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
       label,
       `${at}Model law ${expressionStates(mechanisms.map((mechanism) => mechanism.expression)).some((id) => !model.constructs[id]?.distribution) ? "at the initial state" : "at the saved state coordinates"}; contribution in ${name(target)} units per day.`,
       (inputs) =>
-        mechanisms.reduce(
-          (sum, mechanism) =>
-            sum +
-            (mechanism.kind === "potential"
-              ? potentialDrift(mechanism.expression, inputs, target)
-              : scalarValue(evaluateExpression(mechanism.expression, inputs))),
-          0,
-        ),
+        mechanisms.reduce((sum, mechanism) => sum + mechanismDrift(mechanism, inputs, target), 0),
     );
   };
   /**
