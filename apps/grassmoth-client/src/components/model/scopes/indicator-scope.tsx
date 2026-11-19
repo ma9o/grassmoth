@@ -1,6 +1,4 @@
 import type { IndicatorId } from "@grassmoth/api-types";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
-import { observationEquation } from "@/lib/model-asset/equations";
 import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { indicatorPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
@@ -26,7 +24,6 @@ export function IndicatorScope({
   const preparation = metadata?.preparation.variables.find(
     (variable) => variable.observation.id === id,
   );
-  const equation = observationEquation(indicator, context.entities);
   const empirical = context.modelSnapshot.profile?.indicators[id]?.profile;
   const model = context.modelSnapshot.dynamical_model_spec;
   return (
@@ -57,11 +54,6 @@ export function IndicatorScope({
           </div>
         </details>
       </Section>
-      {equation && (
-        <Section title="Observation equation" wide>
-          <Katex latex={equation} />
-        </Section>
-      )}
       <FlowSection
         title="Reading distribution"
         plot={model ? modelFlowPlots(model).indicators.get(id) : undefined}

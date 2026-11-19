@@ -58,9 +58,6 @@ Warmup was 2,000 iterations per chain for mGRAD and 1,000 for Stan. Fit time inc
 bun install --frozen-lockfile
 uv sync --frozen --all-packages --group dev
 
-# Environment — set OPENROUTER_API_KEY at minimum
-cp .env.example.dev .env
-
 # Start the web viewer and the tool server
 # (bun run integration:start runs the full stack, including Temporal and the worker)
 bun run dev

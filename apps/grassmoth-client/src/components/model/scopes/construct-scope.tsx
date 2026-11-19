@@ -1,6 +1,4 @@
 import type { ConstructId, ConstructSpec } from "@grassmoth/api-types";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
-import { constructEquation } from "@/lib/model-asset/equations";
 import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { constructPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
@@ -21,7 +19,6 @@ export function ConstructScope({
   const scope = constructPresentation(context, id);
   if (!scope) return null;
   const { modelSnapshot, construct, indicators } = scope;
-  const equation = constructEquation(construct, context.entities);
   const latent = modelSnapshot.fit?.inference_diagnostics?.per_latent?.find(
     (item) => item.subject.id === id,
   );
@@ -59,11 +56,6 @@ export function ConstructScope({
               </li>
             ))}
           </ul>
-        </Section>
-      )}
-      {equation && (
-        <Section title={equation.title} wide>
-          <Katex latex={equation.latex} />
         </Section>
       )}
       <FlowSection title="State distribution" plot={flows?.constructs.get(id)} />

@@ -54,13 +54,17 @@ const ROW_INSET = 4;
 /** Room under the rows for arrows whose cause no mechanism reads. */
 const CARD_PORT_ROOM = 14;
 
-/** One mechanism, drawn as a row of the card of the construct it drives. */
-export interface MechanismRow {
+/** One mechanism, read as a term of the construct it drives. */
+export interface MechanismTerm {
   readonly mechanism: DynamicsMechanismSpec;
-  /** The construct or edge that declares it; selecting the row opens its owner. */
+  /** The construct or edge that declares it; selecting the term opens its owner. */
   readonly owner: Extract<EntitySelection, { kind: "construct" | "edge" }>;
   /** The states its expression reads, in declaration order. */
   readonly reads: readonly ConstructId[];
+}
+
+/** A term drawn as a row of the card of the construct it drives. */
+export interface MechanismRow extends MechanismTerm {
   /** Top of the row inside its card. */
   readonly top: number;
 }
@@ -154,7 +158,7 @@ function ancestorsOf(outcome: ConstructId | null, causes: Neighbours): ReadonlyS
  * in causal order with feedback set aside. States that reach the outcome come last, so the
  * question's block reads last.
  */
-function readingOrder(
+export function readingOrder(
   constructs: readonly ConstructSpec[],
   edges: readonly CausalEdgeSpec[],
   outcome: ConstructId | null,
@@ -219,10 +223,43 @@ function placeChip(
   };
 }
 
-/** The rows an edge ends on: those that read its cause, else the rows the edge declares. */
-function endsOf(link: Link, rows: readonly MechanismRow[]): readonly MechanismRow[] {
-  const readers = rows.filter((row) => row.reads.includes(link.cause.id));
-  const owned = rows.filter((row) => row.owner.kind === "edge" && row.owner.id === link.edge.id);
+/**
+ * The terms that drive a construct: its own dynamics first, then the mechanisms its incoming
+ * edges declare, by their causes' place in the reading order.
+ */
+export function mechanismTerms(
+  construct: ConstructSpec,
+  edges: readonly CausalEdgeSpec[],
+  rank: ReadonlyMap<ConstructId, number>,
+): MechanismTerm[] {
+  return [
+    ...construct.dynamics.map((mechanism) => ({
+      mechanism,
+      owner: { kind: "construct", id: construct.id } as const,
+    })),
+    ...edges
+      .filter((edge) => edge.effect.id === construct.id)
+      .toSorted((a, b) => (rank.get(a.cause.id) ?? 0) - (rank.get(b.cause.id) ?? 0))
+      .flatMap((edge) =>
+        edge.mechanisms.map((mechanism) => ({
+          mechanism,
+          owner: { kind: "edge", id: edge.id } as const,
+        })),
+      ),
+  ].map(({ mechanism, owner }) => ({
+    mechanism,
+    owner,
+    reads: expressionStates([mechanism.expression]),
+  }));
+}
+
+/** The terms an edge ends on: those that read its cause, else the terms the edge declares. */
+export function endsOf<Term extends MechanismTerm>(
+  edge: CausalEdgeSpec,
+  terms: readonly Term[],
+): readonly Term[] {
+  const readers = terms.filter((term) => term.reads.includes(edge.cause.id));
+  const owned = terms.filter((term) => term.owner.kind === "edge" && term.owner.id === edge.id);
   return readers.length > 0 ? readers : owned;
 }
 
@@ -245,7 +282,7 @@ function placeCard(
   links: readonly Link[],
   density: GraphDensity,
 ): PlacedNode {
-  const incoming = links.map((link) => ({ link, ends: endsOf(link, rows) }));
+  const incoming = links.map((link) => ({ link, ends: endsOf(link.edge, rows) }));
   const cardPort = rows.length > 0 && incoming.some(({ ends }) => ends.length === 0);
   const rowsHeight = 2 * ROW_INSET + rows.length * density.row.height;
   const width = (rows.length > 0 ? density.row.width : 0) + density.state.width;
@@ -288,24 +325,8 @@ export function buildLayeredCausalGraph(
     .map((edge) => ({ edge, cause: endpoint(edge.cause.id), effect: endpoint(edge.effect.id) }));
 
   const rowsOf = (construct: ConstructSpec): MechanismRow[] =>
-    [
-      ...construct.dynamics.map((mechanism) => ({
-        mechanism,
-        owner: { kind: "construct", id: construct.id } as const,
-      })),
-      ...edges
-        .filter((edge) => edge.effect.id === construct.id)
-        .toSorted((a, b) => (rank.get(a.cause.id) ?? 0) - (rank.get(b.cause.id) ?? 0))
-        .flatMap((edge) =>
-          edge.mechanisms.map((mechanism) => ({
-            mechanism,
-            owner: { kind: "edge", id: edge.id } as const,
-          })),
-        ),
-    ].map(({ mechanism, owner }, index) => ({
-      mechanism,
-      owner,
-      reads: expressionStates([mechanism.expression]),
+    mechanismTerms(construct, edges, rank).map((term, index) => ({
+      ...term,
       top: ROW_INSET + index * density.row.height,
     }));
 

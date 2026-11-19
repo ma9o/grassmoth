@@ -134,7 +134,7 @@ export type CanonicalTimeline = Expect<
 export type CanonicalWorkspaces = Expect<
   Equal<
     MethodResponse<ReturnType<typeof createModelClient>, "get", "/api/workspaces">,
-    Readonly<Record<string, string | null>>
+    readonly string[]
   >
 >;
 type Upload = paths["/api/upload"]["post"]["requestBody"]["content"]["multipart/form-data"];

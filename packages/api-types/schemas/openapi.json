@@ -518,7 +518,7 @@
     "/api/workspaces": {
       "get": {
         "summary": "List Workspaces",
-        "description": "Available workspaces and their immutable study questions.\n\nX-Actions-Enabled reports whether the facade accepts new calls.",
+        "description": "List workspace IDs in sorted order.\n\nX-Actions-Enabled reports whether the facade accepts new calls.",
         "operationId": "list_workspaces_api_workspaces_get",
         "responses": {
           "200": {
@@ -526,16 +526,9 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                  "type": "array",
+                  "items": {
+                    "type": "string"
                   },
                   "title": "Response List Workspaces Api Workspaces Get"
                 }

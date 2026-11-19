@@ -6,17 +6,17 @@ import { LandingPageView } from "@/components/landing/landing-page-view";
 it("offers existing study navigation without creation or upload controls", () => {
   const html = renderToStaticMarkup(
     createElement(LandingPageView, {
-      data: { STUDY: "Does exercise improve sleep?" },
+      data: ["STUDY"],
       error: null,
       isLoading: false,
     }),
   );
   expect(html).toContain('href="/workspaces/STUDY"');
-  expect(html).toContain("Does exercise improve sleep?");
+  expect(html).toContain(">STUDY</a>");
   expect(html).not.toMatch(/<(?:input|textarea|form|button)\b/);
   const empty = renderToStaticMarkup(
     createElement(LandingPageView, {
-      data: {},
+      data: [],
       error: null,
       isLoading: false,
     }),

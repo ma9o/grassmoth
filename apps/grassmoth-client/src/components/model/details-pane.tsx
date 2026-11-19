@@ -1,11 +1,11 @@
 import type { TimelineRevision } from "@grassmoth/api-types";
-import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { Button } from "@/components/ui/button";
 import { type EntityPresentation, resolveEntity } from "@/lib/model-asset/entities";
-import { constructEquation, observationEquation } from "@/lib/model-asset/equations";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import type { EntitySelection } from "@/lib/model-asset/selection";
 import { humanize } from "@/lib/model-asset/selection";
+import { cn } from "@/lib/utils";
+import { AuthoredEquations } from "./authored-equations";
 import { DefinitionContext } from "./definition-context";
 import { Hint, OwnerLink, Section } from "./scope-primitives";
 import { ConstructScope, IdentificationFinding } from "./scopes/construct-scope";
@@ -44,26 +44,6 @@ function ModelScope({
     return <ModelComparisonDetails context={context} />;
   }
   const identification = context.modelSnapshot.identification;
-  const equations = [
-    ...context.entities.constructs.flatMap((construct) => {
-      const equation = constructEquation(construct, context.entities);
-      return equation
-        ? [
-            {
-              id: construct.id,
-              label: `${construct.name} · ${equation.title}`,
-              latex: equation.latex,
-            },
-          ]
-        : [];
-    }),
-    ...context.entities.indicators.flatMap((indicator) => {
-      const latex = observationEquation(indicator, context.entities);
-      return latex
-        ? [{ id: indicator.observation.id, label: indicator.observation.name, latex }]
-        : [];
-    }),
-  ];
 
   return (
     <>
@@ -102,19 +82,7 @@ function ModelScope({
           })}
         </Section>
       )}
-      {equations.length > 0 && (
-        <Section title="Authored equations" wide>
-          {equations.map(({ id, label, latex }) => (
-            <div key={id} className="min-w-0 space-y-2 border-b pb-2">
-              <Hint>{humanize(label)}</Hint>
-              <div className="overflow-x-auto pb-2">
-                <Katex latex={latex} />
-              </div>
-            </div>
-          ))}
-        </Section>
-      )}
-      {!identification && equations.length === 0 && (
+      {!identification && context.entities.constructs.length === 0 && (
         <Hint>No identification report or authored equations available.</Hint>
       )}
     </>
@@ -155,11 +123,21 @@ function DetailsContent({
 }
 
 /**
- * The state the selected action left, in depth. With a graph part selected it shows that part.
- * With nothing selected it shows the model-wide state that action produced, and only that:
+ * The scope's sections flow down the pane, then across it. The box itself flows vertically and
+ * its sections flow back: only then is it as wide as the columns it holds, where a wrapping
+ * column flexbox keeps the width of one. The equations take the width that leaves.
+ */
+const SCOPE =
+  "relative flex min-h-0 flex-row flex-wrap content-start items-start gap-x-3 gap-y-[18px] overflow-x-auto pb-2 [writing-mode:vertical-lr] [&>*]:[writing-mode:horizontal-tb] [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto";
+
+/**
+ * The state the selected action left, in depth. It leads with the model in text: the authored
+ * equations stay beside every scope, take all the width the scope leaves, mark the selected part
+ * and navigate as the graph does. With a graph part selected the rest shows that part. With
+ * nothing selected it shows the model-wide state that action produced, and only that:
  * - edit_model: the model as specified, meaning its checks against the question, how the question
- *   is identified, the equations, and the evidence of its predictive checks for every indicator
- *   under the laws the model holds.
+ *   is identified, and the evidence of its predictive checks for every indicator under the laws
+ *   the model holds.
  * - prepare_data: the panel as a whole, meaning every variable's observations over time and the
  *   dataset-level issues.
  * - fit: the fitted model as a whole, meaning predictive calibration, latent mixing and the
@@ -185,6 +163,9 @@ export function DetailsPane({
   readonly tick: TimelineRevision | undefined;
 }) {
   const entity = selection ? resolveEntity(context.entities, selection) : null;
+  const model = context.modelSnapshot.dynamical_model_spec;
+  const text = model && context.entities.constructs.length > 0 ? model : null;
+  const related = entity && entity.relationships.length > 0 ? entity : null;
   return (
     <section
       aria-label="Model details"
@@ -207,12 +188,25 @@ export function DetailsPane({
         )}
         <PaneToggle title="model state" />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-        {entity && <DefinitionContext entity={entity} onSelect={context.select} />}
+      <div className="flex min-h-0 flex-1 gap-3 p-3">
+        {text && (
+          <div className="flex min-h-0 min-w-[440px] flex-1 border-r pr-3 pb-2 [&>section]:max-h-full [&>section]:w-full [&>section>div:last-child]:overflow-y-auto">
+            <AuthoredEquations model={text} context={context} selection={selection} />
+          </div>
+        )}
         <div
           key={selection?.id ?? tick?.record.seq}
-          className="flex min-h-0 flex-1 flex-col flex-wrap content-start items-start gap-x-[18px] gap-y-3 overflow-x-auto pb-2 [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto"
+          className={cn(
+            SCOPE,
+            text ? "max-w-[calc(100%-464px)] flex-none" : "flex-1",
+            related && "pt-7",
+          )}
         >
+          {related && (
+            <div className="absolute top-0 left-0">
+              <DefinitionContext entity={related} onSelect={context.select} />
+            </div>
+          )}
           <DetailsContent
             selection={selection}
             entity={entity}

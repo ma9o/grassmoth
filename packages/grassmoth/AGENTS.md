@@ -37,7 +37,7 @@ Name types by the role their values serve. Python contracts and generated TypeSc
 
 ## Scientific model
 
-- Never switch GPU computation to float64; GPU work stays in float32.
+- Everything is float32, on GPU and CPU alike: library code, tests, checks and experiments. Never enable x64 or compute in float64, including for a reference, a replay or an oracle; compare float32 results with tolerances.
 
 - Represent structural assumptions as DAGs with explicit latent confounders. ADMGs are only for internal projection into y0's identification algorithm, never user-facing.
 
@@ -50,3 +50,15 @@ Name types by the role their values serve. Python contracts and generated TypeSc
 - Production posteriors, all diagnostics, posterior-predictive checks, and counterfactual/predictive outputs must use the exact engines in [docs/assumptions.md](../../docs/assumptions.md#model-class).
 - [test_no_linearized_likelihood.py](tests/models/ssm/test_no_linearized_likelihood.py) enforces the first rule: it fails if a linearized likelihood backend appears anywhere in production source.
 - Every tuning constant and default that shapes sampling or its diagnostics in [inference](src/grassmoth/models/ssm/inference) and [sampler settings](src/grassmoth/artifacts/sampling.py) states its source in code, because comment sweeps remove `#` comments. A setting uses its `Field(description=...)`, a module constant uses `Annotated[T, Field(description=...)]`, and a number inside a computation moves to a named constant or the docstring of the function that owns it. The source is a paper's section or algorithm and where we differ, our measurement (what was compared and the result), or `Heuristic:` when no paper or [recorded benchmark](../../benchmarks/suite/notes.md) sets it. Check each citation against the paper itself; [docs/papers](../../docs/papers) lists the main ones.
+
+## Sampler design
+
+Judge every design for the [exact-posterior sampler](../../docs/assumptions.md#inference-policy) against four principles from the papers it implements, [Corenflos 2025, v4][c25] and [Corenflos & Finke 2024, v1][cf24]. When proposing or evaluating a design, state which principles it follows and which it breaks.
+
+- **Integrate the path out of the parameter move.** Alternating between the path and the parameters given the path mixes slowly when the two are correlated, however good the conditional sampler. The parameter move marginalizes the path instead of conditioning on it ([C25][c25] abstract, §1, §4).
+- **Keep the parameter ensemble small.** More candidates per move are not the remedy: the paper uses two, citing the limits of ensemble samplers for static parameters ([C25][c25] §4, §5).
+- **Use the time structure.** Gradient or preconditioned moves that treat the whole path as one block ignore that states decorrelate over time, and break down as the series grows. Path updates propose and select per time step with particles; gradients belong inside those per-step proposals ([CF24][cf24] §1.2, §1.3).
+- **Build on conditional SMC, not pseudo-marginal acceptance.** Marginal parameter moves come from a conditional particle filter with backward sampling, which stays stable as observations accumulate, not from accepting or rejecting on noisy likelihood estimates ([C25][c25] §1, §5).
+
+[c25]: https://arxiv.org/abs/2505.04611v4
+[cf24]: https://arxiv.org/abs/2401.14868v1

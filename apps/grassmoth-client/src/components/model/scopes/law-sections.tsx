@@ -13,7 +13,7 @@ import { LawChart } from "@/components/charts/law-chart";
 import { useInferenceReport } from "@/lib/hooks/use-inference-report";
 import { useParameterDraws } from "@/lib/hooks/use-visuals";
 import type { CoefficientUse } from "@/lib/model-accessors";
-import { type LawCurve, lawCurves, lawLabel } from "@/lib/model-asset/laws";
+import { intervalText, type LawCurve, lawCurves, lawLabel } from "@/lib/model-asset/laws";
 import type { DrawColumnView } from "@/lib/model-asset/result-values";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
@@ -21,10 +21,6 @@ import { distributionText } from "@/lib/utils/distribution-format";
 import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
 import { Reasoning } from "./reasoning";
 import { EmpiricalPlot, SimulationHistory } from "./recorded-history";
-
-function interval(days: number | "model_clock"): string {
-  return days === "model_clock" ? "model clock tick" : `${days} d`;
-}
 
 /** Only scale changes and missing priors need words; the legend names the curves. */
 function lawHint(curve: LawCurve): string | null {
@@ -35,10 +31,10 @@ function lawHint(curve: LawCurve): string | null {
   }
   const transform = curve.parameter.transform;
   if (transform.kind === "dt_persistence_to_ct_decay") {
-    return `Authored as persistence per ${interval(transform.interval_days)}; a fit reports decay rates.`;
+    return `Authored as persistence per ${intervalText(transform.interval_days)}; a fit reports decay rates.`;
   }
   if (transform.kind === "dt_effect_to_ct_rate") {
-    return `Authored as the effect over ${interval(transform.interval_days)}; a fit reports rates per day.`;
+    return `Authored as the effect over ${intervalText(transform.interval_days)}; a fit reports rates per day.`;
   }
   return null;
 }

@@ -153,16 +153,22 @@ def rm_tree(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
-def listdir(path: str) -> list[str]:
+def listdir(path: str, *, directories_only: bool = False) -> list[str]:
     """List entries in *path*. Returns full paths/URIs."""
     if is_remote():
         fs = get_fs()
-        entries = fs.ls(path, detail=False) if fs.exists(path) else []
+        if not fs.exists(path):
+            return []
+        entries = [
+            entry["name"]
+            for entry in fs.ls(path, detail=True)
+            if not directories_only or entry["type"] == "directory"
+        ]
         return [f"s3://{e}" if not e.startswith("s3://") else e for e in entries]
     p = Path(path)
     if not p.is_dir():
         return []
-    return [str(child) for child in p.iterdir()]
+    return [str(child) for child in p.iterdir() if not directories_only or child.is_dir()]
 
 
 def walk_files(path: str) -> list[str]:

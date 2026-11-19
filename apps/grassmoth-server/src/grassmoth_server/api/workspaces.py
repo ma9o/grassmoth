@@ -1,7 +1,5 @@
 """HTTP adapter for public workspace discovery."""
 
-from collections.abc import Mapping
-
 from fastapi import APIRouter, Response
 
 from grassmoth_server.study import workspaces
@@ -10,9 +8,9 @@ from grassmoth_server.study.calls import actions_enabled
 workspaces_router = APIRouter(prefix="/api")
 
 
-@workspaces_router.get("/workspaces", response_model=Mapping[str, str | None])
-def list_workspaces(response: Response) -> Mapping[str, str | None]:
-    """Available workspaces and their immutable study questions.
+@workspaces_router.get("/workspaces")
+def list_workspaces(response: Response) -> tuple[str, ...]:
+    """List workspace IDs in sorted order.
 
     X-Actions-Enabled reports whether the facade accepts new calls.
     """

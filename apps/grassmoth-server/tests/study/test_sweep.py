@@ -105,6 +105,8 @@ def test_startup_opens_no_studies_and_old_studies_fail_only_when_read(monkeypatc
     StudyRepository("old").repo.config["grassmoth.format"] = 31
     with TestClient(app) as client:
         assert client.get("/api/docs").status_code == 200
+        assert client.get("/api/workspaces").json() == ["current", "old"]
         assert client.get("/api/studies/current/timeline").status_code == 200
-        with pytest.raises(ValueError, match="incompatible storage format"):
-            client.get("/api/studies/old/timeline")
+        response = client.get("/api/studies/old/timeline")
+        assert response.status_code == 400
+        assert "incompatible storage format" in response.json()["detail"]

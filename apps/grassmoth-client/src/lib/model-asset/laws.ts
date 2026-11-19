@@ -94,6 +94,11 @@ export function lawCurves(
   });
 }
 
+/** The interval over which a persistence or interval-effect law is authored. */
+export function intervalText(days: number | "model_clock"): string {
+  return days === "model_clock" ? "model clock tick" : `${days} d`;
+}
+
 /** Authored persistence and interval-effect laws describe another quantity than their role. */
 export function lawLabel(curve: LawCurve): string {
   if (curve.kind === "authored") {

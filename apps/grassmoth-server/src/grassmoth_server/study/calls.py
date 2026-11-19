@@ -43,7 +43,7 @@ from grassmoth_server.actions.contracts.timeline import (
 from grassmoth_server.actions.input_resolution import resolve_action_inputs
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
-from grassmoth_server.study.errors import StudyLookupError
+from grassmoth_server.study.errors import IncompatibleStudyFormatError, StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied, Attempt, StudyRevision, record_dependencies
@@ -322,7 +322,11 @@ async def get_timeline(
     if isinstance(parsed, StudyError):
         return parsed
     workspace_id = parsed
-    records = await asyncio.to_thread(StudyRepository(workspace_id).attempts)
+    try:
+        repository = StudyRepository(workspace_id)
+    except IncompatibleStudyFormatError as exc:
+        return StudyError(code="invalid_request", detail=str(exc))
+    records = await asyncio.to_thread(repository.attempts)
     attempts = []
     for revision in records:
         record = revision.record

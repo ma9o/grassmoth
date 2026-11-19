@@ -5,7 +5,7 @@ import { apiClient } from "@/lib/api/client";
 
 describe("generated facade client", () => {
   it("returns the endpoint's response and accepts custom headers", async () => {
-    const body = { HEALTHDEMO: "Why?" };
+    const body = ["HEALTHDEMO"];
     const fetch = vi.fn<(request: Request) => Promise<Response>>(() =>
       Promise.resolve(Response.json(body)),
     );

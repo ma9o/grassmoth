@@ -428,7 +428,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/upload" \
 
 ### GET `/api/workspaces`
 
-Available workspaces and their immutable study questions.
+List workspace IDs in sorted order.
 
 X-Actions-Enabled reports whether the facade accepts new calls.
 

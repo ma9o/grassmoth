@@ -170,7 +170,7 @@ export interface paths {
         };
         /**
          * List Workspaces
-         * @description Available workspaces and their immutable study questions.
+         * @description List workspace IDs in sorted order.
          *
          *     X-Actions-Enabled reports whether the facade accepts new calls.
          */
@@ -8250,9 +8250,7 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    readonly "application/json": {
-                        readonly [key: string]: string | null;
-                    };
+                    readonly "application/json": readonly string[];
                 };
             };
         };

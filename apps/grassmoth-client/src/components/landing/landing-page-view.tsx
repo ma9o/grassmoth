@@ -1,4 +1,3 @@
-import type { WorkspaceList } from "@/lib/server/workspaces";
 import { WorkspacesRail } from "./workspaces-rail";
 
 export function LandingPageView({
@@ -6,7 +5,7 @@ export function LandingPageView({
   error,
   isLoading,
 }: {
-  readonly data: WorkspaceList | undefined;
+  readonly data: readonly string[] | undefined;
   readonly error: string | null;
   readonly isLoading: boolean;
 }) {

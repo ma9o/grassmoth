@@ -35,7 +35,11 @@ export async function readStudyJournal(
     ...(signal === undefined ? {} : { signal }),
   });
   if (data === undefined) {
-    throw new Error(`Cannot read the journal (${response.status}): ${JSON.stringify(error)}`);
+    const message =
+      response.status === 400 && typeof error.detail === "string"
+        ? error.detail
+        : `Cannot read the journal (${response.status}): ${JSON.stringify(error)}`;
+    throw new Error(message, { cause: response.status });
   }
   const seq = Math.max(0, ...data.attempts.map((entry) => entry.record.seq));
   return {
@@ -60,7 +64,9 @@ export function useStudyJournal(workspaceId: string) {
         signal,
       ),
     refetchInterval: (query) =>
-      journalPollIntervalMs(!query.state.data || query.state.data.running.length > 0),
+      query.state.error?.cause === 400
+        ? false
+        : journalPollIntervalMs(!query.state.data || query.state.data.running.length > 0),
     staleTime: 0,
     gcTime: 0,
     retry: false,

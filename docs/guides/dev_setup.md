@@ -19,31 +19,23 @@ bun install --frozen-lockfile
 uv sync --frozen --all-packages --group dev
 # Optional: --group gpu on Linux
 
-# 3. Environment
-cp .env.example.dev .env
-# Fill in OPENROUTER_API_KEY (required)
-# Optional: EXA_API_KEY, TOOL_SERVER_URL
-
-# 4. Code generation
+# 3. Code generation
 bun run codegen
 ```
 
-Edit `.env` and fill in at minimum:
+For optional settings, copy `.env.example.dev` to `.env` at the repository root.
 
-- `OPENROUTER_API_KEY` — the ambient credential for semantic measurement extraction (the only key mechanism; there is no per-user handoff)
-
-Optional keys:
-
+- `OPENROUTER_API_KEY` — set this when running semantic measurement extraction
 - `EXA_API_KEY` — literature search
 - `TOOL_SERVER_URL` — override the study facade / tool server URL (default `http://localhost:8100`)
 - `TEMPORAL_ADDRESS` — override the Temporal dev server address (default `localhost:7233`)
 - `READ_ONLY_FACADE=1` — serve reads only (what the hosted viewer's facade sets)
 
-### 4. Generate API Artifacts and Docs
+### 3. Generate API Artifacts and Docs
 
 Generate committed API artifacts and documentation from Python sources following the [API generation workflow](../../packages/api-types/AGENTS.md#code-generation) and [documentation generation guidance](../AGENTS.md#generated-documentation).
 
-### 5. Start development servers
+### 4. Start development servers
 
 ```bash
 # From repo root — starts all apps via Turbo:

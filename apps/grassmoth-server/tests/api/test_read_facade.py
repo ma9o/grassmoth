@@ -4,7 +4,7 @@ import msgpack
 import pytest
 from fastapi.testclient import TestClient
 
-from grassmoth.artifacts.identity import ConstructId, GitOid
+from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import EditModelInput
@@ -163,21 +163,18 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
     )
 
 
-def test_workspaces_endpoint_lists_study_questions(monkeypatch, tmp_path):
-
-    monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
-    monkeypatch.setenv("READ_ONLY_FACADE", "1")
-
-    model_root(
-        "WS-LIST",
-        initial_model(question="does X cause Y?", outcome=ConstructId("construct:y")),
-    )
-
+def test_workspaces_endpoint_lists_only_workspace_directories(monkeypatch, tmp_path):
+    monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
+    (tmp_path / "WS-B").mkdir()
+    (tmp_path / "WS-A").mkdir()
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / "notes.txt").touch()
     client = TestClient(create_read_facade_app())
     response = client.get("/api/workspaces")
 
     assert response.status_code == 200
-    assert response.json() == {"WS-LIST": "does X cause Y?"}
+    assert response.json() == ["WS-A", "WS-B"]
+    assert not list(tmp_path.glob("*/history.git"))
 
 
 def test_upload_endpoint_stages_input_file(monkeypatch, tmp_path):

@@ -6,6 +6,7 @@ from pathlib import Path
 import pygit2
 
 from grassmoth_server.storage import paths as data_module
+from grassmoth_server.study.errors import IncompatibleStudyFormatError
 
 
 def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repository:
@@ -19,7 +20,7 @@ def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repos
             "grassmoth.format" not in repository.config
             or repository.config.get_int("grassmoth.format") != 33
         ):
-            raise ValueError(
+            raise IncompatibleStudyFormatError(
                 "This study uses an incompatible storage format. Create a new study for format 33."
             )
         return repository

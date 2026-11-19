@@ -2,19 +2,16 @@
 
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { WorkspaceList } from "@/lib/server/workspaces";
 
 export function WorkspacesRail({
-  data,
+  data: workspaces = [],
   error,
   isLoading,
 }: {
-  readonly data: WorkspaceList | undefined;
+  readonly data: readonly string[] | undefined;
   readonly error: string | null;
   readonly isLoading: boolean;
 }) {
-  const workspaces = Object.entries(data ?? {});
-
   return (
     <div className="w-full max-w-2xl mx-auto space-y-3">
       {isLoading && (
@@ -37,40 +34,23 @@ export function WorkspacesRail({
 
       {!isLoading &&
         !error &&
-        workspaces.map(([workspaceId, question]) => (
-          <WorkspaceCard key={workspaceId} workspaceId={workspaceId} question={question} />
+        workspaces.map((workspaceId) => (
+          <Link
+            key={workspaceId}
+            href={`/workspaces/${workspaceId}`}
+            className="block rounded-lg border bg-card px-4 py-3 font-mono text-sm font-semibold shadow-sm transition-colors hover:bg-accent/50"
+          >
+            {workspaceId}
+          </Link>
         ))}
     </div>
   );
 }
 
-function WorkspaceCard({
-  workspaceId,
-  question,
-}: {
-  readonly workspaceId: string;
-  readonly question: string | null;
-}) {
-  return (
-    <Link
-      href={`/workspaces/${workspaceId}`}
-      className="block rounded-lg border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-accent/50"
-    >
-      <p className="font-mono text-xs font-semibold tracking-wider text-muted-foreground">
-        {workspaceId}
-      </p>
-      <p className="mt-1 text-sm leading-snug text-foreground">
-        {question ?? "Question not available yet."}
-      </p>
-    </Link>
-  );
-}
-
 function SkeletonCard() {
   return (
-    <div className="rounded-lg border bg-card px-4 py-3 shadow-sm space-y-2">
-      <Skeleton className="h-3 w-24" />
-      <Skeleton className="h-4 w-full" />
+    <div className="rounded-lg border bg-card px-4 py-3 shadow-sm">
+      <Skeleton className="h-5 w-32" />
     </div>
   );
 }

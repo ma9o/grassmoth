@@ -1,29 +1,16 @@
 """Public workspace discovery and input-file staging."""
 
-from collections.abc import Mapping
-
 from grassmoth_server.actions.contracts.polling import StudyError
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.calls import actions_enabled, parse_workspace_id
-from grassmoth_server.study.persistence.history import StudyRepository
-from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 
 
-def list_workspaces() -> Mapping[str, str | None]:
-    """Read available workspace names and their retained study questions."""
-    workspaces = {}
-    for entry in sorted(storage.listdir(data_module.data_root())):
-        workspace_id = entry.rstrip("/").rsplit("/", 1)[-1]
-        if not workspace_id or workspace_id.startswith("."):
-            continue
-        model = StudyRepository(workspace_id).state().get("model")
-        workspaces[workspace_id] = (
-            read_model(ArtifactStore(workspace_id), model.revision).question
-            if model is not None
-            else None
-        )
-    return workspaces
+def list_workspaces() -> tuple[str, ...]:
+    """List workspace directories without opening their study histories."""
+    entries = storage.listdir(data_module.data_root(), directories_only=True)
+    names = (entry.rstrip("/").rsplit("/", 1)[-1] for entry in entries)
+    return tuple(sorted(name for name in names if not name.startswith(".")))
 
 
 def stage_input(workspace_id: str, filename: str, payload: bytes) -> str | StudyError:
