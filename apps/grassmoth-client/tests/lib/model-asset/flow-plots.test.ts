@@ -167,6 +167,68 @@ describe("local distributions at model seams", () => {
     expect(values(plots.indicators.get(indicator))).toEqual([[7], [8], [13]]);
   });
 
+  it("draws a known input's authored path as held steps, while its readers stay at the first day", () => {
+    const model = authoredModel();
+    const definition = model.constructs[x];
+    if (!definition) throw new Error("Missing test construct.");
+    const input: ConstructId = "construct:00000000000000000008";
+    const path = "distribution:00000000000000000008" as const;
+    const edge = "edge:00000000000000000008" as const;
+    const plots = modelFlowPlots({
+      ...model,
+      constructs: {
+        ...model.constructs,
+        [input]: {
+          ...definition,
+          name: "input",
+          role: "exogenous",
+          dynamics: {},
+          coefficients: [],
+          indicators: {},
+          distribution: path,
+        },
+      },
+      edges: {
+        [edge]: {
+          cause: input,
+          effect: x,
+          mechanisms: {
+            "mechanism:00000000000000000008": {
+              kind: "drift",
+              expression: binary("multiply", literal(2), { kind: "state", construct_id: input }),
+            },
+          },
+          reasoning: { text: "The input drives the state.", reference_urls: [] },
+        },
+      },
+      distributions: {
+        ...model.distributions,
+        [path]: { distribution: "Delta", params: { v: { array: [48, 40, 45] }, event_dim: 1 } },
+      },
+      law_layouts: {
+        [path]: {
+          parameters: [],
+          constructs: [input],
+          time_points: [0, 1, 1.5],
+          time_origin: "2026-01-01T00:00:00Z",
+          labels: {},
+        },
+      },
+    });
+    // Each step repeats its day, and the last value runs to the end of the two-day model window.
+    expect(plots.constructs.get(input)).toMatchObject({
+      times: [0, 1, 1, 1.5, 1.5, 2],
+      rows: [[48, 48, 40, 40, 45, 45]],
+      retained: false,
+    });
+    const distinct = (plot: FlowPlot | undefined) => [
+      ...new Set(values(plot).map((row) => row.join(","))),
+    ];
+    expect(distinct(plots.inputs.get(input))).toEqual(["48"]);
+    expect(distinct(plots.edges.get(edge))).toEqual(["96"]);
+    expect(values(plots.constructs.get(x)).every((row) => row.length === 1)).toBe(true);
+  });
+
   it("applies authored interval transforms, while conditioned laws remain on their native scale", () => {
     const model = authoredModel();
     const specification = model.parameters[theta];

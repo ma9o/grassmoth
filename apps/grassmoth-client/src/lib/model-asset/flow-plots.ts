@@ -1,5 +1,6 @@
 import type {
   ConstructId,
+  ConstructSpec,
   DynamicalModelSpec,
   DynamicsMechanismSpec,
   EdgeId,
@@ -19,8 +20,10 @@ import {
 } from "./expression-evaluation";
 import { displayProbability } from "./law-draws";
 import { measurementDraw } from "./measurement-draws";
-import { type ModelDraws, modelDraws } from "./model-draws";
+import { durationDays, type ModelDraws, modelDraws } from "./model-draws";
 import { humanize, mechanismName } from "./selection";
+
+const DAY_MS = 86_400_000;
 
 export type FlowPlot =
   | {
@@ -36,7 +39,10 @@ export type FlowPlot =
   | { readonly kind: "unavailable"; readonly label: string; readonly reason: string };
 
 export interface ModelFlowPlots {
+  /** Each construct's own law. A known input reads as its authored path, on every version. */
   readonly constructs: ReadonlyMap<ConstructId, FlowPlot>;
+  /** Each state as the mechanisms read it: at the times their outputs are drawn. */
+  readonly inputs: ReadonlyMap<ConstructId, FlowPlot>;
   readonly intrinsic: ReadonlyMap<ConstructId, FlowPlot>;
   readonly edges: ReadonlyMap<EdgeId, FlowPlot>;
   /** Each mechanism alone: one term of its effect's drift. */
@@ -65,6 +71,35 @@ export function expressionStates(expressions: readonly Expression[]): readonly C
   };
   for (const expression of expressions) visit(expression);
   return [...ids];
+}
+
+/** The model window's final day, on a time axis with the given origin. */
+function windowEnd(model: DynamicalModelSpec, origin: string): number {
+  const horizon = durationDays(model.time.window.horizon);
+  if (origin === "relative") return horizon;
+  return (Date.parse(model.time.window.start) - Date.parse(origin)) / DAY_MS + horizon;
+}
+
+/**
+ * A held path as the line it is: each value runs from its day to the next change, where the
+ * line steps and the day appears twice, and the last value runs to `end`.
+ */
+function heldLine(
+  days: readonly number[],
+  values: readonly number[],
+  end: number,
+): { readonly days: readonly number[]; readonly values: readonly number[] } {
+  const points = days.flatMap((day, index) => {
+    const value = values[index];
+    const previous = values[index - 1];
+    if (value === undefined) return [];
+    return previous === undefined
+      ? [[day, value] as const]
+      : [[day, previous] as const, [day, value] as const];
+  });
+  const last = points.at(-1);
+  const line = last && end > last[0] ? [...points, [end, last[1]] as const] : points;
+  return { days: line.map(([day]) => day), values: line.map(([, value]) => value) };
 }
 
 const cache = new WeakMap<DynamicalModelSpec, ModelFlowPlots>();
@@ -120,9 +155,11 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
     if (mechanisms.length === 0) {
       return { kind: "unavailable", label, reason: "No mechanism assigned." };
     }
+    // An output drawn at one day names that day: a known input it reads shows its whole path.
+    const at = draws.times.length === 1 ? readingTime : "";
     return plot(
       label,
-      `Model law ${expressionStates(mechanisms.map((mechanism) => mechanism.expression)).some((id) => !model.constructs[id]?.distribution) ? "at the initial state" : "at the saved state coordinates"}; contribution in ${name(target)} units per day.`,
+      `${at}Model law ${expressionStates(mechanisms.map((mechanism) => mechanism.expression)).some((id) => !model.constructs[id]?.distribution) ? "at the initial state" : "at the saved state coordinates"}; contribution in ${name(target)} units per day.`,
       (inputs) =>
         mechanisms.reduce(
           (sum, mechanism) =>
@@ -134,20 +171,54 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
         ),
     );
   };
+  /**
+   * A known input's authored path over the model window. The path is the model's own law, so it
+   * reads over time on every version, while a state that still waits for a simulation shows only
+   * its initial law. A fixed path is one line, not one per draw.
+   */
+  const knownPath = (construct: ConstructSpec): FlowPlot | null => {
+    const layout = construct.distribution ? model.law_layouts[construct.distribution] : undefined;
+    if (construct.role !== "exogenous" || !layout || layout.time_points.length === 0) return null;
+    const shift =
+      draws.timeOrigin === "relative" || layout.time_origin === "relative"
+        ? 0
+        : (Date.parse(layout.time_origin) - Date.parse(draws.timeOrigin)) / DAY_MS;
+    const changes = layout.time_points.map((point) => point + shift);
+    const sampled = plot(
+      `${name(construct.id)}: state law`,
+      "The authored trajectory law: each value holds until the next point, and the last to the end of the model window.",
+      (inputs) => inputs.state(construct.id),
+      { times: changes },
+    );
+    if (sampled.kind === "unavailable") return sampled;
+    const end = windowEnd(model, draws.timeOrigin);
+    const lines = sampled.rows.map((values) => heldLine(changes, values, end));
+    const [first] = lines;
+    if (!first) return null;
+    const fixed = lines.every((line) =>
+      line.values.every((value, index) => value === first.values[index]),
+    );
+    return {
+      ...sampled,
+      times: first.days,
+      rows: (fixed ? [first] : lines).map((line) => line.values),
+      retained: false,
+    };
+  };
+  const states = constructs.map((construct) => {
+    const read = plot(
+      `${name(construct.id)}: ${construct.distribution ? "state law" : "initial state law"}`,
+      construct.distribution
+        ? "State draws from the saved model law."
+        : "Initial state distribution; later trajectories come from simulate.",
+      (inputs) => inputs.state(construct.id),
+      { times: construct.distribution ? draws.times : draws.times.slice(0, 1) },
+    );
+    return { id: construct.id, read, own: knownPath(construct) ?? read };
+  });
   const view: ModelFlowPlots = {
-    constructs: new Map(
-      constructs.map((construct) => [
-        construct.id,
-        plot(
-          `${name(construct.id)}: ${construct.distribution ? "state law" : "initial state law"}`,
-          construct.distribution
-            ? "State draws from the saved model law."
-            : "Initial state distribution; later trajectories come from simulate.",
-          (inputs) => inputs.state(construct.id),
-          { times: construct.distribution ? draws.times : draws.times.slice(0, 1) },
-        ),
-      ]),
-    ),
+    constructs: new Map(states.map(({ id, own }) => [id, own])),
+    inputs: new Map(states.map(({ id, read }) => [id, read])),
     intrinsic: new Map(
       constructs.map((construct) => [
         construct.id,

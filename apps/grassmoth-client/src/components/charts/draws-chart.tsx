@@ -55,7 +55,7 @@ export interface Threshold {
 
 export interface DrawsChartProps {
   readonly label: string;
-  /** Model days, increasing. */
+  /** Model days, never decreasing; a held path repeats the day of each step. */
   readonly times: readonly number[];
   /** Pinned UTC origin of model day zero; without one the axis counts days. */
   readonly timeOrigin: string | null;

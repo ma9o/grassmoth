@@ -36,21 +36,27 @@ export interface ModelDraws {
   readonly inputs: (draw: number, time: number, indicator?: IndicatorSpec) => ExpressionInputs;
 }
 
+const DURATION_UNIT_DAYS: Readonly<Record<string, number>> = {
+  s: 1 / 86_400,
+  m: 1 / 1440,
+  h: 1 / 24,
+  d: 1,
+  w: 7,
+};
+
+/** A saved duration in days: the API spells one as a count and a unit of s, m, h, d or w. */
+export function durationDays(duration: string): number {
+  const unit = DURATION_UNIT_DAYS[duration.slice(-1)];
+  if (unit === undefined) throw new Error(`Invalid saved duration ${duration}.`);
+  return Number(duration.slice(0, -1)) * unit;
+}
+
 function intervalDays(transform: ParameterTransformSpec, model: DynamicalModelSpec): number {
   if (!("interval_days" in transform)) throw new Error("This transform has no interval.");
   if (transform.interval_days !== "model_clock") return transform.interval_days;
   const clock = model.time.step;
   if (!clock) throw new PlotUnavailable("The model clock has not been assigned.");
-  const units: Readonly<Record<string, number>> = {
-    s: 1 / 86_400,
-    m: 1 / 1440,
-    h: 1 / 24,
-    d: 1,
-    w: 7,
-  };
-  const unit = units[clock.slice(-1)];
-  if (unit === undefined) throw new Error("Invalid saved model clock.");
-  return Number(clock.slice(0, -1)) * unit;
+  return durationDays(clock);
 }
 
 /** The declared correlation transform truncates its authored support, rather than clipping draws. */

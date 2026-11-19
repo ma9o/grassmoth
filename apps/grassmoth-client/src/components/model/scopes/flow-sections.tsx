@@ -24,7 +24,10 @@ export function FlowSection({
   );
 }
 
-/** The state distributions entering the selected expression, on the same draw axis as its output. */
+/**
+ * The state distributions entering the selected expression, on the same draw axis as its output.
+ * A known input enters at the times the output is drawn, not as its whole authored path.
+ */
 export function FlowInputs({
   context,
   expressions,
@@ -41,7 +44,7 @@ export function FlowInputs({
   return (
     <Section title="State inputs" wide>
       {ids.map((id) => {
-        const plot = flows.constructs.get(id);
+        const plot = flows.inputs.get(id);
         const construct = context.entities.constructById.get(id);
         return (
           <div key={id} className="space-y-1">
