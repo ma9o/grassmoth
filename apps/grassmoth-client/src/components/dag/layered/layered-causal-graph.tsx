@@ -24,7 +24,7 @@ import { ExogenousChip } from "./layered-exogenous-chip";
 import { FunctionNode, SpecConnection } from "./layered-function-nodes";
 import { assignmentLabel, graphButton, plotTitle } from "./layered-graph-marks";
 import { IndicatorNodes } from "./layered-indicator-nodes";
-import { useSpecGlyphs } from "./layered-spec-glyphs";
+import type { SpecView } from "./layered-spec-glyphs";
 import { type ConstructState, StateColumn, type StateView } from "./layered-state-column";
 
 export interface LayeredCausalGraphProps extends LayeredGraphOptions {
@@ -121,9 +121,10 @@ export function LayeredCausalGraph({
   const name = (id: ConstructSpec["id"]) => humanize(entities.constructById.get(id)?.name ?? id);
   const firstArrow = new Set<string>();
   const timeOrigin = simulationResult?.evidence.time_origin ?? null;
+  const selectedKey = selection ? glyphKey(selection) : null;
   const selectNode = (node: EntitySelection) =>
-    onSelect(selection && glyphKey(selection) === glyphKey(node) ? null : node);
-  const spec = useSpecGlyphs(plots, selection, selectNode);
+    onSelect(selectedKey === glyphKey(node) ? null : node);
+  const spec: SpecView | null = plots ? { plots, selected: selectedKey, select: selectNode } : null;
   const view: StateView = {
     spec,
     geometry: stateGeometry(density),
@@ -214,18 +215,15 @@ export function LayeredCausalGraph({
           aria-label="Layered causal graph"
         >
           <g transform={`translate(${CANVAS_PADDING},${CANVAS_PADDING})`}>
-            {authored &&
-              spec &&
-              authored.links.map((link) => (
-                <SpecConnection
-                  key={`${link.source}>${link.target}`}
-                  link={link}
-                  labels={authored.labels}
-                  focused={focused}
-                  spec={spec}
-                  selection={selection}
-                />
-              ))}
+            {authored?.links.map((link) => (
+              <SpecConnection
+                key={`${link.source}>${link.target}`}
+                link={link}
+                labels={authored.labels}
+                focused={focused}
+                selection={selection}
+              />
+            ))}
             {arrows.map((arrow) => {
               const carry = topology.carryMeta.get(arrow.id);
               if (carry) {
@@ -291,9 +289,7 @@ export function LayeredCausalGraph({
               const boxes = authored?.indicators.get(construct.id);
               const constructChange = difference.constructChanges.get(construct.id);
               const dimmed =
-                (!spec?.highlighted.has(construct.id) &&
-                  focused !== null &&
-                  !focused.constructs.has(construct.id)) ||
+                (focused !== null && !focused.constructs.has(construct.id)) ||
                 (dataDiff !== null && !compared(construct));
               const selected = selectedNode === construct.id;
               const select = () => selectNode({ kind: "construct", id: construct.id });
@@ -334,9 +330,6 @@ export function LayeredCausalGraph({
                       selected={selected}
                       dimmed={dimmed}
                       onSelect={select}
-                      onHover={(active) =>
-                        spec?.hover(active ? { kind: "construct", id: construct.id } : null)
-                      }
                       rows={authored ? null : meta.rows.map((row) => mechanismRow(construct, row))}
                     >
                       <StateColumn view={view} state={state} />

@@ -43,7 +43,6 @@ export function ConstructCard({
   selected,
   dimmed,
   onSelect,
-  onHover,
   rows,
   children,
 }: {
@@ -61,7 +60,6 @@ export function ConstructCard({
   readonly selected: boolean;
   readonly dimmed: boolean;
   readonly onSelect: () => void;
-  readonly onHover: (active: boolean) => void;
   readonly rows: ReactNode;
   readonly children: ReactNode;
 }) {
@@ -82,10 +80,6 @@ export function ConstructCard({
       {...graphButton(onSelect)}
       aria-pressed={selected}
       aria-label={humanize(construct.name)}
-      onPointerEnter={() => onHover(true)}
-      onPointerLeave={() => onHover(false)}
-      onFocus={() => onHover(true)}
-      onBlur={() => onHover(false)}
     >
       <DagNodeShell
         width={width}

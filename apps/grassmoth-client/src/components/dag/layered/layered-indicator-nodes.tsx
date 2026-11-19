@@ -7,12 +7,23 @@ import {
 import { DAG_COLORS } from "@/lib/dag/palette";
 import { glyphControls, type SpecView } from "./layered-spec-glyphs";
 
-function IndicatorNode({ box, spec }: { readonly box: IndicatorBox; readonly spec: SpecView }) {
+function IndicatorNode({
+  box,
+  spec,
+  dimmed,
+}: {
+  readonly box: IndicatorBox;
+  readonly spec: SpecView;
+  readonly dimmed: boolean;
+}) {
   const glyph = box.distribution;
+  const controls = glyphControls(spec, glyph);
+  const selected = controls["aria-pressed"];
   const lines = [...box.name, ...box.caption];
   return (
     <g
-      {...glyphControls(spec, glyph)}
+      {...controls}
+      opacity={dimmed && !selected ? 0.25 : 1}
       data-node-id={glyph.selection.id}
       transform={`translate(${box.x},${box.y})`}
       aria-label={`${glyph.label} reading distribution`}
@@ -22,9 +33,9 @@ function IndicatorNode({ box, spec }: { readonly box: IndicatorBox; readonly spe
         width={box.width}
         height={box.height}
         rx={7}
-        stroke={spec.lit(glyph) ? "var(--primary)" : DAG_COLORS.line}
+        stroke={selected ? "var(--primary)" : DAG_COLORS.line}
         fill="var(--card)"
-        strokeWidth={spec.lit(glyph) ? 1.8 : 1.2}
+        strokeWidth={selected ? 1.8 : 1.2}
       />
       <text x={10} y={16} fontFamily="ui-monospace, monospace">
         {lines.map((line, i) => (
@@ -69,10 +80,10 @@ export function IndicatorNodes({
   readonly dimmed: boolean;
 }) {
   return (
-    <g opacity={dimmed ? 0.25 : 1}>
+    <>
       {boxes.map((box) => (
-        <IndicatorNode key={box.distribution.selection.id} box={box} spec={spec} />
+        <IndicatorNode key={box.distribution.selection.id} box={box} spec={spec} dimmed={dimmed} />
       ))}
-    </g>
+    </>
   );
 }

@@ -23,19 +23,17 @@ export function FunctionNode({
   readonly failures: readonly string[];
 }) {
   const { glyph, mechanism } = box;
-  const lit = spec.lit(glyph);
+  const controls = glyphControls(spec, glyph);
+  const selected = controls["aria-pressed"];
   const several = glyph.slices.length > 1;
   const dimmed =
     focused &&
     !(mechanism ? focused.mechanisms.has(mechanism) : focused.constructs.has(glyph.construct));
   const focus: GraphFocus = mechanism ? { kind: "mechanism", id: mechanism } : glyph.selection;
-  const hover = (active: boolean) => {
-    spec.hover(active ? glyph.selection : null);
-    onFocus(active ? focus : null);
-  };
+  const hover = (active: boolean) => onFocus(active ? focus : null);
   return (
     <g
-      {...glyphControls(spec, glyph)}
+      {...controls}
       onPointerEnter={() => hover(true)}
       onPointerLeave={() => hover(false)}
       onFocus={() => hover(true)}
@@ -44,7 +42,7 @@ export function FunctionNode({
       data-function-id={box.id}
       data-indicator-arrow={mechanism ? undefined : glyph.selection.id}
       transform={`translate(${box.x},${box.y})`}
-      opacity={dimmed && !lit ? 0.25 : 1}
+      opacity={dimmed && !selected ? 0.25 : 1}
       aria-label={mechanism ? `Mechanism ${glyph.label}` : `Expected reading for ${glyph.label}`}
     >
       <title>{`${glyph.label} · ${glyph.units}`}</title>
@@ -53,8 +51,8 @@ export function FunctionNode({
         height={box.height}
         rx={5}
         fill={DAG_COLORS.col}
-        stroke={lit ? "var(--primary)" : DAG_COLORS.line}
-        strokeWidth={lit ? 1.8 : 1}
+        stroke={selected ? "var(--primary)" : DAG_COLORS.line}
+        strokeWidth={selected ? 1.8 : 1}
       />
       {box.name.map((line, i) => (
         <text
@@ -103,21 +101,17 @@ export function SpecConnection({
   link,
   labels,
   focused,
-  spec,
   selection,
 }: {
   readonly link: SpecLink;
   readonly labels: ReadonlyMap<string, string>;
   readonly focused: FocusedParts | null;
-  readonly spec: SpecView;
   readonly selection: EntitySelection | null;
 }) {
   const key = glyphKey(link.selection);
-  const glyph = spec.plots.get(key);
   const active = selection !== null && glyphKey(selection) === key;
   const lit =
     active ||
-    (!!glyph && spec.lit(glyph)) ||
     (focused !== null &&
       (link.mechanism
         ? focused.mechanisms.has(link.mechanism)
