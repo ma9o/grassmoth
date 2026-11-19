@@ -7,6 +7,7 @@ import type {
   ConstructId,
   ConstructSpec,
   DynamicalModelSpec,
+  DynamicsMechanismSpec,
   Expression,
   IndicatorSpec,
   ObservationLawSpec,
@@ -235,24 +236,28 @@ function typeset(entities: ModelEntities, expression: Expression): Typeset {
 }
 
 /** A potential contributes the negative of its gradient in the state it is declared on. */
-function typesetMechanism(
+export function mechanismEquation(
   entities: ModelEntities,
-  { mechanism }: MechanismTerm,
+  mechanism: DynamicsMechanismSpec,
   target: ConstructSpec,
-): Typeset {
+  afterPlus = false,
+): Equation {
   const expression = typeset(entities, mechanism.expression);
-  if (mechanism.kind === "drift") return expression;
-  return phrase(
-    [
-      symbol("−∂/∂"),
-      { kind: "state", construct: target },
-      symbol(" ["),
-      ...run(expression),
-      symbol("]"),
-    ],
-    LEVEL.product,
-    true,
-  );
+  const contribution =
+    mechanism.kind === "drift"
+      ? expression
+      : phrase(
+          [
+            symbol("−∂/∂"),
+            { kind: "state", construct: target },
+            symbol(" ["),
+            ...run(expression),
+            symbol("]"),
+          ],
+          LEVEL.product,
+          true,
+        );
+  return afterPlus && contribution.signed ? [run(contribution, true)] : contribution.phrases;
 }
 
 /** A law's arguments are its phrases; the first carries the law's name. */
@@ -272,7 +277,7 @@ function typesetLaw(
 }
 
 /** The response and the conditional law shown by the two measurement nodes. */
-function readingLine(
+export function readingLine(
   entities: ModelEntities,
   indicator: IndicatorSpec,
   split: boolean,
@@ -388,7 +393,10 @@ export interface ConstructEquations {
   readonly parameters: readonly ParameterLine[];
 }
 
-function coefficientLine(entities: ModelEntities, operand: CoefficientExpression): CoefficientLine {
+export function coefficientLine(
+  entities: ModelEntities,
+  operand: CoefficientExpression,
+): CoefficientLine {
   const [other] = operand.construct_ids;
   const partner = other === undefined ? null : entities.constructById.get(other);
   if (partner === undefined) throw new Error(`Coefficient references absent construct ${other}`);
@@ -418,7 +426,6 @@ function ownedExpressions(construct: ConstructSpec, terms: readonly MechanismTer
 export function modelEquations(
   model: DynamicalModelSpec,
   entities: ModelEntities,
-  splitReadings = false,
 ): readonly ConstructEquations[] {
   const order = readingOrder(entities.constructs, entities.edges, model.outcome);
   const rank = new Map(order.map((construct, index) => [construct.id, index] as const));
@@ -437,15 +444,10 @@ export function modelEquations(
     return {
       construct,
       law: stateLaw(model, construct),
-      terms: terms.map((term, index) => {
-        const contribution = typesetMechanism(entities, term, construct);
-        // Every term after the first follows a plus sign, so a leading minus takes brackets.
-        return {
-          term,
-          equation:
-            index > 0 && contribution.signed ? [run(contribution, true)] : contribution.phrases,
-        };
-      }),
+      terms: terms.map((term, index) => ({
+        term,
+        equation: mechanismEquation(entities, term.mechanism, construct, index > 0),
+      })),
       links: entities.edges
         .filter((edge) => edge.effect.id === construct.id && endsOf(edge, terms).length === 0)
         .toSorted((a, b) => (rank.get(a.cause.id) ?? 0) - (rank.get(b.cause.id) ?? 0))
@@ -455,9 +457,7 @@ export function modelEquations(
           return { edge, cause };
         }),
       coefficients: construct.coefficients.map((operand) => coefficientLine(entities, operand)),
-      readings: construct.indicators.map((indicator) =>
-        readingLine(entities, indicator, splitReadings && construct.role === "endogenous"),
-      ),
+      readings: construct.indicators.map((indicator) => readingLine(entities, indicator, false)),
       parameters,
     };
   });

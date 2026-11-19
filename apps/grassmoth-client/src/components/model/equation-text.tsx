@@ -1,15 +1,15 @@
 import type { ConstructSpec, ParameterId } from "@grassmoth/api-types";
-import { Fragment, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { ModelEntities } from "@/lib/model-asset/entities";
 import { type Equation, type EquationToken, numberParts } from "@/lib/model-asset/equations";
+import type { ParameterLaw, StateLaw } from "@/lib/model-asset/laws";
 import { type EntitySelection, humanize } from "@/lib/model-asset/selection";
-import { glyphKey, type SpecPlots } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
+import { distributionArgumentText, distributionText } from "@/lib/utils/distribution-format";
+import { formatModelDate } from "@/lib/utils/format";
 
 /** What every line of the equations needs: the selection it shows and changes. */
 export interface EquationView {
-  readonly editing: boolean;
-  readonly plots: SpecPlots | null;
   readonly entities: ModelEntities;
   readonly selection: EntitySelection | null;
   /** The parameters named by the selected entity's own laws. */
@@ -44,7 +44,6 @@ export function Pick({
   readonly className: string;
   readonly children: ReactNode;
 }) {
-  if (view.editing) return <span className={className}>{children}</span>;
   return (
     <span
       role="button"
@@ -82,14 +81,6 @@ export function StateName({
   readonly className?: string;
   readonly children?: ReactNode;
 }) {
-  if (view.editing) {
-    return (
-      <span className={cn("font-medium", className)}>
-        {children}
-        {humanize(construct.name)}
-      </span>
-    );
-  }
   const target = { kind: "construct", id: construct.id } as const;
   return (
     <Pick
@@ -106,51 +97,29 @@ export function StateName({
 /** The selected entity's own lines carry the selection colour at their edge, as its card does. */
 export const SELECTED = "shadow-[inset_2px_0_0_var(--primary)]";
 
-/** An edit has one row control per DAG node. Other actions keep their entity navigation. */
+/** A line in the model-wide equations navigates to its owner. */
 export function Line({
   view,
   target,
-  node,
   mark = null,
   className,
   children,
 }: {
   readonly view: EquationView;
   readonly target: EntitySelection;
-  readonly node?: EntitySelection | undefined;
   readonly mark?: "selected" | "named" | null;
   readonly className?: string;
   readonly children: ReactNode;
 }) {
-  const action = view.editing ? node : target;
-  const key = node && glyphKey(node);
-  const selected = view.editing
-    ? key !== undefined && view.selection !== null && key === glyphKey(view.selection)
-    : mark === "selected";
+  const selected = mark === "selected";
   return (
     <div
       data-selected={selected || undefined}
-      data-equation-node={key}
-      {...(view.editing &&
-        node && {
-          role: "button",
-          tabIndex: 0,
-          "aria-pressed": selected,
-          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-            if (event.key !== "Enter" && event.key !== " ") return;
-            event.preventDefault();
-            view.toggle(node);
-          },
-        })}
-      onClick={
-        action &&
-        (() => {
-          if (document.getSelection()?.isCollapsed !== false) view.toggle(action);
-        })
-      }
+      onClick={() => {
+        if (document.getSelection()?.isCollapsed !== false) view.toggle(target);
+      }}
       className={cn(
-        "rounded-[5px] px-1.5 py-px",
-        action && "cursor-pointer hover:bg-foreground/[0.045] focus-visible:outline-ring",
+        "cursor-pointer rounded-[5px] px-1.5 py-px hover:bg-foreground/[0.045]",
         (selected || mark === "named") && "bg-foreground/[0.07]",
         selected && SELECTED,
         className,
@@ -175,10 +144,7 @@ export function Caption({
     <Pick
       view={view}
       target={target}
-      className={cn(
-        "block w-fit rounded-sm pl-1 text-[10px] leading-[1.5] text-muted-foreground",
-        !view.editing && "hover:text-foreground",
-      )}
+      className="block w-fit rounded-sm pl-1 text-[10px] leading-[1.5] text-muted-foreground hover:text-foreground"
     >
       {children}
     </Pick>
@@ -203,7 +169,65 @@ export function Unassigned({
   );
 }
 
-function Token({ view, token }: { readonly view: EquationView; readonly token: EquationToken }) {
+/** A longer exogenous path is read from its chart; its line gives the extent. */
+const PATH_POINTS = 12;
+const NBSP = "\u00A0";
+export function StateLawText({ law }: { readonly law: StateLaw }) {
+  if (law.kind === "law") {
+    return (
+      <div className="pl-1">
+        <span className={QUIET}>~{NBSP}</span>
+        <span className="text-foreground/80">{law.law.distribution}</span>
+      </div>
+    );
+  }
+  const at = (time: number) =>
+    law.timeOrigin === "relative" ? `day ${time}` : formatModelDate(time, law.timeOrigin);
+  const first = law.points[0];
+  const last = law.points.at(-1);
+  return (
+    <div className="pl-5 -indent-4">
+      <span className={QUIET}>={NBSP}</span>
+      {law.points.length > PATH_POINTS && first && last ? (
+        <span className="text-foreground/80">
+          {law.points.length} values from {at(first.time)} to {at(last.time)}
+        </span>
+      ) : (
+        law.points.map(({ time, value }, index) => (
+          <span key={time}>
+            {index > 0 && <span className={QUIET}>, </span>}
+            <span className="whitespace-nowrap">
+              <span className="tabular-nums">{distributionArgumentText(value)}</span>
+              <span className={QUIET}> from {at(time)}</span>
+            </span>
+          </span>
+        ))
+      )}
+    </div>
+  );
+}
+
+export function ParameterLawText({ law }: { readonly law: ParameterLaw }) {
+  switch (law.kind) {
+    case "scalar": {
+      return <span className="text-foreground/80">{distributionText(law.law)}</span>;
+    }
+    case "joint": {
+      return <span className="text-foreground/80">joint {law.law.distribution}</span>;
+    }
+    case "unassigned": {
+      return <Unassigned title="No law assigned">?</Unassigned>;
+    }
+  }
+}
+
+function Token({
+  view,
+  token,
+}: {
+  readonly view: EquationView | null;
+  readonly token: EquationToken;
+}) {
   switch (token.kind) {
     case "symbol": {
       return <span className={QUIET}>{token.text}</span>;
@@ -229,9 +253,14 @@ function Token({ view, token }: { readonly view: EquationView; readonly token: E
       );
     }
     case "state": {
-      return <StateName view={view} construct={token.construct} />;
+      return view ? (
+        <StateName view={view} construct={token.construct} />
+      ) : (
+        <span className="font-medium">{humanize(token.construct.name)}</span>
+      );
     }
     case "parameter": {
+      if (!view) return <span className="font-medium">{humanize(token.parameter.name)}</span>;
       return (
         <span
           className={cn(
@@ -261,7 +290,7 @@ function Tokens({
   view,
   tokens,
 }: {
-  readonly view: EquationView;
+  readonly view: EquationView | null;
   readonly tokens: readonly EquationToken[];
 }) {
   return tokens.map((token, index) => (
@@ -275,7 +304,7 @@ export function Phrases({
   view,
   equation,
 }: {
-  readonly view: EquationView;
+  readonly view: EquationView | null;
   readonly equation: Equation;
 }) {
   return equation.map((phrase, index) => (

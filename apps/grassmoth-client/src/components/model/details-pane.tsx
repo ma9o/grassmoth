@@ -8,6 +8,7 @@ import { glyphKey, type SpecPlots, viewedSpecPlots } from "@/lib/model-asset/spe
 import { cn } from "@/lib/utils";
 import { AuthoredEquations } from "./authored-equations";
 import { DefinitionContext } from "./definition-context";
+import { NodeEquations } from "./node-equations";
 import { Hint, OwnerLink, Section } from "./scope-primitives";
 import { ConstructScope, IdentificationFinding } from "./scopes/construct-scope";
 import { DataComparisonEvidence, PreparedObservations } from "./scopes/data-details";
@@ -92,7 +93,7 @@ function ModelScope({
   );
 }
 
-/** A function's equation selects its own node; its endpoints are linked in DefinitionContext. */
+/** Links and reasoning for the selected mechanism or reading function. */
 function FunctionDetails({
   selection,
   entity,
@@ -185,10 +186,8 @@ const SCOPE =
   "relative flex min-h-0 flex-row flex-wrap content-start items-start gap-x-3 gap-y-[18px] overflow-x-auto pb-2 [writing-mode:vertical-lr] [&>*]:[writing-mode:horizontal-tb] [&>section]:max-h-full [&>section]:w-[280px] [&>section[data-wide]]:w-[400px] [&>section>div:last-child]:overflow-auto";
 
 /**
- * The state the selected action left, in depth. It leads with the model in text: the authored
- * equations stay beside every scope, take all the width the scope leaves, mark the selected part
- * and navigate as the graph does. With a graph part selected the rest shows that part. With
- * nothing selected it shows the model-wide state that action produced, and only that:
+ * An edit shows equations with their selected DAG node. Other actions retain model-wide navigation.
+ * Clearing selection returns to the model-wide state produced by the viewed action:
  * - edit_model: the model as specified, meaning its checks against the question, how the question
  *   is identified, and the evidence of its predictive checks for every indicator under the laws
  *   the model holds.
@@ -220,7 +219,8 @@ export function DetailsPane({
   const step = tick?.record.attempt.action ?? null;
   const plots = viewedSpecPlots(context.modelSnapshot, step);
   const model = context.modelSnapshot.dynamical_model_spec;
-  const text = model && context.entities.constructs.length > 0 ? model : null;
+  const overview =
+    step !== "edit_model" && model && context.entities.constructs.length > 0 ? model : null;
   const related = entity && entity.relationships.length > 0 ? entity : null;
   return (
     <section
@@ -243,22 +243,16 @@ export function DetailsPane({
         <PaneToggle title="model state" />
       </div>
       <div className="flex min-h-0 flex-1 gap-3 p-3">
-        {text && (
+        {overview && (
           <div className="flex min-h-0 min-w-[440px] flex-1 border-r pr-3 pb-2 [&>section]:max-h-full [&>section]:w-full [&>section>div:last-child]:overflow-y-auto">
-            <AuthoredEquations
-              model={text}
-              context={context}
-              selection={selection}
-              plots={plots}
-              editing={step === "edit_model"}
-            />
+            <AuthoredEquations model={overview} context={context} selection={selection} />
           </div>
         )}
         <div
           key={selection ? glyphKey(selection) : tick?.record.seq}
           className={cn(
             SCOPE,
-            text ? "max-w-[calc(100%-464px)] flex-none" : "flex-1",
+            overview ? "max-w-[calc(100%-464px)] flex-none" : "flex-1",
             related && "pt-7",
           )}
         >
@@ -266,6 +260,14 @@ export function DetailsPane({
             <div className="absolute top-0 left-0">
               <DefinitionContext entity={related} onSelect={context.select} />
             </div>
+          )}
+          {!loading && step === "edit_model" && model && selection && entity && (
+            <NodeEquations
+              model={model}
+              entities={context.entities}
+              selection={selection}
+              separateNodes={plots !== null}
+            />
           )}
           {!loading && plots && selection && entity && (
             <SpecSections context={context} selection={selection} plots={plots} />

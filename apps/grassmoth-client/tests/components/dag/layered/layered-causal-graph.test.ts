@@ -10,7 +10,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
-import { AuthoredEquations } from "@/components/model/authored-equations";
+import { NodeEquations } from "@/components/model/node-equations";
 import {
   baseline as baselineConstruct,
   treatment as dose,
@@ -23,7 +23,8 @@ import { specLayout } from "@/lib/dag/spec-layout";
 import { presentEntries } from "@/lib/model-accessors";
 import { indexModel } from "@/lib/model-asset/entities";
 import type { SimulationPathsView } from "@/lib/model-asset/result-values";
-import { modelSpecPlots, viewedSpecPlots } from "@/lib/model-asset/spec-plots";
+import type { EntitySelection } from "@/lib/model-asset/selection";
+import { modelSpecPlots } from "@/lib/model-asset/spec-plots";
 import type { DagGraphInput } from "@/lib/utils/dag-graph-layout";
 import { formatModelDate } from "@/lib/utils/format";
 
@@ -157,42 +158,42 @@ describe("dated intervention overlay", () => {
   });
 });
 
+function renderEquations(selection: EntitySelection, separateNodes = true) {
+  return renderToStaticMarkup(
+    createElement(NodeEquations, {
+      model: modelFixture,
+      entities: indexed,
+      selection,
+      separateNodes,
+    }),
+  );
+}
+
 describe("authored mechanism boxes", () => {
-  it.each([
-    authoredSnapshot,
-    fittedSnapshot,
-  ])("gives each edit DAG node exactly one equation control", (snapshot) => {
-    const entities = indexModel(modelFixture);
-    const edit = {
-      modelSnapshot: snapshot,
-      entities,
-      step: "edit_model" as const,
-      selection: null,
-      onSelect: () => undefined,
-    };
-    const dag = renderToStaticMarkup(createElement(LayeredCausalGraph, edit));
-    const equations = renderToStaticMarkup(
-      createElement(AuthoredEquations, {
-        model: modelFixture,
-        selection: null,
-        editing: true,
-        plots: viewedSpecPlots(snapshot, edit.step),
-        context: {
-          modelSnapshot: snapshot,
-          entities,
-          select: edit.onSelect,
-          ticks: [],
-          result: undefined,
-          dataDiff: null,
-        },
-      }),
-    );
-    const nodes = [...dag.matchAll(/data-node-id="(construct:[^"]+)"|data-glyph="([^"]+)"/g)]
-      .map((match) => match[1] ?? match[2])
-      .toSorted();
-    const rows = [...equations.matchAll(/data-equation-node="([^"]+)"/g)].map((match) => match[1]);
-    expect(rows.toSorted()).toEqual(nodes);
-    expect(equations.match(/role="button"/g)).toHaveLength(rows.length);
+  it("shows only the selected node’s equations and folds embedded components into compact state cards", () => {
+    const state = { kind: "construct", id: symptoms.id } as const;
+    const mechanism = symptoms.dynamics[0];
+    const reading = symptoms.indicators[0];
+    if (!mechanism || !reading) throw new Error("Missing mechanism or reading fixture.");
+    const stateText = renderEquations(state);
+    expect(stateText).toContain("diffusion scale");
+    expect(stateText).toContain("HalfNormal");
+    expect(stateText).not.toContain("outcome persistence");
+    expect(stateText).not.toContain("outcome reading");
+    const term = renderEquations({ ...state, glyph: mechanism.id });
+    expect(term).toContain("drift term for outcome");
+    expect(term).toContain("outcome persistence");
+    expect(term).not.toContain("diffusion scale");
+    expect(term).not.toContain('role="button"');
+    const indicator = { kind: "indicator", id: reading.observation.id } as const;
+    const response = renderEquations({ ...indicator, glyph: "response" });
+    expect(response).toContain("Expected reading for outcome reading");
+    expect(response).not.toContain("treatment reading");
+    expect(renderEquations(indicator)).not.toContain("Expected reading");
+    const compact = renderEquations(state, false);
+    expect(compact).toContain("drift term for outcome");
+    expect(compact).toContain("outcome reading");
+    expect(compact).not.toContain("treatment reading");
   });
 
   it("makes the enclosing node the only target in an edit with retained fitted laws", () => {

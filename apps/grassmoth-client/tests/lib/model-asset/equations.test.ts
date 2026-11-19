@@ -22,6 +22,7 @@ import {
   type EquationToken,
   modelEquations,
   numberParts,
+  readingLine,
 } from "@/lib/model-asset/equations";
 
 const x: Expression = { kind: "state", construct_id: outcome.id };
@@ -89,11 +90,9 @@ function revised(
   };
 }
 
-function block(model: DynamicalModelSpec, id = outcome.id, splitReadings = false) {
+function block(model: DynamicalModelSpec, id = outcome.id) {
   return fixtureValue(
-    modelEquations(model, indexModel(model), splitReadings).find(
-      (item) => item.construct.id === id,
-    ),
+    modelEquations(model, indexModel(model)).find((item) => item.construct.id === id),
   );
 }
 
@@ -115,9 +114,8 @@ function measurement(value: ObservationLawSpec, model: DynamicalModelSpec, split
       likelihood: { law: value, standardized: false },
     },
   };
-  return fixtureValue(
-    block(revised(outcome.id, { indicators }, model), outcome.id, split).readings[0],
-  );
+  const entities = indexModel(revised(outcome.id, { indicators }, model));
+  return readingLine(entities, fixtureValue(entities.indicatorById.get(reading)), split);
 }
 
 function law(value: ObservationLawSpec, model = modelFixture): string {

@@ -1,32 +1,30 @@
 import type { DynamicalModelSpec, ParameterId } from "@grassmoth/api-types";
-import { Fragment, type ReactNode, useEffect, useMemo, useRef } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { type ModelEntities, resolveEntity } from "@/lib/model-asset/entities";
 import { type ConstructEquations, modelEquations } from "@/lib/model-asset/equations";
-import { ownLawUses, type ParameterLaw, type StateLaw } from "@/lib/model-asset/laws";
+import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { type EntitySelection, humanize, mechanismName } from "@/lib/model-asset/selection";
-import { glyphKey, type SpecPlots } from "@/lib/model-asset/spec-plots";
+import { glyphKey } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
-import { distributionArgumentText, distributionText } from "@/lib/utils/distribution-format";
-import { formatModelDate } from "@/lib/utils/format";
 import {
   Caption,
   type EquationView,
   isSelected,
   Line,
   NAME,
+  ParameterLawText,
   Phrases,
   PICKED,
   Pick,
   QUIET,
   SELECTED,
+  StateLawText,
   StateName,
   Unassigned,
 } from "./equation-text";
 import { Section } from "./scope-primitives";
 
-/** A longer exogenous path is read from its chart; its line gives the extent. */
-const PATH_POINTS = 12;
 /** A relation keeps its right-hand side on its line. */
 const NBSP = "\u00A0";
 function selectedEntity(entities: ModelEntities, selection: EntitySelection) {
@@ -46,10 +44,7 @@ function selectedEntity(entities: ModelEntities, selection: EntitySelection) {
 function namedParameters(
   entities: ModelEntities,
   selection: EntitySelection | null,
-  plots: SpecPlots | null,
 ): ReadonlySet<ParameterId> {
-  const glyph = selection ? plots?.get(glyphKey(selection)) : undefined;
-  if (glyph) return new Set(glyph.uses.map((use) => use.parameterId));
   const entity = selection ? selectedEntity(entities, selection) : undefined;
   return new Set(entity ? ownLawUses(entity).map((use) => use.parameterId) : []);
 }
@@ -70,55 +65,6 @@ function Tag({ children }: { readonly children: ReactNode }) {
   return <span className="text-[10px] whitespace-nowrap text-muted-foreground">{children}</span>;
 }
 
-function StateLawText({ law }: { readonly law: StateLaw }) {
-  if (law.kind === "law") {
-    return (
-      <div className="pl-1">
-        <span className={QUIET}>~{NBSP}</span>
-        <span className="text-foreground/80">{law.law.distribution}</span>
-      </div>
-    );
-  }
-  const at = (time: number) =>
-    law.timeOrigin === "relative" ? `day ${time}` : formatModelDate(time, law.timeOrigin);
-  const first = law.points[0];
-  const last = law.points.at(-1);
-  return (
-    <div className="pl-5 -indent-4">
-      <span className={QUIET}>={NBSP}</span>
-      {law.points.length > PATH_POINTS && first && last ? (
-        <span className="text-foreground/80">
-          {law.points.length} values from {at(first.time)} to {at(last.time)}
-        </span>
-      ) : (
-        law.points.map(({ time, value }, index) => (
-          <span key={time}>
-            {index > 0 && <span className={QUIET}>, </span>}
-            <span className="whitespace-nowrap">
-              <span className="tabular-nums">{distributionArgumentText(value)}</span>
-              <span className={QUIET}> from {at(time)}</span>
-            </span>
-          </span>
-        ))
-      )}
-    </div>
-  );
-}
-
-function ParameterLawText({ law }: { readonly law: ParameterLaw }) {
-  switch (law.kind) {
-    case "scalar": {
-      return <span className="text-foreground/80">{distributionText(law.law)}</span>;
-    }
-    case "joint": {
-      return <span className="text-foreground/80">joint {law.law.distribution}</span>;
-    }
-    case "unassigned": {
-      return <Unassigned title="No law assigned">?</Unassigned>;
-    }
-  }
-}
-
 /** What drives the construct: its mechanisms as the terms of its drift, then its bare links. */
 function Drift({
   view,
@@ -135,16 +81,11 @@ function Drift({
         const selected = view.selection?.glyph
           ? view.selection.glyph === term.mechanism.id
           : edge && isSelected(view.selection, term.owner);
-        const node =
-          block.construct.role === "endogenous"
-            ? view.plots?.get(glyphKey({ ...term.owner, glyph: term.mechanism.id }))?.selection
-            : undefined;
         return (
           <Line
             key={term.mechanism.id}
             view={view}
             target={term.owner}
-            node={node}
             mark={selected ? "selected" : null}
           >
             <Caption view={view} target={term.owner}>
@@ -192,60 +133,28 @@ function Laws({
 }) {
   return (
     <>
-      {block.readings.map(({ indicator, law, expected }) => {
+      {block.readings.map(({ indicator, law }) => {
         const target = { kind: "indicator", id: indicator.observation.id } as const;
-        const picked = !view.editing && isSelected(view.selection, target);
-        const distribution = view.plots?.get(target.id);
-        const response = view.plots?.get(glyphKey({ ...target, glyph: "response" }));
-        const name = humanize(indicator.observation.name);
+        const picked = isSelected(view.selection, target);
         return (
-          <Fragment key={target.id}>
-            {response && (
-              <Line
+          <Line key={target.id} view={view} target={target} mark={picked ? "selected" : null}>
+            <div className="pl-4 -indent-4">
+              <Pick
                 view={view}
-                target={response.selection}
-                node={response.selection}
-                className="pl-4 -indent-2.5"
+                target={target}
+                className={cn(NAME, "font-medium hover:bg-foreground/[0.1]", picked && PICKED)}
               >
-                <span className="font-medium">Expected reading for {name}</span>
-                <span className={QUIET}> ={NBSP}</span>
-                {expected ? (
-                  <Phrases view={view} equation={expected} />
-                ) : (
-                  <Unassigned title="No likelihood assigned">?</Unassigned>
-                )}
-                {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
-              </Line>
-            )}
-            <Line
-              view={view}
-              target={target}
-              node={distribution?.selection}
-              mark={picked ? "selected" : null}
-            >
-              <div className="pl-4 -indent-4">
-                <Pick
-                  view={view}
-                  target={target}
-                  className={cn(
-                    NAME,
-                    "font-medium",
-                    picked && PICKED,
-                    !view.editing && "hover:bg-foreground/[0.1]",
-                  )}
-                >
-                  {humanize(indicator.observation.name)}
-                </Pick>
-                <span className={QUIET}> ~{NBSP}</span>
-                {law ? (
-                  <Phrases view={view} equation={law} />
-                ) : (
-                  <Unassigned title="No likelihood assigned">?</Unassigned>
-                )}
-                {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
-              </div>
-            </Line>
-          </Fragment>
+                {humanize(indicator.observation.name)}
+              </Pick>
+              <span className={QUIET}> ~{NBSP}</span>
+              {law ? (
+                <Phrases view={view} equation={law} />
+              ) : (
+                <Unassigned title="No likelihood assigned">?</Unassigned>
+              )}
+              {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
+            </div>
+          </Line>
         );
       })}
       {block.parameters.length > 0 && (
@@ -262,11 +171,7 @@ function Laws({
             <Pick
               view={view}
               target={owner}
-              className={cn(
-                NAME,
-                "border border-foreground/20",
-                !view.editing && "hover:bg-foreground/[0.07]",
-              )}
+              className={cn(NAME, "border border-foreground/20", "hover:bg-foreground/[0.07]")}
             >
               {humanize(parameter.name)}
             </Pick>
@@ -291,7 +196,7 @@ function ConstructBlock({
 }) {
   const { construct } = block;
   const own = { kind: "construct", id: construct.id } as const;
-  const selected = !view.editing && !view.selection?.glyph && isSelected(view.selection, own);
+  const selected = !view.selection?.glyph && isSelected(view.selection, own);
   const student = construct.innovation_family === "student_t";
   return (
     <div
@@ -302,12 +207,7 @@ function ConstructBlock({
         selected && SELECTED,
       )}
     >
-      <Line
-        view={view}
-        target={own}
-        node={view.editing ? own : undefined}
-        className="flex flex-wrap items-baseline gap-x-1.5"
-      >
+      <Line view={view} target={own} className="flex flex-wrap items-baseline gap-x-1.5">
         <StateName view={view} construct={construct} className="text-xs font-semibold">
           {outcome && "★ "}
         </StateName>
@@ -352,30 +252,19 @@ function ConstructBlock({
   );
 }
 
-/**
- * Equations follow graph order. In an edit, a whole defining line selects the same node as the DAG;
- * operands, parameter definitions and relationships remain readable in context.
- */
+/** The navigable model-wide equations shown alongside analysis actions. */
 export function AuthoredEquations({
   model,
   context,
   selection,
-  plots,
-  editing,
 }: {
-  readonly editing: boolean;
   readonly model: DynamicalModelSpec;
   readonly context: ScopeContext;
   readonly selection: EntitySelection | null;
-  readonly plots: SpecPlots | null;
 }) {
   const { entities, select } = context;
-  const split = plots !== null;
-  const blocks = useMemo(() => modelEquations(model, entities, split), [model, entities, split]);
-  const named = useMemo(
-    () => namedParameters(entities, selection, plots),
-    [entities, selection, plots],
-  );
+  const blocks = useMemo(() => modelEquations(model, entities), [model, entities]);
+  const named = useMemo(() => namedParameters(entities, selection), [entities, selection]);
   const root = useRef<HTMLDivElement>(null);
   const selected = selection ? glyphKey(selection) : null;
   useEffect(() => {
@@ -383,8 +272,6 @@ export function AuthoredEquations({
     root.current?.querySelector("[data-selected]")?.scrollIntoView({ block: "nearest" });
   }, [selected]);
   const view: EquationView = {
-    editing,
-    plots,
     entities,
     selection,
     named,
