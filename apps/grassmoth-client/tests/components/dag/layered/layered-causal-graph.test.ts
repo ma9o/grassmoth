@@ -10,6 +10,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
+import { AuthoredEquations } from "@/components/model/authored-equations";
 import {
   baseline as baselineConstruct,
   treatment as dose,
@@ -22,7 +23,7 @@ import { specLayout } from "@/lib/dag/spec-layout";
 import { presentEntries } from "@/lib/model-accessors";
 import { indexModel } from "@/lib/model-asset/entities";
 import type { SimulationPathsView } from "@/lib/model-asset/result-values";
-import { modelSpecPlots } from "@/lib/model-asset/spec-plots";
+import { modelSpecPlots, viewedSpecPlots } from "@/lib/model-asset/spec-plots";
 import type { DagGraphInput } from "@/lib/utils/dag-graph-layout";
 import { formatModelDate } from "@/lib/utils/format";
 
@@ -157,6 +158,43 @@ describe("dated intervention overlay", () => {
 });
 
 describe("authored mechanism boxes", () => {
+  it.each([
+    authoredSnapshot,
+    fittedSnapshot,
+  ])("gives each edit DAG node exactly one equation control", (snapshot) => {
+    const entities = indexModel(modelFixture);
+    const edit = {
+      modelSnapshot: snapshot,
+      entities,
+      step: "edit_model" as const,
+      selection: null,
+      onSelect: () => undefined,
+    };
+    const dag = renderToStaticMarkup(createElement(LayeredCausalGraph, edit));
+    const equations = renderToStaticMarkup(
+      createElement(AuthoredEquations, {
+        model: modelFixture,
+        selection: null,
+        editing: true,
+        plots: viewedSpecPlots(snapshot, edit.step),
+        context: {
+          modelSnapshot: snapshot,
+          entities,
+          select: edit.onSelect,
+          ticks: [],
+          result: undefined,
+          dataDiff: null,
+        },
+      }),
+    );
+    const nodes = [...dag.matchAll(/data-node-id="(construct:[^"]+)"|data-glyph="([^"]+)"/g)]
+      .map((match) => match[1] ?? match[2])
+      .toSorted();
+    const rows = [...equations.matchAll(/data-equation-node="([^"]+)"/g)].map((match) => match[1]);
+    expect(rows.toSorted()).toEqual(nodes);
+    expect(equations.match(/role="button"/g)).toHaveLength(rows.length);
+  });
+
   it("makes the enclosing node the only target in an edit with retained fitted laws", () => {
     const markup = renderToStaticMarkup(
       createElement(LayeredCausalGraph, {

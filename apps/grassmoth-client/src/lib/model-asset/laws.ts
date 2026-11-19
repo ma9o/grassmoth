@@ -2,13 +2,16 @@ import type {
   CausalEdgeSpec,
   ConstructSpec,
   DensityCurve,
+  DynamicalModelSpec,
   IndicatorSpec,
   ModelSnapshot,
+  NumPyroDistribution,
   ParameterSpec,
   PosteriorMarginal,
 } from "@grassmoth/api-types";
 import { type CoefficientUse, coefficientUses, modelParameters } from "@/lib/model-accessors";
 import { authoredPriorPlot } from "./authored-prior-plot";
+import { nativeArray } from "./law-draws";
 import { observationArguments } from "./observation-law";
 import { humanize } from "./selection";
 
@@ -106,4 +109,47 @@ export function lawLabel(curve: LawCurve): string {
     if (curve.parameter.transform.kind === "dt_effect_to_ct_rate") return "interval effect";
   }
   return humanize(curve.use.role);
+}
+
+/** How a parameter's law is held: on its own, as a member of a joint law, or not yet. */
+export type ParameterLaw =
+  | { readonly kind: "scalar"; readonly law: NumPyroDistribution }
+  | { readonly kind: "joint"; readonly law: NumPyroDistribution }
+  | { readonly kind: "unassigned" };
+
+/** A construct's trajectory law: the values an exogenous path holds from each time, or a law. */
+export type StateLaw =
+  | {
+      readonly kind: "path";
+      readonly points: readonly { readonly time: number; readonly value: number }[];
+      readonly timeOrigin: string;
+    }
+  | { readonly kind: "law"; readonly law: NumPyroDistribution };
+
+export function parameterLaw(model: DynamicalModelSpec, parameter: ParameterSpec): ParameterLaw {
+  const law = parameter.distribution ? model.distributions[parameter.distribution] : undefined;
+  if (!parameter.distribution || !law) return { kind: "unassigned" };
+  return { kind: model.law_layouts[parameter.distribution] ? "joint" : "scalar", law };
+}
+
+export function stateLaw(model: DynamicalModelSpec, construct: ConstructSpec): StateLaw | null {
+  const law = construct.distribution ? model.distributions[construct.distribution] : undefined;
+  if (!construct.distribution || !law) return null;
+  const layout = model.law_layouts[construct.distribution];
+  const member = layout?.constructs.indexOf(construct.id) ?? -1;
+  if (construct.role !== "exogenous" || law.distribution !== "Delta" || !layout || member === -1) {
+    return { kind: "law", law };
+  }
+  // Trajectories follow the law's parameters, one run of time points per construct.
+  const count = layout.time_points.length;
+  const start =
+    layout.parameters.reduce((sum, [, elements]) => sum + elements.length, 0) + member * count;
+  const values = nativeArray(law.params.v).values.slice(start, start + count);
+  const points = layout.time_points.flatMap((time, index) => {
+    const value = values[index];
+    return value === undefined ? [] : [{ time, value }];
+  });
+  return points.length === count
+    ? { kind: "path", points, timeOrigin: layout.time_origin }
+    : { kind: "law", law };
 }

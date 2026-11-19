@@ -1,13 +1,8 @@
 import type { DynamicalModelSpec, ParameterId } from "@grassmoth/api-types";
-import { type ReactNode, useEffect, useMemo, useRef } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef } from "react";
 import { type ModelEntities, resolveEntity } from "@/lib/model-asset/entities";
-import {
-  type ConstructEquations,
-  modelEquations,
-  type ParameterLaw,
-  type StateLaw,
-} from "@/lib/model-asset/equations";
-import { ownLawUses } from "@/lib/model-asset/laws";
+import { type ConstructEquations, modelEquations } from "@/lib/model-asset/equations";
+import { ownLawUses, type ParameterLaw, type StateLaw } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { type EntitySelection, humanize, mechanismName } from "@/lib/model-asset/selection";
 import { glyphKey, type SpecPlots } from "@/lib/model-asset/spec-plots";
@@ -15,13 +10,16 @@ import { cn } from "@/lib/utils";
 import { distributionArgumentText, distributionText } from "@/lib/utils/distribution-format";
 import { formatModelDate } from "@/lib/utils/format";
 import {
+  Caption,
   type EquationView,
   isSelected,
+  Line,
   NAME,
   Phrases,
   PICKED,
   Pick,
   QUIET,
+  SELECTED,
   StateName,
   Unassigned,
 } from "./equation-text";
@@ -31,9 +29,6 @@ import { Section } from "./scope-primitives";
 const PATH_POINTS = 12;
 /** A relation keeps its right-hand side on its line. */
 const NBSP = "\u00A0";
-/** The selected entity's own lines carry the selection colour at their edge, as its card does. */
-const SELECTED = "shadow-[inset_2px_0_0_var(--primary)]";
-
 function selectedEntity(entities: ModelEntities, selection: EntitySelection) {
   switch (selection.kind) {
     case "construct": {
@@ -57,65 +52,6 @@ function namedParameters(
   if (glyph) return new Set(glyph.uses.map((use) => use.parameterId));
   const entity = selection ? selectedEntity(entities, selection) : undefined;
   return new Set(entity ? ownLawUses(entity).map((use) => use.parameterId) : []);
-}
-
-/**
- * One line of a block. Clicking anywhere on it selects its entity, as a row of a card does;
- * the names of other states inside it select those states.
- */
-function Line({
-  view,
-  target,
-  mark = null,
-  className,
-  children,
-}: {
-  readonly view: EquationView;
-  readonly target: EntitySelection;
-  /** The line is the selected entity's own, or holds a law that entity names. */
-  readonly mark?: "selected" | "named" | null;
-  readonly className?: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <div
-      data-selected={mark === "selected" || undefined}
-      onClick={() => {
-        // Dragging across a line selects its text; only a plain click selects its entity.
-        if (document.getSelection()?.isCollapsed === false) return;
-        view.toggle(target);
-      }}
-      className={cn(
-        "cursor-pointer rounded-[5px] px-1.5 py-px hover:bg-foreground/[0.045]",
-        mark !== null && "bg-foreground/[0.07]",
-        mark === "selected" && SELECTED,
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** A mechanism's or an edge's name above its term; the term's keyboard control. */
-function Caption({
-  view,
-  target,
-  children,
-}: {
-  readonly view: EquationView;
-  readonly target: EntitySelection;
-  readonly children: ReactNode;
-}) {
-  return (
-    <Pick
-      view={view}
-      target={target}
-      className="block w-fit rounded-sm pl-1 text-[10px] leading-[1.5] text-muted-foreground hover:text-foreground"
-    >
-      {children}
-    </Pick>
-  );
 }
 
 /** One term of a drift; its wrapped lines hang under its first operand. */
@@ -199,11 +135,16 @@ function Drift({
         const selected = view.selection?.glyph
           ? view.selection.glyph === term.mechanism.id
           : edge && isSelected(view.selection, term.owner);
+        const node =
+          block.construct.role === "endogenous"
+            ? view.plots?.get(glyphKey({ ...term.owner, glyph: term.mechanism.id }))?.selection
+            : undefined;
         return (
           <Line
             key={term.mechanism.id}
             view={view}
             target={term.owner}
+            node={node}
             mark={selected ? "selected" : null}
           >
             <Caption view={view} target={term.owner}>
@@ -251,28 +192,60 @@ function Laws({
 }) {
   return (
     <>
-      {block.readings.map(({ indicator, law }) => {
+      {block.readings.map(({ indicator, law, expected }) => {
         const target = { kind: "indicator", id: indicator.observation.id } as const;
-        const picked = isSelected(view.selection, target);
+        const picked = !view.editing && isSelected(view.selection, target);
+        const distribution = view.plots?.get(target.id);
+        const response = view.plots?.get(glyphKey({ ...target, glyph: "response" }));
+        const name = humanize(indicator.observation.name);
         return (
-          <Line key={target.id} view={view} target={target} mark={picked ? "selected" : null}>
-            <div className="pl-4 -indent-4">
-              <Pick
+          <Fragment key={target.id}>
+            {response && (
+              <Line
                 view={view}
-                target={target}
-                className={cn(NAME, picked ? PICKED : "font-medium hover:bg-foreground/[0.1]")}
+                target={response.selection}
+                node={response.selection}
+                className="pl-4 -indent-2.5"
               >
-                {humanize(indicator.observation.name)}
-              </Pick>
-              <span className={QUIET}> ~{NBSP}</span>
-              {law ? (
-                <Phrases view={view} equation={law} />
-              ) : (
-                <Unassigned title="No likelihood assigned">?</Unassigned>
-              )}
-              {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
-            </div>
-          </Line>
+                <span className="font-medium">Expected reading for {name}</span>
+                <span className={QUIET}> ={NBSP}</span>
+                {expected ? (
+                  <Phrases view={view} equation={expected} />
+                ) : (
+                  <Unassigned title="No likelihood assigned">?</Unassigned>
+                )}
+                {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
+              </Line>
+            )}
+            <Line
+              view={view}
+              target={target}
+              node={distribution?.selection}
+              mark={picked ? "selected" : null}
+            >
+              <div className="pl-4 -indent-4">
+                <Pick
+                  view={view}
+                  target={target}
+                  className={cn(
+                    NAME,
+                    "font-medium",
+                    picked && PICKED,
+                    !view.editing && "hover:bg-foreground/[0.1]",
+                  )}
+                >
+                  {humanize(indicator.observation.name)}
+                </Pick>
+                <span className={QUIET}> ~{NBSP}</span>
+                {law ? (
+                  <Phrases view={view} equation={law} />
+                ) : (
+                  <Unassigned title="No likelihood assigned">?</Unassigned>
+                )}
+                {indicator.likelihood?.standardized && <Tag> · standardized</Tag>}
+              </div>
+            </Line>
+          </Fragment>
         );
       })}
       {block.parameters.length > 0 && (
@@ -289,7 +262,11 @@ function Laws({
             <Pick
               view={view}
               target={owner}
-              className={cn(NAME, "border border-foreground/20 hover:bg-foreground/[0.07]")}
+              className={cn(
+                NAME,
+                "border border-foreground/20",
+                !view.editing && "hover:bg-foreground/[0.07]",
+              )}
             >
               {humanize(parameter.name)}
             </Pick>
@@ -314,7 +291,7 @@ function ConstructBlock({
 }) {
   const { construct } = block;
   const own = { kind: "construct", id: construct.id } as const;
-  const selected = !view.selection?.glyph && isSelected(view.selection, own);
+  const selected = !view.editing && !view.selection?.glyph && isSelected(view.selection, own);
   const student = construct.innovation_family === "student_t";
   return (
     <div
@@ -325,7 +302,12 @@ function ConstructBlock({
         selected && SELECTED,
       )}
     >
-      <Line view={view} target={own} className="flex flex-wrap items-baseline gap-x-1.5">
+      <Line
+        view={view}
+        target={own}
+        node={view.editing ? own : undefined}
+        className="flex flex-wrap items-baseline gap-x-1.5"
+      >
         <StateName view={view} construct={construct} className="text-xs font-semibold">
           {outcome && "★ "}
         </StateName>
@@ -371,26 +353,25 @@ function ConstructBlock({
 }
 
 /**
- * The model in text: every construct's drift, coefficients, readings and parameter laws as
- * authored, in the graph's reading order. It navigates as the graph does. A construct's name
- * selects the construct wherever it appears, a term selects the edge or construct that declares
- * its mechanism, and a reading selects its indicator; selecting the selected part clears it.
- * The selection made here or on the graph marks its lines and scrolls them into view. The
- * constructs fill the width they are given, in as many columns as fit.
+ * Equations follow graph order. In an edit, a whole defining line selects the same node as the DAG;
+ * operands, parameter definitions and relationships remain readable in context.
  */
 export function AuthoredEquations({
   model,
   context,
   selection,
   plots,
+  editing,
 }: {
+  readonly editing: boolean;
   readonly model: DynamicalModelSpec;
   readonly context: ScopeContext;
   readonly selection: EntitySelection | null;
   readonly plots: SpecPlots | null;
 }) {
   const { entities, select } = context;
-  const blocks = useMemo(() => modelEquations(model, entities), [model, entities]);
+  const split = plots !== null;
+  const blocks = useMemo(() => modelEquations(model, entities, split), [model, entities, split]);
   const named = useMemo(
     () => namedParameters(entities, selection, plots),
     [entities, selection, plots],
@@ -402,6 +383,8 @@ export function AuthoredEquations({
     root.current?.querySelector("[data-selected]")?.scrollIntoView({ block: "nearest" });
   }, [selected]);
   const view: EquationView = {
+    editing,
+    plots,
     entities,
     selection,
     named,

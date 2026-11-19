@@ -4,7 +4,7 @@ import { type EntityPresentation, resolveEntity } from "@/lib/model-asset/entiti
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import type { EntitySelection } from "@/lib/model-asset/selection";
 import { humanize, mechanismName } from "@/lib/model-asset/selection";
-import { glyphKey, viewedSpecPlots } from "@/lib/model-asset/spec-plots";
+import { glyphKey, type SpecPlots, viewedSpecPlots } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
 import { AuthoredEquations } from "./authored-equations";
 import { DefinitionContext } from "./definition-context";
@@ -16,6 +16,7 @@ import { ModelComparisonDetails } from "./scopes/edit-details";
 import { FitDetails } from "./scopes/fit-details";
 import { IndicatorScope } from "./scopes/indicator-scope";
 import { QuestionChecks, QuestionDetails } from "./scopes/question-details";
+import { Reasoning } from "./scopes/reasoning";
 import { SpecSections } from "./scopes/spec-sections";
 import { SimulationEvidence } from "./simulation-evidence";
 import { PaneToggle } from "./workbench-panes";
@@ -91,6 +92,33 @@ function ModelScope({
   );
 }
 
+/** A function's equation selects its own node; its endpoints are linked in DefinitionContext. */
+function FunctionDetails({
+  selection,
+  entity,
+  context,
+}: {
+  readonly selection: EntitySelection;
+  readonly entity: EntityPresentation;
+  readonly context: ScopeContext;
+}) {
+  if (selection.kind === "edge") {
+    const edge = context.entities.edgeById.get(selection.id);
+    return (
+      edge && (
+        <Section title="Relationship">
+          <Reasoning value={edge.reasoning} />
+        </Section>
+      )
+    );
+  }
+  return (
+    <Section title={selection.kind === "indicator" ? "Measurement" : "Defined on"}>
+      <OwnerLink onClick={() => context.select(entity.selection)}>{entity.label}</OwnerLink>
+    </Section>
+  );
+}
+
 /** A data comparison, the selected part's scope, or the model-wide state with no selection. */
 function DetailsContent({
   selection,
@@ -98,14 +126,14 @@ function DetailsContent({
   context,
   loading,
   tick,
-  showCardRows,
+  plots,
 }: {
   readonly selection: EntitySelection | null;
   readonly entity: EntityPresentation | null | undefined;
   readonly context: ScopeContext;
   readonly loading: boolean;
   readonly tick: TimelineRevision | undefined;
-  readonly showCardRows: boolean;
+  readonly plots: SpecPlots | null;
 }) {
   if (loading) {
     return (
@@ -122,15 +150,17 @@ function DetailsContent({
   if (!selection) return <ModelScope context={context} tick={tick} />;
   if (!entity) return <Hint>This {selection.kind} is absent from this revision.</Hint>;
   if (selection.glyph) {
-    // The function is a node of its own. Its full relationship or measurement is one click away.
-    return (
-      <Section title={selection.kind === "indicator" ? "Measurement" : "Defined on"}>
-        <OwnerLink onClick={() => context.select(entity.selection)}>{entity.label}</OwnerLink>
-      </Section>
-    );
+    return <FunctionDetails selection={selection} entity={entity} context={context} />;
   }
   if (selection.kind === "construct") {
-    return <ConstructScope context={context} id={selection.id} showCardRows={showCardRows} />;
+    const editReadings = plots ? "nodes" : "rows";
+    return (
+      <ConstructScope
+        context={context}
+        id={selection.id}
+        editReadings={tick?.record.attempt.action === "edit_model" ? editReadings : null}
+      />
+    );
   }
   if (selection.kind === "edge") return <EdgeScope context={context} id={selection.id} />;
   return <IndicatorScope context={context} id={selection.id} />;
@@ -215,7 +245,13 @@ export function DetailsPane({
       <div className="flex min-h-0 flex-1 gap-3 p-3">
         {text && (
           <div className="flex min-h-0 min-w-[440px] flex-1 border-r pr-3 pb-2 [&>section]:max-h-full [&>section]:w-full [&>section>div:last-child]:overflow-y-auto">
-            <AuthoredEquations model={text} context={context} selection={selection} plots={plots} />
+            <AuthoredEquations
+              model={text}
+              context={context}
+              selection={selection}
+              plots={plots}
+              editing={step === "edit_model"}
+            />
           </div>
         )}
         <div
@@ -240,7 +276,7 @@ export function DetailsPane({
             context={context}
             loading={loading}
             tick={tick}
-            showCardRows={step === "edit_model" && !plots}
+            plots={plots}
           />
         </div>
       </div>

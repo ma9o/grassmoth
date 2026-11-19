@@ -89,9 +89,11 @@ function revised(
   };
 }
 
-function block(model: DynamicalModelSpec, id = outcome.id) {
+function block(model: DynamicalModelSpec, id = outcome.id, splitReadings = false) {
   return fixtureValue(
-    modelEquations(model, indexModel(model)).find((item) => item.construct.id === id),
+    modelEquations(model, indexModel(model), splitReadings).find(
+      (item) => item.construct.id === id,
+    ),
   );
 }
 
@@ -105,7 +107,7 @@ function drift(...expressions: readonly Expression[]): string[] {
   return block(revised(outcome.id, { dynamics })).terms.map((term) => text(term.equation));
 }
 
-function law(value: ObservationLawSpec, model = modelFixture): string {
+function measurement(value: ObservationLawSpec, model: DynamicalModelSpec, split: boolean) {
   const definition = fixtureValue(model.constructs[outcome.id]);
   const indicators = {
     [reading]: {
@@ -113,7 +115,13 @@ function law(value: ObservationLawSpec, model = modelFixture): string {
       likelihood: { law: value, standardized: false },
     },
   };
-  return text(fixtureValue(block(revised(outcome.id, { indicators }, model)).readings[0]?.law));
+  return fixtureValue(
+    block(revised(outcome.id, { indicators }, model), outcome.id, split).readings[0],
+  );
+}
+
+function law(value: ObservationLawSpec, model = modelFixture): string {
+  return text(fixtureValue(measurement(value, model, false).law));
 }
 
 describe("authored equations", () => {
@@ -221,6 +229,33 @@ describe("authored equations", () => {
         }[transform.kind],
       );
     }
+  });
+
+  it("separates the expected reading from its count law and preserves the StudentT mean condition", () => {
+    const count = measurement(
+      {
+        distribution: "NegativeBinomial2",
+        mean: quarter,
+        concentration: coefficient("dispersion", diffusion.id),
+      },
+      modelFixture,
+      true,
+    );
+    expect(text(fixtureValue(count.expected))).toBe("0.25 · treatment");
+    expect(text(fixtureValue(count.law))).toBe(
+      "NegativeBinomial2(mean = expected reading, concentration = outcome_diffusion)",
+    );
+    const student = measurement(
+      { distribution: "StudentT", loc: quarter, df: literal(1), scale: literal(2) },
+      modelFixture,
+      true,
+    );
+    expect(text(fixtureValue(student.expected))).toBe(
+      "0.25 · treatment if 1 > 1, undefined otherwise",
+    );
+    expect(text(fixtureValue(student.law))).toBe(
+      "StudentT(df = 1, loc = 0.25 · treatment, scale = 2)",
+    );
   });
 
   it("typesets every native observation family and follows construct identity after renaming", () => {

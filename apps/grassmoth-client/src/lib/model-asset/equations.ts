@@ -9,7 +9,6 @@ import type {
   DynamicalModelSpec,
   Expression,
   IndicatorSpec,
-  NumPyroDistribution,
   ObservationLawSpec,
   ParameterId,
   ParameterSpec,
@@ -22,10 +21,9 @@ import {
 } from "@/lib/dag/build-layered-causal-graph";
 import { coefficientUses } from "@/lib/model-accessors";
 import type { ModelEntities } from "./entities";
-import { nativeArray } from "./law-draws";
-import { intervalText } from "./laws";
+import { intervalText, type ParameterLaw, parameterLaw, type StateLaw, stateLaw } from "./laws";
 import { observationArguments } from "./observation-law";
-import type { EntitySelection } from "./selection";
+import { type EntitySelection, humanize } from "./selection";
 
 /** One piece of a typeset equation. A name carries the entity it refers to. */
 export type EquationToken =
@@ -258,15 +256,90 @@ function typesetMechanism(
 }
 
 /** A law's arguments are its phrases; the first carries the law's name. */
-function typesetLaw(entities: ModelEntities, law: ObservationLawSpec): Equation {
+function typesetLaw(
+  entities: ModelEntities,
+  law: ObservationLawSpec,
+  expectedArgument?: string,
+): Equation {
   const operands = observationArguments(law);
   return operands.map(([name, value], index) => [
     ...(index === 0 ? [word(law.distribution), symbol("(")] : []),
     word(name),
     symbol(`${NBSP}=${NBSP}`),
-    ...run(typeset(entities, value)),
+    ...(name === expectedArgument ? [word("expected reading")] : run(typeset(entities, value))),
     symbol(index === operands.length - 1 ? ")" : ","),
   ]);
+}
+
+/** The response and the conditional law shown by the two measurement nodes. */
+function readingLine(
+  entities: ModelEntities,
+  indicator: IndicatorSpec,
+  split: boolean,
+): ReadingLine {
+  const law = indicator.likelihood?.law;
+  if (!law) return { indicator, expected: null, law: null };
+  const reading = (expected: Equation | null): ReadingLine => ({
+    indicator,
+    expected,
+    law: typesetLaw(entities, law),
+  });
+  if (!split) return reading(null);
+  const direct = (name: string, expr: Expression): ReadingLine => ({
+    indicator,
+    expected: typeset(entities, expr).phrases,
+    law: typesetLaw(entities, law, name),
+  });
+  const operand = (expr: Expression) => typeset(entities, expr);
+  switch (law.distribution) {
+    case "Delta": {
+      return direct("v", law.v);
+    }
+    case "Normal": {
+      return direct("loc", law.loc);
+    }
+    case "Poisson": {
+      return direct("rate", law.rate);
+    }
+    case "BernoulliProbs": {
+      return direct("probs", law.probs);
+    }
+    case "NegativeBinomial2": {
+      return direct("mean", law.mean);
+    }
+    case "StudentT": {
+      return reading([
+        ...operand(law.loc).phrases,
+        [
+          symbol(`if${NBSP}`),
+          ...run(operand(law.df)),
+          symbol(" > 1"),
+          word(", undefined otherwise"),
+        ],
+      ]);
+    }
+    case "BernoulliLogits": {
+      return reading([[word("logistic"), symbol("("), ...run(operand(law.logits)), symbol(")")]]);
+    }
+    case "Gamma": {
+      return reading(
+        typesetBinary("divide", operand(law.concentration), operand(law.rate)).phrases,
+      );
+    }
+    case "Beta": {
+      const a = operand(law.concentration1);
+      return reading(
+        typesetBinary("divide", a, typesetBinary("add", a, operand(law.concentration0))).phrases,
+      );
+    }
+    case "OrderedLogistic":
+    case "Categorical": {
+      // The response is the expected level index under the displayed observation law.
+      return reading([
+        [symbol("Σₖ k · P("), word(humanize(indicator.observation.name)), symbol(" = k)")],
+      ]);
+    }
+  }
 }
 
 /** A mechanism as one term of the drift of the construct it drives. */
@@ -292,14 +365,9 @@ interface CoefficientLine {
 /** An indicator with its observation law; null while it has no likelihood. */
 interface ReadingLine {
   readonly indicator: IndicatorSpec;
+  readonly expected: Equation | null;
   readonly law: Equation | null;
 }
-
-/** How a parameter's law is held: on its own, as a member of a joint law, or not yet. */
-export type ParameterLaw =
-  | { readonly kind: "scalar"; readonly law: NumPyroDistribution }
-  | { readonly kind: "joint"; readonly law: NumPyroDistribution }
-  | { readonly kind: "unassigned" };
 
 interface ParameterLine {
   readonly parameter: ParameterSpec;
@@ -307,15 +375,6 @@ interface ParameterLine {
   readonly owner: EntitySelection;
   readonly law: ParameterLaw;
 }
-
-/** A construct's trajectory law: the values an exogenous path holds from each time, or a law. */
-export type StateLaw =
-  | {
-      readonly kind: "path";
-      readonly points: readonly { readonly time: number; readonly value: number }[];
-      readonly timeOrigin: string;
-    }
-  | { readonly kind: "law"; readonly law: NumPyroDistribution };
 
 /** One construct's part of the model, in the order its card reads: what drives it, then its readings. */
 export interface ConstructEquations {
@@ -327,34 +386,6 @@ export interface ConstructEquations {
   readonly readings: readonly ReadingLine[];
   /** Laws of the parameters this construct's lines are the first to name. */
   readonly parameters: readonly ParameterLine[];
-}
-
-function parameterLaw(model: DynamicalModelSpec, parameter: ParameterSpec): ParameterLaw {
-  const law = parameter.distribution ? model.distributions[parameter.distribution] : undefined;
-  if (!parameter.distribution || !law) return { kind: "unassigned" };
-  return { kind: model.law_layouts[parameter.distribution] ? "joint" : "scalar", law };
-}
-
-function stateLaw(model: DynamicalModelSpec, construct: ConstructSpec): StateLaw | null {
-  const law = construct.distribution ? model.distributions[construct.distribution] : undefined;
-  if (!construct.distribution || !law) return null;
-  const layout = model.law_layouts[construct.distribution];
-  const member = layout?.constructs.indexOf(construct.id) ?? -1;
-  if (construct.role !== "exogenous" || law.distribution !== "Delta" || !layout || member === -1) {
-    return { kind: "law", law };
-  }
-  // Trajectories follow the law's parameters, one run of time points per construct.
-  const count = layout.time_points.length;
-  const start =
-    layout.parameters.reduce((sum, [, elements]) => sum + elements.length, 0) + member * count;
-  const values = nativeArray(law.params.v).values.slice(start, start + count);
-  const points = layout.time_points.flatMap((time, index) => {
-    const value = values[index];
-    return value === undefined ? [] : [{ time, value }];
-  });
-  return points.length === count
-    ? { kind: "path", points, timeOrigin: layout.time_origin }
-    : { kind: "law", law };
 }
 
 function coefficientLine(entities: ModelEntities, operand: CoefficientExpression): CoefficientLine {
@@ -387,6 +418,7 @@ function ownedExpressions(construct: ConstructSpec, terms: readonly MechanismTer
 export function modelEquations(
   model: DynamicalModelSpec,
   entities: ModelEntities,
+  splitReadings = false,
 ): readonly ConstructEquations[] {
   const order = readingOrder(entities.constructs, entities.edges, model.outcome);
   const rank = new Map(order.map((construct, index) => [construct.id, index] as const));
@@ -423,10 +455,9 @@ export function modelEquations(
           return { edge, cause };
         }),
       coefficients: construct.coefficients.map((operand) => coefficientLine(entities, operand)),
-      readings: construct.indicators.map((indicator) => ({
-        indicator,
-        law: indicator.likelihood ? typesetLaw(entities, indicator.likelihood.law) : null,
-      })),
+      readings: construct.indicators.map((indicator) =>
+        readingLine(entities, indicator, splitReadings && construct.role === "endogenous"),
+      ),
       parameters,
     };
   });

@@ -1,26 +1,51 @@
 import type { ConstructId, ConstructSpec } from "@grassmoth/api-types";
+import { type ReactNode, useState } from "react";
 import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { constructPresentation } from "@/lib/model-asset/inspector";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize, mechanismName } from "@/lib/model-asset/selection";
 import { Callout, KeyValue, OwnerLink, Prose, Section, StatusIcon } from "../scope-primitives";
+import { EdgeScope } from "./edge-scope";
 import { FlowSection } from "./flow-sections";
+import { IndicatorScope } from "./indicator-scope";
 import { LawSections, SimulatedHistory } from "./law-sections";
 import { Reasoning } from "./reasoning";
+
+/** Open a component in its owning node's details without changing the graph selection. */
+function ComponentDetails({
+  name,
+  children,
+}: {
+  readonly name: string;
+  readonly children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer font-medium">{name}</summary>
+      {open && <div className="mt-2 space-y-3">{children}</div>}
+    </details>
+  );
+}
 
 export function ConstructScope({
   context,
   id,
-  showCardRows = false,
+  editReadings,
 }: {
   readonly context: ScopeContext;
   readonly id: ConstructId;
-  readonly showCardRows?: boolean;
+  readonly editReadings: "nodes" | "rows" | null;
 }) {
   const scope = constructPresentation(context, id);
   if (!scope) return null;
   const { modelSnapshot, construct, indicators } = scope;
+  const embedded =
+    editReadings === "rows" || (editReadings === "nodes" && construct.role === "exogenous");
+  const incoming = editReadings
+    ? context.entities.edges.filter((edge) => edge.effect.id === id)
+    : [];
   const latent = modelSnapshot.fit?.inference_diagnostics?.per_latent?.find(
     (item) => item.subject.id === id,
   );
@@ -44,31 +69,44 @@ export function ConstructScope({
         </details>
       </Section>
       {indicators.length > 0 && (
-        <Section title="Indicators">
+        <Section title="Indicators" wide={embedded}>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {indicators.map((indicator) => (
               <li key={indicator.observation.id}>
-                <OwnerLink
-                  onClick={() =>
-                    context.select({ kind: "indicator", id: indicator.observation.id })
-                  }
-                >
-                  {humanize(indicator.observation.name)}
-                </OwnerLink>
+                {embedded ? (
+                  <ComponentDetails name={humanize(indicator.observation.name)}>
+                    <IndicatorScope context={context} id={indicator.observation.id} />
+                  </ComponentDetails>
+                ) : (
+                  <OwnerLink
+                    onClick={() =>
+                      context.select({ kind: "indicator", id: indicator.observation.id })
+                    }
+                  >
+                    {humanize(indicator.observation.name)}
+                  </OwnerLink>
+                )}
               </li>
             ))}
           </ul>
         </Section>
       )}
+      {incoming.length > 0 && (
+        <Section title="Incoming relationships" wide>
+          {incoming.map((edge) => (
+            <ComponentDetails
+              key={edge.id}
+              name={`${humanize(context.entities.constructById.get(edge.cause.id)?.name ?? edge.cause.id)} → ${humanize(construct.name)}`}
+            >
+              <EdgeScope context={context} id={edge.id} />
+            </ComponentDetails>
+          ))}
+        </Section>
+      )}
       <FlowSection title="State distribution" plot={flows?.constructs.get(id)} />
-      {showCardRows && flows && (
+      {editReadings === "rows" && flows && (
         <>
-          {[
-            ...construct.dynamics,
-            ...context.entities.edges
-              .filter((edge) => edge.effect.id === id)
-              .flatMap((edge) => edge.mechanisms),
-          ].map((term) => (
+          {[...construct.dynamics, ...incoming.flatMap((edge) => edge.mechanisms)].map((term) => (
             <FlowSection
               key={term.id}
               title={mechanismName(term.id)}

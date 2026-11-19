@@ -1,12 +1,15 @@
 import type { ConstructSpec, ParameterId } from "@grassmoth/api-types";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type KeyboardEvent, type ReactNode } from "react";
 import type { ModelEntities } from "@/lib/model-asset/entities";
 import { type Equation, type EquationToken, numberParts } from "@/lib/model-asset/equations";
 import { type EntitySelection, humanize } from "@/lib/model-asset/selection";
+import { glyphKey, type SpecPlots } from "@/lib/model-asset/spec-plots";
 import { cn } from "@/lib/utils";
 
 /** What every line of the equations needs: the selection it shows and changes. */
 export interface EquationView {
+  readonly editing: boolean;
+  readonly plots: SpecPlots | null;
   readonly entities: ModelEntities;
   readonly selection: EntitySelection | null;
   /** The parameters named by the selected entity's own laws. */
@@ -41,6 +44,7 @@ export function Pick({
   readonly className: string;
   readonly children: ReactNode;
 }) {
+  if (view.editing) return <span className={className}>{children}</span>;
   return (
     <span
       role="button"
@@ -78,6 +82,14 @@ export function StateName({
   readonly className?: string;
   readonly children?: ReactNode;
 }) {
+  if (view.editing) {
+    return (
+      <span className={cn("font-medium", className)}>
+        {children}
+        {humanize(construct.name)}
+      </span>
+    );
+  }
   const target = { kind: "construct", id: construct.id } as const;
   return (
     <Pick
@@ -87,6 +99,88 @@ export function StateName({
     >
       {children}
       {humanize(construct.name)}
+    </Pick>
+  );
+}
+
+/** The selected entity's own lines carry the selection colour at their edge, as its card does. */
+export const SELECTED = "shadow-[inset_2px_0_0_var(--primary)]";
+
+/** An edit has one row control per DAG node. Other actions keep their entity navigation. */
+export function Line({
+  view,
+  target,
+  node,
+  mark = null,
+  className,
+  children,
+}: {
+  readonly view: EquationView;
+  readonly target: EntitySelection;
+  readonly node?: EntitySelection | undefined;
+  readonly mark?: "selected" | "named" | null;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  const action = view.editing ? node : target;
+  const key = node && glyphKey(node);
+  const selected = view.editing
+    ? key !== undefined && view.selection !== null && key === glyphKey(view.selection)
+    : mark === "selected";
+  return (
+    <div
+      data-selected={selected || undefined}
+      data-equation-node={key}
+      {...(view.editing &&
+        node && {
+          role: "button",
+          tabIndex: 0,
+          "aria-pressed": selected,
+          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            view.toggle(node);
+          },
+        })}
+      onClick={
+        action &&
+        (() => {
+          if (document.getSelection()?.isCollapsed !== false) view.toggle(action);
+        })
+      }
+      className={cn(
+        "rounded-[5px] px-1.5 py-px",
+        action && "cursor-pointer hover:bg-foreground/[0.045] focus-visible:outline-ring",
+        (selected || mark === "named") && "bg-foreground/[0.07]",
+        selected && SELECTED,
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A mechanism's or an edge's name above its term; the term's keyboard control. */
+export function Caption({
+  view,
+  target,
+  children,
+}: {
+  readonly view: EquationView;
+  readonly target: EntitySelection;
+  readonly children: ReactNode;
+}) {
+  return (
+    <Pick
+      view={view}
+      target={target}
+      className={cn(
+        "block w-fit rounded-sm pl-1 text-[10px] leading-[1.5] text-muted-foreground",
+        !view.editing && "hover:text-foreground",
+      )}
+    >
+      {children}
     </Pick>
   );
 }
