@@ -109,7 +109,7 @@ priors, seeds, observation masks, validity evidence and contrast. The rules:
 **Model documents.** They are in [`cases/suite`](cases/suite), one folder per
 case. C0's [`truth.json`](cases/suite/C0/truth.json) sets every coefficient and
 its [`fit.json`](cases/suite/C0/fit.json) frees only the input effect. The
-folder also holds SV-cubic and L96, the root README's comparison cases. The
+folder also holds SV-cubic and L96. The
 scorecard requests and run notes are in [`suite`](suite). Their status:
 - **NL and MODE are valid** after a redesign. NL uses a bounded-slope drift.
   MODE's two same-well readings leave about 0.70 of the posterior mass on

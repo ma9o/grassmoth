@@ -1,6 +1,6 @@
 # Synthetic hidden-norm policy benchmark
 
-This archive supports the [README comparison](/docs/README.md). It preserves the selected results from 7 November 2026, the exact fitted Stan model and data, native study inputs, and a compact record of the Stan campaign. It contains no new fits or recomputed diagnostics. [comparison.json](comparison.json) records source hashes, original repository-relative artifact identifiers, settings, group statistics and timing definitions.
+This archive preserves the selected results from 7 November 2026, the exact fitted Stan model and data, native study inputs, and a compact record of the Stan campaign. It contains no new fits or recomputed diagnostics. [comparison.json](comparison.json) records source hashes, original repository-relative artifact identifiers, settings, group statistics and timing definitions.
 
 ## Model and data
 
@@ -8,7 +8,7 @@ The synthetic model couples log incidence `x` and an unobserved protective norm 
 
 Both fits use Gaussian priors `a ~ Normal(0.2, 0.15)` and `h ~ Normal(0.5, 0.05)`, Gaussian initial states `x[1] ~ Normal(1.5, 0.5)` and `z[1] ~ Normal(0, 0.1)`, daily process standard deviations 0.08 and 0.03, and observation standard deviation 0.2. The fitted incidence transition includes the small drift anchor `-1e-6*x`. Both samplers target this same nonlinear model; there is no latent-path chart in the selected particle run. Its two Gaussian global priors are standardized. See [model.stan](model.stan) and the archived [native model request](model-request.json).
 
-The original data generator used seed 5, fixed initial values `x=1.5, z=0`, and omitted that anchor. Thus this is not a prior-predictive dataset, and the generating model differs slightly from the shared fitted target. The approximate numerical reference also omits the anchor and retains 98.91% of its parameter-grid mass. Its roughly one-percentage-point resolution is an empirical limitation, not a uniform error bound. The README diagnostics do not depend on agreement with this reference. [comparison.json](comparison.json) preserves the generator and reference provenance.
+The original data generator used seed 5, fixed initial values `x=1.5, z=0`, and omitted that anchor. Thus this is not a prior-predictive dataset, and the generating model differs slightly from the shared fitted target. The approximate numerical reference also omits the anchor and retains 98.91% of its parameter-grid mass. Its roughly one-percentage-point resolution is an empirical limitation, not a uniform error bound. The comparison diagnostics do not depend on agreement with this reference. [comparison.json](comparison.json) preserves the generator and reference provenance.
 
 ## Selected comparison
 
